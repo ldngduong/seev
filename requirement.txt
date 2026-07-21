@@ -1,0 +1,47 @@
+📄 TÀI LIỆU YÊU CẦU DỰ ÁN (SRS/PRD)Tên dự án (dự kiến): AI Resume Matcher & Smart AuditorTech Stack: React (Vite + TypeScript), NestJS, PostgreSQL, Redis (BullMQ), TailwindCSS.I. MỤC TIÊU DỰ ÁN (PROJECT OBJECTIVES)Phân tích CV chuyên sâu: Đánh giá CV chi tiết theo từng dòng/section, highlight trực quan vị trí cần sửa trên giao diện xem PDF.So khớp JD (Job Description): So sánh CV với bài đăng tuyển dụng thực tế (crawl được) để chỉ ra điểm yếu, keyword còn thiếu (Gap Analysis).Tối ưu hiệu năng: Xử lý bất đồng bộ các tác vụ nặng (Crawl, AI Call, PDF Parse) không gây block UI.II. KIẾN TRÚC HỆ THỐNG & TECH STACK┌─────────────────────────────────┐       ┌──────────────────────────────────────┐
+│     Client: React + TS (Vite)   │       │           Server: NestJS             │
+│ ─────────────────────────────── │       │ ──────────────────────────────────── │
+│ • State: TanStack Query (React) │ ◄───► │ • Modules: Auth, CV, Job, AI Engine │
+│ • UI: TailwindCSS + Lucide Icon │ HTTP  │ • Queue: BullMQ + Redis              │
+│ • PDF: react-pdf / pdfjs-dist   │ REST  │ • DB: PostgreSQL (Prisma/TypeORM)    │
+└─────────────────────────────────┘       └──────────────────────────────────────┘
+                                                             │
+                                                  ┌──────────┴──────────┐
+                                                  ▼                     ▼
+                                          [OpenAI/Gemini API]    [Crawler: Playwright]
+III. YÊU CẦU TÍNH NĂNG CHI TIẾT (FUNCTIONAL REQUIREMENTS)1. Module 1: Authentication & User Management (Cơ bản)1.1. Đăng ký / Đăng nhập qua Email + Password hoặc Google OAuth (sử dụng JWT).1.2. Quản lý Profile: Lưu các vị trí công việc quan tâm (ví dụ: Frontend Developer, NestJS Backend).2. Module 2: CV Parsing & Visual Audit (Tính năng cốt lõi)2.1. Upload CV: Cho phép upload file PDF (Giới hạn $\le 5\text{MB}$).2.2. Extract & Coordinate Parsing (NestJS):Trích xuất Plain Text kèm theo thông tin vị trí (pageNumber, bounding Box/Line ID hoặc chuỗi text gốc).2.3. AI Scoring & Line-by-Line Feedback:AI đánh giá tổng quan (Điểm số /100, Điểm mạnh, Điểm yếu chung).AI đánh giá chi tiết (Trả về mảng JSON chứa: original_text, section, issue_type, reason, suggestion).2.4. Interactive Split-Screen UI (React):Bên trái: Viewer hiển thị file PDF.Bên phải: Danh sách các thẻ nhận xét từ AI.Interaction: Khi di chuột hoặc click vào một thẻ nhận xét bên phải, Viewer bên trái sẽ tự động scroll tới đúng vị trí và highlight dòng chữ/đoạn văn đó bằng màu nổi bật (Đỏ: Lỗi cần sửa, Vàng: Gợi ý cải thiện).3. Module 3: Job Crawling & Smart Matching3.1. Crawl Data Việc làm (Background Job):User tìm kiếm từ khóa (VD: "ReactJS Developer Hanoi").NestJS đẩy công việc vào BullMQ Queue, kích hoạt worker crawl dữ liệu từ các trang tuyển dụng công khai.Lưu kết quả crawl vào PostgreSQL + Redis Cache để tái sử dụng.3.2. JD Gap Analysis (So sánh CV với Job cụ thể):User bấm chọn 1 Job trong danh sách tìm được.AI so sánh CV của User với Requirement/JD của Job đó.Trả về báo cáo: % Độ phù hợp (Match Score), danh sách Skills/Keywords bị thiếu trong CV so với JD, và gợi ý cách thêm vào CV.IV. YÊU CẦU KỸ THUẬT & LUỒNG DỮ LIỆU (TECHNICAL DESIGN)1. Structure JSON Response từ AI (Prompt Engineering Rule)Nhà phát triển bắt buộc cài đặt AI API (OpenAI Structured Outputs hoặc Gemini JSON Schema) trả về đúng định dạng JSON sau:JSON{
+  "overall_score": 75,
+  "summary": "CV có bố cục rõ ràng nhưng thiếu số liệu đo lường thành quả.",
+  "detailed_feedbacks": [
+    {
+      "id": "fb_01",
+      "section": "Work Experience",
+      "original_text": "Làm giao diện cho ứng dụng web bằng React",
+      "severity": "warning", 
+      "issue": "Thiếu số liệu và công nghệ chi tiết.",
+      "suggestion": "Xây dựng 10+ màn hình Responsive với ReactJS và TailwindCSS, tối ưu LCP giảm 30%."
+    }
+  ]
+}
+2. Cơ chế Highlight Text trên PDF ở React ViewerDùng thư viện react-pdf:Dùng thuộc tính customTextRenderer hoặc lớp phủ Text Layer mặc định của pdfjs-dist.Khi activeFeedbackId được chọn ở State React, chạy hàm tìm kiếm chuỗi original_text tương ứng trong DOM của Text Layer.Thêm class CSS .highlight-active (với background-color: yellow; transition: all 0.3s) vào element chứa text đó và gọi .scrollIntoView({ behavior: 'smooth' }).V. CẤU TRÚC THƯ MỤC DỰ ÁN ĐỀ XUẤTClient (/client - React + Vite + TS)Plaintextsrc/
+├── assets/
+├── components/
+│   ├── common/         # Button, Input, Modal, Loader
+│   ├── cv-viewer/      # PdfViewer, HighlightOverlay, TextMatch
+│   ├── feedback/       # FeedbackList, FeedbackCard, ScoreWidget
+│   └── job/            # JobCard, JobList, MatchAnalysisModal
+├── hooks/              # usePDFHighlight, useCVCrawl, useAuth
+├── pages/              # Dashboard, CVAuditPage, JobSearchPage
+├── services/           # Axios instance, API calls (cvApi, jobApi)
+├── types/              # TypeScript Interfaces (CV, Feedback, Job)
+└── utils/              # Text matching helpers, PDF parsers
+Server (/server - NestJS)Plaintextsrc/
+├── modules/
+│   ├── auth/           # JwtStrategy, AuthService, AuthController
+│   ├── cv/             # CvService, PdfParserService, CvController
+│   ├── ai/             # AiEngineService (OpenAI/Gemini integration)
+│   └── crawler/        # CrawlerService (Playwright/Puppeteer), JobQueue
+├── queues/             # BullMQ processors (CrawlProcessor, AiProcessor)
+├── database/           # Prisma/TypeORM schema & migrations
+└── common/             # Interceptors, Filters, Guards
+VI. LỘ TRÌNH PHÁT TRIỂN (DEVELOPMENT ROADMAP)Tuần 1: Setup & Core Parsing (NestJS + React)Dựng khung dự án Vite + React + TS và NestJS.Làm API upload file PDF, trích xuất text cơ bản bằng NestJS.Dựng UI Split-screen ở React: bên trái load PDF, bên phải dạng mockup text.Tuần 2: Integration AI & Text Highlighting (Phần khó nhất)Tạo Prompt chuẩn xác để AI trả JSON Schema.Code thuật toán Matching & Scroll/Highlight text trên react-pdf.Tuần 3: Queue System & Job CrawlerTích hợp Redis + BullMQ vào NestJS.Viết module Crawler lấy danh sách Job tuyển dụng.Làm tính năng Match CV vs JD.Tuần 4: Polish, UI/UX & DeploymentTối ưu hóa UI/UX với TailwindCSS, thêm loading state/skeleton mượt mà.Deploy Frontend (Vercel/Netlify), Backend (Render/Railway), DB (Supabase/Neon).1.Bước 1: Setup Repository & Base Stack:Khoảng 1-2 ngày.Khởi tạo project React TypeScript bằng Vite (npm create vite@latest) và NestJS CLI (nest new).2.Bước 2: Dựng Module Audit CV Core:Khoảng 5-7 ngày.Tập trung làm luồng Upload PDF -> NestJS gọi AI -> Trả về JSON -> React render và highlight trên PDF trước.3.Bước 3: Phát triển Crawl & Match Job:Khoảng 4-5 ngày.Cài đặt BullMQ + Redis, viết Crawler module thu thập dữ liệu job và tính năng so sánh JD.4.Bước 4: Hoàn thiện UI & Đưa vào CV:Khoảng 2-3 ngày.Chỉnh chu UI/UX, đóng gói README.md chỉn chu có đính kèm video demo hoặc sơ đồ kiến trúc để thu hút nhà tuyển dụng.
