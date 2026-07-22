@@ -12,10 +12,12 @@ import type { Env } from '../../config/env.schema';
 import type { CandidateHighlight } from '../cv/interfaces/parsed-resume.interface';
 import {
   cvAuditResultSchema,
+  cvTargetInferenceSchema,
   generalCvAuditResultSchema,
   lineCvAuditResultSchema,
   rawCvAuditResultSchema,
   type CvAuditResult,
+  type CvTargetInference,
 } from './schemas/cv-audit-result.schema';
 
 interface AnalyzeCvInput {
@@ -26,6 +28,7 @@ interface AnalyzeCvInput {
     seniorityLevelId: string | null;
     seniorityLevelName: string | null;
     seniorityDescription: string | null;
+    jobDescription?: string | null;
   };
   resumeText: string;
   candidateHighlights: CandidateHighlight[];
@@ -55,6 +58,67 @@ export class AiEngineService {
   private client: OpenAI | null = null;
 
   constructor(private readonly configService: ConfigService<Env, true>) {}
+
+  async inferCvTarget(input: {
+    resumeText: string;
+    headerLines: string[];
+  }): Promise<CvTargetInference> {
+    const client = this.getClient();
+    const model = this.configService.get('DEEPSEEK_MODEL', { infer: true });
+    const content = await this.requestAuditJson(client, {
+      model,
+      stream: false,
+      reasoning_effort: 'high',
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a senior recruiter. Return only valid JSON. Do not use markdown.',
+        },
+        {
+          role: 'user',
+          content: [
+            'Infer the most appropriate job target for this CV.',
+            'Priority:',
+            '1. If the CV header, title, objective, or profile summary states an explicit job title, use that exact job title as target_role.',
+            '2. Do not replace a specific job title with a broader degree, major, or category. Education and majors are context unless the CV has no job title or career direction.',
+            '3. If no explicit job title exists, infer the strongest job direction from summary, skills, projects, and experience.',
+            '4. Do not invent a target that is unsupported by the CV.',
+            '5. target_category_hint is only a broad category/domain hint; target_role must stay as the candidate-facing job title.',
+            '6. The output language for role/category can follow the CV language.',
+            '7. PDF extraction may letter-space header titles. If a top-line title is split into individual characters or unusual spacing, infer the normal phrase from that line instead of ignoring it.',
+            '8. Preserve occupation wording from evidence. Do not transform a person/job title into a broader field noun unless the CV itself uses that broader wording.',
+            '9. search_queries are for job-board crawling, not for display. They must be short, searchable phrases that maximize recall while staying close to the CV target. Prefer concise job titles and core specializations over long titles with parenthetical details.',
+            '',
+            'Return this exact JSON shape:',
+            JSON.stringify({
+              target_role: 'candidate-facing job title inferred from the CV',
+              target_category_hint: 'broad domain/category inferred from the CV',
+              seniority_hint: 'seniority or position level inferred from the CV',
+              confidence: 0.8,
+              reasoning:
+                'Vietnamese explanation of how the target was inferred from the evidence.',
+              keywords: ['relevant keyword 1', 'relevant keyword 2', 'relevant keyword 3'],
+              search_queries: [
+                'short searchable job title',
+                'alternative concise job title',
+                'core specialization keyword',
+              ],
+            }),
+            '',
+            'Header / top CV lines, highest priority:',
+            JSON.stringify(input.headerLines.slice(0, 20), null, 2),
+            '',
+            'CV text:',
+            input.resumeText.slice(0, 12000),
+          ].join('\n'),
+        },
+      ],
+    });
+
+    return cvTargetInferenceSchema.parse(this.parseJsonContent(content));
+  }
 
   async analyzeCv(input: AnalyzeCvInput): Promise<CvAuditResult> {
     const client = this.getClient();
@@ -457,6 +521,8 @@ export class AiEngineService {
     const targetSeniority = input.target.seniorityLevelName || 'not specified';
     const seniorityDescription =
       input.target.seniorityDescription || 'No seniority description provided.';
+    const jobDescription =
+      input.target.jobDescription?.trim() || 'No employer job description provided.';
 
     return {
       model,
@@ -477,6 +543,7 @@ export class AiEngineService {
             `Selected seniority/position level: ${targetSeniority}`,
             `Resolved target: ${targetRole}`,
             `Seniority expectation: ${seniorityDescription}`,
+            `Employer JD, if provided: ${jobDescription.slice(0, 5000)}`,
             '',
             'Evaluation rubric, based on common career-center resume guidance:',
             '- Judge fit for the selected job category/domain and selected seniority/position level. The selected target is authoritative.',
@@ -649,6 +716,8 @@ export class AiEngineService {
     const seniorityDescription =
       input.target.seniorityDescription ||
       'No seniority description provided.';
+    const jobDescription =
+      input.target.jobDescription?.trim() || 'No employer job description provided.';
 
     return {
       model,
@@ -669,6 +738,7 @@ export class AiEngineService {
             `Selected seniority/position level: ${targetSeniority}`,
             `Resolved target: ${targetRole}`,
             `Seniority expectation: ${seniorityDescription}`,
+            `Employer JD, if provided: ${jobDescription.slice(0, 5000)}`,
             `Batch: ${batchNumber}/${totalBatches}`,
             '',
             'Line-level rules:',
@@ -746,6 +816,8 @@ export class AiEngineService {
     const seniorityDescription =
       input.target.seniorityDescription ||
       'No seniority description provided.';
+    const jobDescription =
+      input.target.jobDescription?.trim() || 'No employer job description provided.';
 
     return {
       model,
@@ -766,6 +838,7 @@ export class AiEngineService {
             `Selected seniority/position level: ${targetSeniority}`,
             `Resolved target: ${targetRole}`,
             `Seniority expectation: ${seniorityDescription}`,
+            `Employer JD, if provided: ${jobDescription.slice(0, 5000)}`,
             '',
             'Coverage rules:',
             '- Only evaluate the candidate highlight lines in this coverage batch.',

@@ -2,14 +2,39 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+
+import { User } from '../../users/entities/user.entity';
+import { UserCv } from './user-cv.entity';
 
 @Entity({ name: 'cv_audits' })
 export class CvAudit {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  @Column({ name: 'user_id', nullable: true, type: 'uuid' })
+  userId!: string | null;
+
+  @JoinColumn({ name: 'user_id' })
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  user!: User | null;
+
+  @Column({ name: 'user_cv_id', nullable: true, type: 'uuid' })
+  userCvId!: string | null;
+
+  @JoinColumn({ name: 'user_cv_id' })
+  @ManyToOne(() => UserCv, { nullable: true, onDelete: 'SET NULL' })
+  userCv!: UserCv | null;
+
+  @Column({ name: 'research_session_id', nullable: true, type: 'uuid' })
+  researchSessionId!: string | null;
+
+  @Column({ name: 'research_type', nullable: true, type: 'varchar' })
+  researchType!: 'quick' | 'custom' | null;
 
   @Column({ name: 'target_role', nullable: true, type: 'varchar' })
   targetRole!: string | null;

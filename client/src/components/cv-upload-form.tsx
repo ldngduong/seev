@@ -32,7 +32,6 @@ export function CvUploadForm({ onAuditComplete }: CvUploadFormProps) {
   const setSelectedFeedbackId = useAuditStore(
     (state) => state.setSelectedFeedbackId,
   );
-  const setUploadedPdfFile = useAuditStore((state) => state.setUploadedPdfFile);
 
   const form = useForm<CvUploadFormValues, unknown, CvUploadValues>({
     resolver: zodResolver(cvUploadSchema),
@@ -118,7 +117,6 @@ export function CvUploadForm({ onAuditComplete }: CvUploadFormProps) {
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) {
-                  setUploadedPdfFile(file);
                   setSelectedFeedbackId(null);
                 }
                 form.setValue("resume", file as File, {

@@ -14,7 +14,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString()
 
 interface PdfAuditViewerProps {
-  file: File | null
+  file: File | Blob | string | null
   feedbacks: AuditFeedback[]
   activeFeedback: AuditFeedback | null
   onHighlightStatsChange?: (stats: HighlightStats) => void

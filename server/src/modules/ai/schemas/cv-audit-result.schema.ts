@@ -83,3 +83,15 @@ export const cvAuditResultSchema = z.object({
 });
 
 export type CvAuditResult = z.infer<typeof cvAuditResultSchema>;
+
+export const cvTargetInferenceSchema = z.object({
+  target_role: z.string().min(1),
+  target_category_hint: z.string().optional().default(''),
+  seniority_hint: z.string().optional().default(''),
+  confidence: z.number().min(0).max(1).default(0.5),
+  reasoning: z.string().min(1),
+  keywords: z.array(z.string().min(1)).min(3).max(20),
+  search_queries: z.array(z.string().min(2)).min(2).max(8),
+});
+
+export type CvTargetInference = z.infer<typeof cvTargetInferenceSchema>;

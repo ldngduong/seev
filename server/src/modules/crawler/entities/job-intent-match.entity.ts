@@ -1,0 +1,44 @@
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+
+import { JobPost } from './job-post.entity';
+import { JobSearchIntent } from './job-search-intent.entity';
+
+@Entity({ name: 'job_intent_matches' })
+export class JobIntentMatch {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ name: 'intent_id', type: 'uuid' })
+  intentId!: string;
+
+  @JoinColumn({ name: 'intent_id' })
+  @ManyToOne(() => JobSearchIntent, { onDelete: 'CASCADE' })
+  intent!: JobSearchIntent;
+
+  @Column({ name: 'job_post_id', type: 'uuid' })
+  jobPostId!: string;
+
+  @JoinColumn({ name: 'job_post_id' })
+  @ManyToOne(() => JobPost, { onDelete: 'CASCADE' })
+  jobPost!: JobPost;
+
+  @Column({ name: 'match_score', default: 0, type: 'int' })
+  matchScore!: number;
+
+  @Column({ name: 'matched_terms', default: () => "'[]'::jsonb", type: 'jsonb' })
+  matchedTerms!: string[];
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt!: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt!: Date;
+}
