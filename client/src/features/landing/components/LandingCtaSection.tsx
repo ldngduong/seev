@@ -5,8 +5,8 @@ import { buttonVariants } from '@/components/ui/button'
 
 export const LandingCtaSection = () => {
   return (
-    <section id="career-fit" className="rounded-4xl bg-card">
-      <div className="grid gap-6 p-[calc(var(--page-pad)*1.5)]">
+    <section id="pricing" className="rounded-4xl bg-card p-6">
+      <div className="grid gap-6">
         <div className="mx-auto flex flex-col items-center gap-4 text-center">
           <div className="w-fit rounded-4xl border bg-background px-3 py-1 text-xs font-medium">
             Career fit
@@ -33,13 +33,13 @@ export const LandingCtaSection = () => {
           </div>
 
           <div className="absolute inset-x-[5%] bottom-5 grid overflow-hidden rounded-3xl bg-background/80 backdrop-blur md:grid-cols-[1fr_1fr_0.8fr]">
-            <div className="p-[var(--page-pad)]">
+            <div className="p-5">
               <h3 className="text-xl font-semibold">Role-ready CV</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 Align the resume with job expectations before applying.
               </p>
             </div>
-            <div className="border-t p-[var(--page-pad)] md:border-s md:border-t-0">
+            <div className="border-t p-5 md:border-s md:border-t-0">
               <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
                 <span>Match progress</span>
                 <span>+34%</span>
@@ -48,7 +48,7 @@ export const LandingCtaSection = () => {
                 <div className="h-full w-8/12 rounded-full bg-primary" />
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 border-t bg-foreground p-[var(--page-pad)] text-background md:border-s md:border-t-0">
+            <div className="flex items-center justify-between gap-3 border-t bg-foreground p-5 text-background md:border-s md:border-t-0">
               <span className="text-xl font-semibold leading-tight">
                 Try Seev
               </span>

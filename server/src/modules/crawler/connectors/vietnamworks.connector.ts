@@ -9,6 +9,7 @@ import type {
   JobSourceConnector,
 } from '../types/crawled-job.type';
 import { resolveJobSearchQueries } from '../utils/job-search-query';
+import { resolveVietnamWorksLevelFilter } from '../utils/source-seniority-filters';
 import { normalizeText, uniqueNonEmpty } from '../utils/text-normalizer';
 
 interface VietnamWorksSearchResponse {
@@ -71,7 +72,7 @@ export class VietnamWorksConnector implements JobSourceConnector {
 
       const response = await this.http.fetchJson<VietnamWorksSearchResponse>(
         this.config.get('VIETNAMWORKS_SEARCH_URL', { infer: true }),
-        this.buildSearchRequest(query, hitsPerPage),
+        this.buildSearchRequest(query, hitsPerPage, intent),
       );
 
       for (const rawJob of response.data ?? []) {
@@ -94,7 +95,13 @@ export class VietnamWorksConnector implements JobSourceConnector {
     return jobs;
   }
 
-  private buildSearchRequest(query: string, hitsPerPage: number) {
+  private buildSearchRequest(
+    query: string,
+    hitsPerPage: number,
+    intent: JobSearchIntentPayload,
+  ) {
+    const jobLevelId = resolveVietnamWorksLevelFilter(intent);
+
     return {
       method: 'POST' as const,
       headers: {
@@ -107,7 +114,7 @@ export class VietnamWorksConnector implements JobSourceConnector {
       },
       body: JSON.stringify({
         query,
-        filter: [],
+        filter: jobLevelId ? [{ field: 'jobLevelId', value: jobLevelId }] : [],
         ranges: [],
         order: [],
         hitsPerPage,

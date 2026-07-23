@@ -51,6 +51,11 @@ export class CreateJobResearchIntentDto {
   seniorityLevelId?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  seniorityLevelName?: string;
+
+  @IsOptional()
   @Transform(({ value }) => toStringArray(value))
   @IsArray()
   @IsString({ each: true })

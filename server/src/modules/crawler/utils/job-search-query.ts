@@ -1,4 +1,5 @@
 import type { JobSearchIntentPayload } from '../types/crawled-job.type';
+import { removeSeniorityPhrases } from './seniority-intent';
 import { normalizeText, uniqueNonEmpty } from './text-normalizer';
 
 export function resolveJobSearchQueries(
@@ -10,26 +11,33 @@ export function resolveJobSearchQueries(
     | 'targetRole'
     | 'seniorityLevelName'
   >,
-  limit = 8,
+  limit = 12,
 ) {
   const targetWithoutParentheses = stripParenthetical(intent.targetRole);
   const categoryWithoutParentheses = stripParenthetical(intent.jobCategoryName);
-  const targetWithoutSeniority = removeExactPhrase(
-    targetWithoutParentheses,
-    intent.seniorityLevelName,
+  const roleWithoutSeniority = removeSeniorityPhrases(
+    removeExactPhrase(targetWithoutParentheses, intent.seniorityLevelName),
   );
-  const normalizedKeywords = (intent.keywords ?? []).flatMap((keyword) => [
-    stripParenthetical(keyword),
-    keyword,
-  ]);
+  const normalizedSearchQueries = (intent.searchQueries ?? []).map((query) =>
+    removeSeniorityPhrases(
+      removeExactPhrase(stripParenthetical(query), intent.seniorityLevelName),
+    ),
+  );
+  const normalizedKeywords = (intent.keywords ?? []).flatMap((keyword) => {
+    const withoutParentheses = stripParenthetical(keyword);
+    const withoutSeniority = removeSeniorityPhrases(
+      removeExactPhrase(withoutParentheses, intent.seniorityLevelName),
+    );
+
+    return [withoutSeniority, withoutParentheses, keyword];
+  });
 
   return uniqueNonEmpty([
-    ...(intent.searchQueries ?? []),
-    targetWithoutSeniority,
+    ...normalizedSearchQueries,
+    roleWithoutSeniority,
     categoryWithoutParentheses,
     intent.jobCategoryName,
     ...normalizedKeywords,
-    intent.targetRole,
   ]).slice(0, limit);
 }
 

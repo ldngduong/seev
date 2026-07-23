@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
 import { AuditResultPanel } from '@/components/audit-result-panel'
+import { DashboardPageHeader } from '@/components/layouts/DashboardPageHeader'
 import { JobCategoryPicker } from '@/components/job-category-picker'
 import {
   PdfAuditViewer,
@@ -136,54 +137,49 @@ export const ResearchCvPage = () => {
 
   return (
     <main className="flex w-full flex-col gap-6">
-      <header className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-2">
-          <Badge variant="secondary" className="w-fit">
-            AI Resume Matcher
-          </Badge>
-          <div>
-            <h1 className="text-3xl font-semibold tracking-normal md:text-4xl">
-              Smart CV auditor workspace
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Upload a PDF, let DeepSeek score the CV, highlight the exact
-              feedback text, then review keyword and role suggestions.
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to="/research-history"
-            className={cn(buttonVariants({ variant: 'outline' }))}
-          >
-            Research history
-          </Link>
-          <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-            <ShieldCheck className="size-4 text-primary" />
-            React TS + NestJS
-          </div>
-        </div>
-      </header>
+      <DashboardPageHeader
+        title="Smart CV auditor workspace"
+        actions={
+          <>
+            <Link
+              to="/research-history"
+              className={cn(buttonVariants({ variant: 'outline' }))}
+            >
+              Research history
+            </Link>
+            <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+              <ShieldCheck className="size-4 text-primary" />
+              React TS + NestJS
+            </div>
+          </>
+        }
+      />
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-3 md:grid-cols-3">
         {workflow.map((item) => (
-          <Card key={item.label} className="rounded-md">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{item.label}</CardTitle>
+          <Card key={item.label} className="rounded-2xl shadow-none">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+              <CardTitle className="text-sm font-medium text-zinc-700">
+                {item.label}
+              </CardTitle>
               <item.icon className="size-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold">{item.value}</div>
+            <CardContent className="pt-0">
+              <div className="text-lg font-semibold text-zinc-700">
+                {item.value}
+              </div>
             </CardContent>
           </Card>
         ))}
       </section>
 
       <section className="grid min-h-[680px] gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-        <div className="flex min-h-[620px] flex-col rounded-md border bg-card">
+        <div className="flex min-h-[620px] flex-col rounded-2xl border bg-card">
           <div className="flex items-center justify-between border-b px-4 py-3">
             <div>
-              <h2 className="text-base font-semibold">PDF viewer</h2>
+              <h2 className="text-base font-semibold text-zinc-700">
+                PDF viewer
+              </h2>
               <p className="text-sm text-muted-foreground">
                 Click highlighted PDF text to view the detailed feedback.
               </p>
@@ -208,9 +204,11 @@ export const ResearchCvPage = () => {
         </div>
 
         <aside className="flex flex-col gap-4">
-          <Card className="rounded-md">
+          <Card className="rounded-2xl shadow-none">
             <CardHeader>
-              <CardTitle className="text-base">Start research</CardTitle>
+              <CardTitle className="text-base font-semibold text-zinc-700">
+                Start research
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">

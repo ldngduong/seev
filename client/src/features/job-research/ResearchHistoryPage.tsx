@@ -3,6 +3,7 @@ import { BriefcaseBusiness, Clock3, FileText, RefreshCw } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 
+import { DashboardPageHeader } from '@/components/layouts/DashboardPageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -41,43 +42,33 @@ export function ResearchHistoryPage() {
 
   return (
     <main className="flex w-full flex-col gap-5">
-      <header className="flex flex-col gap-4 rounded-[2rem] bg-card p-5 ring-1 ring-border sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-2">
-          <Link to="/" className="text-sm font-semibold">
-            Seev
-          </Link>
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              Research history
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Review CV-to-job searches triggered from your account.
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              void sessionsQuery.refetch()
-              void intentsQuery.refetch()
-            }}
-            disabled={intentsQuery.isFetching || sessionsQuery.isFetching}
-          >
-            <RefreshCw />
-            Refresh
-          </Button>
-          <Link to="/research-cv" className={cn(buttonVariants())}>
-            <FileText />
-            New research
-          </Link>
-        </div>
-      </header>
+      <DashboardPageHeader
+        title="Research history"
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void sessionsQuery.refetch()
+                void intentsQuery.refetch()
+              }}
+              disabled={intentsQuery.isFetching || sessionsQuery.isFetching}
+            >
+              <RefreshCw />
+              Refresh
+            </Button>
+            <Link to="/research-cv" className={cn(buttonVariants())}>
+              <FileText />
+              New research
+            </Link>
+          </>
+        }
+      />
 
       {isLoading ? <HistorySkeleton /> : null}
       {isError ? (
-        <div className="rounded-[1.5rem] bg-destructive/10 p-4 text-sm text-destructive">
+        <div className="rounded-2xl bg-destructive/10 p-4 text-sm text-destructive">
           Could not load research history.
         </div>
       ) : null}
@@ -111,7 +102,7 @@ function HistorySection({
 }) {
   return (
     <section className="grid gap-3">
-      <h2 className="text-lg font-semibold">{title}</h2>
+      <h2 className="text-lg font-semibold text-zinc-700">{title}</h2>
       {children}
     </section>
   )
@@ -129,7 +120,7 @@ function SessionHistoryItem({ session }: { session: CvResearchSession }) {
   const createdAt = formatDateTime(session.created_at)
 
   return (
-    <article className="rounded-[1.5rem] bg-card p-4 ring-1 ring-border">
+    <article className="rounded-2xl bg-card p-4 ring-1 ring-border">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -146,7 +137,7 @@ function SessionHistoryItem({ session }: { session: CvResearchSession }) {
           </div>
 
           <div>
-            <h3 className="text-lg font-semibold">
+            <h3 className="text-lg font-semibold text-zinc-700">
               {target || 'AI inferred research'}
             </h3>
             <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
@@ -163,7 +154,7 @@ function SessionHistoryItem({ session }: { session: CvResearchSession }) {
           </div>
         </div>
 
-        <div className="grid min-w-[180px] gap-2 rounded-[1.25rem] bg-muted/40 p-3 text-sm">
+        <div className="grid min-w-[180px] gap-2 rounded-2xl bg-muted/40 p-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">Score</span>
             <strong>{session.audit?.overall_score ?? '-'}</strong>
@@ -193,7 +184,7 @@ function HistoryItem({ intent }: { intent: JobSearchIntent }) {
   const createdAt = formatDateTime(intent.createdAt)
 
   return (
-    <article className="rounded-[1.5rem] bg-card p-4 ring-1 ring-border">
+    <article className="rounded-2xl bg-card p-4 ring-1 ring-border">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -207,7 +198,7 @@ function HistoryItem({ intent }: { intent: JobSearchIntent }) {
           </div>
 
           <div>
-            <h2 className="text-lg font-semibold">
+            <h2 className="text-lg font-semibold text-zinc-700">
               {target || 'Untitled research'}
             </h2>
             <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
@@ -224,7 +215,7 @@ function HistoryItem({ intent }: { intent: JobSearchIntent }) {
           </div>
         </div>
 
-        <div className="grid min-w-[180px] gap-2 rounded-[1.25rem] bg-muted/40 p-3 text-sm">
+        <div className="grid min-w-[180px] gap-2 rounded-2xl bg-muted/40 p-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">Jobs saved</span>
             <strong>{intent.totalJobs}</strong>
@@ -251,7 +242,7 @@ function HistorySkeleton() {
   return (
     <section className="grid gap-3">
       {Array.from({ length: 3 }).map((_, index) => (
-        <Skeleton key={index} className="h-36 rounded-[1.5rem]" />
+        <Skeleton key={index} className="h-36 rounded-2xl" />
       ))}
     </section>
   )
@@ -259,10 +250,12 @@ function HistorySkeleton() {
 
 function EmptyHistory() {
   return (
-    <section className="grid min-h-[280px] place-items-center rounded-[2rem] bg-card p-8 text-center ring-1 ring-border">
+    <section className="grid min-h-[280px] place-items-center rounded-2xl bg-card p-8 text-center ring-1 ring-border">
       <div className="space-y-3">
         <BriefcaseBusiness className="mx-auto size-8 text-muted-foreground" />
-        <h2 className="text-xl font-semibold">No research yet</h2>
+        <h2 className="text-xl font-semibold text-zinc-700">
+          No research yet
+        </h2>
         <p className="text-sm text-muted-foreground">
           Start with a CV audit. Seev will create a job-search intent from that
           target and keep the result here.

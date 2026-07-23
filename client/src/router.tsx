@@ -1,7 +1,6 @@
 import { createBrowserRouter } from 'react-router'
 
 import { AuthLayout } from './components/layouts/AuthLayout'
-import { GuestLayout } from './components/layouts/GuestLayout'
 import { GoogleSuccessGuard } from './features/auth/guards/GoogleSuccessGuard'
 import { AuthGuard } from './features/auth/guards/AuthGuard'
 import { GuestGuard } from './features/auth/guards/GuestGuard'
@@ -19,7 +18,6 @@ import { LandingPage } from './features/landing/LandingPage'
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <GuestLayout />,
     children: [
       {
         index: true,

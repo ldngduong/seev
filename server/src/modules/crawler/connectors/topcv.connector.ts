@@ -15,6 +15,7 @@ import {
   uniqueNonEmpty,
 } from '../utils/text-normalizer';
 import { resolveJobSearchQueries } from '../utils/job-search-query';
+import { resolveTopCvPositionFilter } from '../utils/source-seniority-filters';
 
 @Injectable()
 export class TopCvConnector implements JobSourceConnector {
@@ -58,9 +59,12 @@ export class TopCvConnector implements JobSourceConnector {
         break;
       }
 
-      const html = await this.http.fetchText(this.buildSearchUrl(query), {
-        viaBrightData: true,
-      });
+      const html = await this.http.fetchText(
+        this.buildSearchUrl(query, intent),
+        {
+          viaBrightData: true,
+        },
+      );
       const parsedCards = this.parseListing(html, query);
 
       for (const card of parsedCards) {
@@ -82,12 +86,19 @@ export class TopCvConnector implements JobSourceConnector {
     return cards;
   }
 
-  private buildSearchUrl(query: string) {
+  private buildSearchUrl(query: string, intent: JobSearchIntentPayload) {
     const keyword = slugifyKeyword(query);
-
-    return this.config
+    const rawUrl = this.config
       .get('TOPCV_SEARCH_URL_TEMPLATE', { infer: true })
       .replace('{keyword}', encodeURIComponent(keyword));
+    const url = new URL(rawUrl);
+    const position = resolveTopCvPositionFilter(intent);
+
+    if (position) {
+      url.searchParams.set('position', position);
+    }
+
+    return url.toString();
   }
 
   private parseListing(html: string, query: string): CrawledJob[] {
@@ -112,13 +123,15 @@ export class TopCvConnector implements JobSourceConnector {
         sourceJobId,
         sourceUrl,
         title,
-        companyName: normalizeText(
-          card.find('.company-name, .company a, a.company').first().text() ||
-            card.find('.avatar img').first().attr('alt'),
-        ) || null,
-        salaryText: normalizeText(
-          card.find('.title-salary, .salary, .job-salary').first().text(),
-        ) || null,
+        companyName:
+          normalizeText(
+            card.find('.company-name, .company a, a.company').first().text() ||
+              card.find('.avatar img').first().attr('alt'),
+          ) || null,
+        salaryText:
+          normalizeText(
+            card.find('.title-salary, .salary, .job-salary').first().text(),
+          ) || null,
         locations: uniqueNonEmpty(
           card
             .find('.job-address, .location, .label-content')
@@ -162,9 +175,7 @@ export class TopCvConnector implements JobSourceConnector {
       description: sections['Mô tả công việc'] || job.description,
       requirements: sections['Yêu cầu ứng viên'] || job.requirements,
       benefits:
-        sections['Quyền lợi ứng viên'] ||
-        sections['Quyền lợi'] ||
-        job.benefits,
+        sections['Quyền lợi ứng viên'] || sections['Quyền lợi'] || job.benefits,
       raw: {
         ...job.raw,
         detailTitle: normalizeText($('title').first().text()),

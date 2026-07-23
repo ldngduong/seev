@@ -15,6 +15,7 @@ import {
   uniqueNonEmpty,
 } from '../utils/text-normalizer';
 import { resolveJobSearchQueries } from '../utils/job-search-query';
+import { resolveIndeedSearchParams } from '../utils/source-seniority-filters';
 
 @Injectable()
 export class IndeedConnector implements JobSourceConnector {
@@ -38,9 +39,12 @@ export class IndeedConnector implements JobSourceConnector {
         break;
       }
 
-      const html = await this.http.fetchText(this.buildSearchUrl(intent, query), {
-        viaBrightData: true,
-      });
+      const html = await this.http.fetchText(
+        this.buildSearchUrl(intent, query),
+        {
+          viaBrightData: true,
+        },
+      );
 
       for (const job of this.parseListing(html, query)) {
         const key = `${job.source}:${job.sourceJobId}`;
@@ -64,11 +68,18 @@ export class IndeedConnector implements JobSourceConnector {
   private buildSearchUrl(intent: JobSearchIntentPayload, query: string) {
     const keyword = slugifyKeyword(query);
     const location = intent.locations[0] || '';
-
-    return this.config
+    const rawUrl = this.config
       .get('INDEED_SEARCH_URL_TEMPLATE', { infer: true })
       .replace('{keyword}', encodeURIComponent(keyword))
       .replace('{location}', encodeURIComponent(location));
+    const url = new URL(rawUrl);
+    const params = resolveIndeedSearchParams(intent);
+
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
+
+    return url.toString();
   }
 
   private parseListing(html: string, query: string): CrawledJob[] {
@@ -99,19 +110,28 @@ export class IndeedConnector implements JobSourceConnector {
           infer: true,
         })}/viewjob?jk=${encodeURIComponent(sourceJobId)}`,
         title,
-        companyName: normalizeText(
-          card.find('[data-testid="company-name"], .companyName').first().text(),
-        ) || null,
-        salaryText: normalizeText(
-          card.find('[data-testid="attribute_snippet_testid"]').first().text(),
-        ) || null,
+        companyName:
+          normalizeText(
+            card
+              .find('[data-testid="company-name"], .companyName')
+              .first()
+              .text(),
+          ) || null,
+        salaryText:
+          normalizeText(
+            card
+              .find('[data-testid="attribute_snippet_testid"]')
+              .first()
+              .text(),
+          ) || null,
         locations: uniqueNonEmpty([
           card.find('[data-testid="text-location"], .companyLocation').text(),
         ]),
         seniorityText: null,
         description:
-          normalizeText(card.find('.job-snippet, [data-testid="job-snippet"]').text()) ||
-          null,
+          normalizeText(
+            card.find('.job-snippet, [data-testid="job-snippet"]').text(),
+          ) || null,
         requirements: null,
         benefits: null,
         skills: [],

@@ -50,28 +50,37 @@ export function AuthLayout() {
 
   return (
     <SidebarProvider>
-      <Sidebar collapsible="icon">
-        <SidebarHeader>
-          <div className="flex h-10 items-center gap-2 rounded-xl px-2">
-            <div className="grid size-8 place-items-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground">
-              S
-            </div>
+      <Sidebar collapsible="icon" className="border-r bg-sidebar">
+        <SidebarHeader className="px-4 py-5 group-data-[collapsible=icon]:px-2">
+          <div className="flex h-11 items-center gap-3 rounded-2xl px-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+            <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl">
+              <img
+                src="/logo.png"
+                alt="Seev"
+                className="size-10 object-contain"
+              />
+            </span>
             <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-              <p className="truncate text-sm font-semibold">Seev</p>
-              <p className="truncate text-xs text-sidebar-foreground/60">
+              <p className="truncate text-lg font-semibold leading-none text-zinc-700">
+                Seev
+              </p>
+              <p className="mt-1 truncate text-xs text-muted-foreground">
                 CV research workspace
               </p>
             </div>
           </div>
         </SidebarHeader>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+        <SidebarContent className="px-3 py-2 group-data-[collapsible=icon]:px-2">
+          <SidebarGroup className="gap-3 px-0">
+            <SidebarGroupLabel className="px-3 text-sm font-medium text-zinc-500 group-data-[collapsible=icon]:sr-only">
+              Workspace
+            </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className="gap-1.5">
                 {navItems.map((item) => (
                   <SidebarMenuItem key={item.to}>
                     <SidebarMenuButton
+                      className="h-11 gap-3 rounded-2xl px-3 text-[15px] font-medium text-zinc-700 transition-colors hover:bg-sidebar-accent hover:text-zinc-900 data-[active=true]:bg-sidebar-accent data-[active=true]:text-zinc-900 group-data-[collapsible=icon]:size-10 group-data-[collapsible=icon]:px-0 [&_svg]:size-5 [&_svg]:shrink-0"
                       isActive={
                         location.pathname === item.to ||
                         location.pathname.startsWith(`${item.to}/`)
@@ -94,8 +103,8 @@ export function AuthLayout() {
         <SidebarRail />
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-[var(--content-pad)] [--content-pad:1rem] sm:[--content-pad:1.25rem] lg:[--content-pad:1.5rem]">
-          <SidebarTrigger />
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-[var(--content-pad)] [--content-pad:1rem] sm:[--content-pad:1.25rem] lg:[--content-pad:1.5rem]">
+          <SidebarTrigger className="size-9 rounded-xl text-zinc-700" />
         </header>
         <div className="flex flex-1 flex-col gap-6 px-[var(--content-pad)] py-[var(--content-pad)] [--content-pad:1rem] sm:[--content-pad:1.25rem] lg:[--content-pad:1.5rem]">
           <Outlet />

@@ -24,7 +24,7 @@ const envSchema = z.object({
     .enum(['development', 'test', 'production'])
     .default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
-  CLIENT_URL: z.url().default('http://localhost:5173'),
+  CLIENT_URL: z.url().default('http://localhost:5175'),
   DATABASE_HOST: z.string().min(1),
   DATABASE_PORT: z.coerce.number().int().positive(),
   DATABASE_USER: z.string().min(1),
@@ -58,10 +58,10 @@ const envSchema = z.object({
     .default('http://localhost:3000/auth/google/callback'),
   GOOGLE_SUCCESS_REDIRECT_URL: z
     .url()
-    .default('http://localhost:5173/auth/google/success'),
+    .default('http://localhost:5175/auth/google/success'),
   GOOGLE_FAILURE_REDIRECT_URL: z
     .url()
-    .default('http://localhost:5173/login?error=google_auth_failed'),
+    .default('http://localhost:5175/login?error=google_auth_failed'),
   DEEPSEEK_API_KEY: z.string().optional(),
   DEEPSEEK_BASE_URL: z.url().default('https://api.deepseek.com'),
   DEEPSEEK_MODEL: z.string().default('deepseek-v4-pro'),

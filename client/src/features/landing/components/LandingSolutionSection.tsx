@@ -22,11 +22,11 @@ export const LandingSolutionSection = () => {
   return (
     <section
       id="scoring"
-      className="-mt-8 rounded-4xl bg-primary text-primary-foreground md:-mt-14 md:ms-[30%]"
+      className="rounded-4xl bg-primary p-6 text-primary-foreground"
     >
-      <div className="grid gap-6 p-[calc(var(--page-pad)*1.5)]">
+      <div className="grid gap-6">
         <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr] lg:items-end">
-          <div className="flex flex-col gap-4 pt-9 md:pt-14">
+          <div className="flex flex-col gap-4">
             <div className="w-fit rounded-4xl border border-primary-foreground/25 px-3 py-1 text-xs font-medium">
               Seev workflow
             </div>

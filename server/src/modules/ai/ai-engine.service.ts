@@ -81,7 +81,7 @@ export class AiEngineService {
           content: [
             'Infer the most appropriate job target for this CV.',
             'Priority:',
-            '1. If the CV header, title, objective, or profile summary states an explicit job title, use that exact job title as target_role.',
+            '1. If the CV header, title, objective, profile summary, or repeated project role states an explicit job title, use that specific candidate-facing job title as target_role.',
             '2. Do not replace a specific job title with a broader degree, major, or category. Education and majors are context unless the CV has no job title or career direction.',
             '3. If no explicit job title exists, infer the strongest job direction from summary, skills, projects, and experience.',
             '4. Do not invent a target that is unsupported by the CV.',
@@ -89,7 +89,9 @@ export class AiEngineService {
             '6. The output language for role/category can follow the CV language.',
             '7. PDF extraction may letter-space header titles. If a top-line title is split into individual characters or unusual spacing, infer the normal phrase from that line instead of ignoring it.',
             '8. Preserve occupation wording from evidence. Do not transform a person/job title into a broader field noun unless the CV itself uses that broader wording.',
-            '9. search_queries are for job-board crawling, not for display. They must be short, searchable phrases that maximize recall while staying close to the CV target. Prefer concise job titles and core specializations over long titles with parenthetical details.',
+            '9. seniority_hint must be a concise level evidenced by the CV, such as Intern, Fresher, Junior, Middle, Senior, Lead, Manager, or empty only when the CV gives no evidence. If the header says Intern/Junior/etc., do not omit it.',
+            '10. search_queries are for job-board crawling, not for display. They must be short, searchable phrases that maximize recall while staying close to the CV target. If a seniority level is evidenced, include level-aware queries first, then role-only variants. Prefer concise job titles and core specializations over long titles with parenthetical details.',
+            '11. Do not rewrite a precise role into a different broad role. For example, a CV title like "Intern Frontend Developer" should remain a frontend developer target, not web development, software engineering, or a generic developer category.',
             '',
             'Return this exact JSON shape:',
             JSON.stringify({

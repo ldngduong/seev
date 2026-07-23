@@ -410,6 +410,8 @@ export class CvService {
       const jobIntentPayload: CreateJobResearchIntentDto = {
         auditId: audit.audit_id,
         targetRole: input.targetRole ?? undefined,
+        seniorityLevelId: input.seniorityLevelId ?? undefined,
+        seniorityLevelName: input.seniorityLevelName ?? undefined,
         keywords: input.extraKeywords,
         searchQueries: input.searchQueries,
       };

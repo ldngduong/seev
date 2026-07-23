@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, FileText, History, RefreshCw } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 
+import { DashboardPageHeader } from '@/components/layouts/DashboardPageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -60,50 +61,56 @@ export function MyCvDetailPage() {
 
   return (
     <main className="flex w-full flex-col gap-6">
-      <header className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <Link
-            to="/my-cvs"
-            className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" />
-            CV của tôi
-          </Link>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-3xl font-semibold tracking-normal">
-              {cv.name}
-            </h1>
-            <Badge variant={cv.status === 'ready' ? 'default' : 'secondary'}>
-              {cv.status}
-            </Badge>
+      <DashboardPageHeader
+        title={
+          <div className="min-w-0">
+            <Link
+              to="/my-cvs"
+              className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="size-4" />
+              CV của tôi
+            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-3xl font-semibold tracking-normal text-zinc-700">
+                {cv.name}
+              </h1>
+              <Badge variant={cv.status === 'ready' ? 'default' : 'secondary'}>
+                {cv.status}
+              </Badge>
+            </div>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {cv.original_file_name}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              void cvsQuery.refetch()
-              void sessionsQuery.refetch()
-            }}
-            disabled={cvsQuery.isFetching || sessionsQuery.isFetching}
-          >
-            <RefreshCw className="size-4" />
-            Refresh
-          </Button>
-          <Link to={`/research-cv?cvId=${cv.id}`} className={cn(buttonVariants())}>
-            Research mới
-          </Link>
-        </div>
-      </header>
+        }
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void cvsQuery.refetch()
+                void sessionsQuery.refetch()
+              }}
+              disabled={cvsQuery.isFetching || sessionsQuery.isFetching}
+            >
+              <RefreshCw className="size-4" />
+              Refresh
+            </Button>
+            <Link
+              to={`/research-cv?cvId=${cv.id}`}
+              className={cn(buttonVariants())}
+            >
+              Research mới
+            </Link>
+          </>
+        }
+      />
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-        <Card className="overflow-hidden rounded-md">
+        <Card className="overflow-hidden rounded-2xl shadow-none">
           <CardHeader>
-            <CardTitle className="text-base">Preview</CardTitle>
+            <CardTitle className="text-base font-semibold text-zinc-700">
+              Preview
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="min-h-[620px] overflow-hidden rounded-md border bg-muted">
@@ -153,9 +160,11 @@ function CvInfoCard({ cv }: { cv: UserCv }) {
   ]
 
   return (
-    <Card className="rounded-md">
+    <Card className="rounded-2xl shadow-none">
       <CardHeader>
-        <CardTitle className="text-base">Thông tin CV</CardTitle>
+        <CardTitle className="text-base font-semibold text-zinc-700">
+          Thông tin CV
+        </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3">
         {rows.map(([label, value]) => (
@@ -183,7 +192,7 @@ function CvResearchHistoryCard({
 }) {
   if (isLoading) {
     return (
-      <Card className="rounded-md">
+      <Card className="rounded-2xl shadow-none">
         <CardContent className="grid gap-3 pt-6">
           {Array.from({ length: 3 }).map((_, index) => (
             <Skeleton key={index} className="h-24 rounded-md" />
@@ -194,9 +203,9 @@ function CvResearchHistoryCard({
   }
 
   return (
-    <Card className="rounded-md">
+    <Card className="rounded-2xl shadow-none">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex items-center gap-2 text-base font-semibold text-zinc-700">
           <History className="size-4" />
           Lịch sử research
         </CardTitle>
@@ -211,7 +220,7 @@ function CvResearchHistoryCard({
           <Link
             key={session.id}
             to={`/research-history/${session.id}`}
-            className="block rounded-md border bg-background p-4 transition-colors hover:bg-muted/40"
+            className="block rounded-2xl border bg-background p-4 transition-colors hover:bg-muted/40"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -221,7 +230,7 @@ function CvResearchHistoryCard({
                   </Badge>
                   <Badge variant="outline">{session.type}</Badge>
                 </div>
-                <h2 className="mt-3 truncate font-semibold">
+                <h2 className="mt-3 truncate font-semibold text-zinc-700">
                   {formatTarget(session)}
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -229,7 +238,7 @@ function CvResearchHistoryCard({
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-semibold">
+                <p className="text-2xl font-semibold text-zinc-700">
                   {session.audit?.overall_score ?? '-'}
                 </p>
                 <p className="text-xs text-muted-foreground">score</p>

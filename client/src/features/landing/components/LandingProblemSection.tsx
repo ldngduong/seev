@@ -32,8 +32,8 @@ const visualTiles = [
 
 export const LandingProblemSection = () => {
   return (
-    <section id="product" className="relative z-10 rounded-4xl bg-card">
-      <div className="grid gap-5 p-[calc(var(--page-pad)*1.5)] lg:grid-cols-[0.8fr_1.05fr_1.05fr_1.05fr]">
+    <section id="product" className="relative z-10 rounded-4xl bg-card p-6">
+      <div className="grid gap-5 lg:grid-cols-[0.8fr_1.05fr_1.05fr_1.05fr]">
         <div className="flex flex-col gap-2">
           <div className="w-fit rounded-4xl border bg-background px-3 py-1 text-xs font-medium">
             Review gaps

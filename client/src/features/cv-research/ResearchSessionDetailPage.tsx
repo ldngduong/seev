@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { AuditResultPanel } from '@/components/audit-result-panel'
+import { DashboardPageHeader } from '@/components/layouts/DashboardPageHeader'
 import {
   PdfAuditViewer,
   type HighlightStats,
@@ -68,56 +69,39 @@ export function ResearchSessionDetailPage() {
     return <main className="text-sm text-destructive">Research not found.</main>
   }
 
-  const targetLabel =
-    session.target.target_role ||
-    [
-      session.target.seniority_level_name,
-      session.target.job_category_name,
-    ]
-      .filter(Boolean)
-      .join(' ') ||
-    'AI inferred target'
-
   return (
     <main className="flex w-full flex-col gap-6">
-      <header className="flex flex-col gap-3 border-b pb-5 md:flex-row md:items-center md:justify-between">
-        <div>
-          <Badge variant="secondary" className="mb-3">
-            {session.type} research
-          </Badge>
-          <h1 className="text-3xl font-semibold tracking-normal">
-            {session.cv.name}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {targetLabel}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={
-              !session.job_search_intent_id ||
-              retryJobsMutation.isPending
-            }
-            onClick={() => retryJobsMutation.mutate(session.id)}
-          >
-            {retryJobsMutation.isPending ? 'Retrying...' : 'Retry jobs'}
-          </Button>
-          <Link
-            to="/research-history"
-            className={cn(buttonVariants({ variant: 'outline' }))}
-          >
-            Back to history
-          </Link>
-        </div>
-      </header>
+      <DashboardPageHeader
+        title={session.cv.name}
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={
+                !session.job_search_intent_id || retryJobsMutation.isPending
+              }
+              onClick={() => retryJobsMutation.mutate(session.id)}
+            >
+              {retryJobsMutation.isPending ? 'Retrying...' : 'Retry jobs'}
+            </Button>
+            <Link
+              to="/research-history"
+              className={cn(buttonVariants({ variant: 'outline' }))}
+            >
+              Back to history
+            </Link>
+          </>
+        }
+      />
 
       <section className="grid min-h-[680px] gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-        <div className="flex min-h-[620px] flex-col rounded-md border bg-card">
+        <div className="flex min-h-[620px] flex-col rounded-2xl border bg-card">
           <div className="flex items-center justify-between border-b px-4 py-3">
             <div>
-              <h2 className="text-base font-semibold">PDF viewer</h2>
+              <h2 className="text-base font-semibold text-zinc-700">
+                PDF viewer
+              </h2>
               <p className="text-sm text-muted-foreground">
                 Replayed from stored research snapshot.
               </p>

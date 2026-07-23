@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Document, Page, pdfjs } from 'react-pdf'
+import { Document, Page } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
 import { Badge } from '@/components/ui/badge'
+import '@/lib/pdfjs-worker'
 import { useAuditStore } from '@/stores/audit-store'
 import type { AuditFeedback } from '@/types/cv'
-
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString()
 
 interface PdfAuditViewerProps {
   file: File | Blob | string | null

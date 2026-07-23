@@ -35,6 +35,11 @@ import {
 } from './types/job-source.type';
 import { createContentHash } from './utils/content-hash';
 import {
+  evaluateSeniorityFit,
+  resolveSeniorityGroup,
+  type SeniorityGroup,
+} from './utils/seniority-intent';
+import {
   clamp,
   normalizeSearchText,
   normalizeText,
@@ -59,8 +64,6 @@ interface JobMatchResult {
   terms: string[];
   accepted: boolean;
 }
-
-type SeniorityGroup = 'intern' | 'junior' | 'mid' | 'senior' | 'leadership';
 
 const MIN_JOB_MATCH_SCORE = 18;
 
@@ -112,7 +115,14 @@ const TOKEN_STOP_WORDS = new Set([
 const ROLE_FAMILIES = [
   {
     name: 'frontend',
-    triggers: ['frontend', 'front end', 'front-end', 'react', 'nextjs', 'next.js'],
+    triggers: [
+      'frontend',
+      'front end',
+      'front-end',
+      'react',
+      'nextjs',
+      'next.js',
+    ],
     evidence: [
       'frontend',
       'front end',
@@ -157,7 +167,13 @@ const ROLE_FAMILIES = [
   },
   {
     name: 'qa',
-    triggers: ['tester', 'testing', 'qa', 'quality assurance', 'test automation'],
+    triggers: [
+      'tester',
+      'testing',
+      'qa',
+      'quality assurance',
+      'test automation',
+    ],
     evidence: [
       'tester',
       'testing',
@@ -221,14 +237,6 @@ const ROLE_FAMILIES = [
     ],
   },
 ] as const;
-
-const SENIORITY_TERMS: Record<SeniorityGroup, string[]> = {
-  intern: ['intern', 'internship', 'fresher', 'thuc tap', 'thực tập'],
-  junior: ['junior', 'entry level', 'fresher'],
-  mid: ['middle', 'mid level', 'mid-level', '2 years', '3 years'],
-  senior: ['senior', 'sr', 'experienced', '4 years', '5 years'],
-  leadership: ['lead', 'leader', 'manager', 'head', 'director', 'principal'],
-};
 
 @Injectable()
 export class JobResearchService {
@@ -309,6 +317,7 @@ export class JobResearchService {
       status: 'processing',
       error: null,
     });
+    await this.matchRepository.delete({ intentId: intent.id });
 
     try {
       const payload = this.toPayload(intent);
@@ -495,13 +504,15 @@ export class JobResearchService {
       category?.name || audit?.jobCategoryName || undefined,
     );
     const seniorityLevelName = normalizeText(
-      seniority?.name || audit?.seniorityLevelName || undefined,
+      seniority?.name ||
+        dto.seniorityLevelName ||
+        audit?.seniorityLevelName ||
+        undefined,
     );
     const keywords = uniqueNonEmpty([
       ...(dto.keywords ?? []),
       jobCategoryName,
       targetRole,
-      seniorityLevelName,
       ...this.extractAuditKeywords(audit),
     ]);
     const searchQueries = uniqueNonEmpty(dto.searchQueries ?? []);
@@ -763,7 +774,7 @@ export class JobResearchService {
       roleTerms,
       positiveTerms,
       roleFamilies,
-      seniorityGroup: this.resolveSeniorityGroup(
+      seniorityGroup: resolveSeniorityGroup(
         [intent.seniorityLevelName, intent.targetRole].join(' '),
       ),
     };
@@ -836,12 +847,27 @@ export class JobResearchService {
       }
     }
 
-    const seniorityScore = this.scoreSeniorityFit(profile, [
-      normalizedTitle,
-      normalizeSearchText(jobPost.seniorityText),
-      normalizedSearch,
-    ].join(' '));
-    score += seniorityScore;
+    const seniorityFit = evaluateSeniorityFit({
+      targetGroup: profile.seniorityGroup,
+      titleText: jobPost.title,
+      explicitLevelText: jobPost.seniorityText,
+      bodyText: [
+        jobPost.description,
+        jobPost.requirements,
+        jobPost.benefits,
+      ].join(' '),
+    });
+
+    if (!seniorityFit.accepted) {
+      return {
+        score: 0,
+        terms: uniqueNonEmpty([...matchedTerms, ...seniorityFit.matchedTerms]),
+        accepted: false,
+      };
+    }
+
+    score += seniorityFit.score;
+    matchedTerms.push(...seniorityFit.matchedTerms);
 
     const finalScore = clamp(score, 0, 100);
 
@@ -966,58 +992,5 @@ export class JobResearchService {
     }
 
     return uniqueNonEmpty(matches);
-  }
-
-  private resolveSeniorityGroup(
-    value: string | null | undefined,
-  ): SeniorityGroup | null {
-    const normalized = normalizeSearchText(value);
-
-    if (!normalized) {
-      return null;
-    }
-
-    for (const [group, terms] of Object.entries(SENIORITY_TERMS)) {
-      if (terms.some((term) => normalized.includes(normalizeSearchText(term)))) {
-        return group as SeniorityGroup;
-      }
-    }
-
-    return null;
-  }
-
-  private scoreSeniorityFit(profile: JobMatchProfile, normalizedJobText: string) {
-    if (!profile.seniorityGroup) {
-      return 0;
-    }
-
-    const targetTerms = SENIORITY_TERMS[profile.seniorityGroup];
-    const hasTargetSeniority = targetTerms.some((term) =>
-      normalizedJobText.includes(normalizeSearchText(term)),
-    );
-
-    if (hasTargetSeniority) {
-      return 8;
-    }
-
-    if (
-      ['intern', 'junior'].includes(profile.seniorityGroup) &&
-      [...SENIORITY_TERMS.senior, ...SENIORITY_TERMS.leadership].some((term) =>
-        normalizedJobText.includes(normalizeSearchText(term)),
-      )
-    ) {
-      return -28;
-    }
-
-    if (
-      ['senior', 'leadership'].includes(profile.seniorityGroup) &&
-      SENIORITY_TERMS.intern.some((term) =>
-        normalizedJobText.includes(normalizeSearchText(term)),
-      )
-    ) {
-      return -18;
-    }
-
-    return 0;
   }
 }
