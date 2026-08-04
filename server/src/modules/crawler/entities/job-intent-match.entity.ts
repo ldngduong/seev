@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -12,6 +13,9 @@ import { JobPost } from './job-post.entity';
 import { JobSearchIntent } from './job-search-intent.entity';
 
 @Entity({ name: 'job_intent_matches' })
+@Index('UQ_job_intent_matches_intent_job', ['intentId', 'jobPostId'], {
+  unique: true,
+})
 export class JobIntentMatch {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

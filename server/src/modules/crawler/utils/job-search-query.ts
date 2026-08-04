@@ -14,7 +14,6 @@ export function resolveJobSearchQueries(
   limit = 12,
 ) {
   const targetWithoutParentheses = stripParenthetical(intent.targetRole);
-  const categoryWithoutParentheses = stripParenthetical(intent.jobCategoryName);
   const roleWithoutSeniority = removeSeniorityPhrases(
     removeExactPhrase(targetWithoutParentheses, intent.seniorityLevelName),
   );
@@ -23,21 +22,18 @@ export function resolveJobSearchQueries(
       removeExactPhrase(stripParenthetical(query), intent.seniorityLevelName),
     ),
   );
-  const normalizedKeywords = (intent.keywords ?? []).flatMap((keyword) => {
-    const withoutParentheses = stripParenthetical(keyword);
-    const withoutSeniority = removeSeniorityPhrases(
-      removeExactPhrase(withoutParentheses, intent.seniorityLevelName),
-    );
-
-    return [withoutSeniority, withoutParentheses, keyword];
-  });
-
-  return uniqueNonEmpty([
+  const occupationQueries = uniqueNonEmpty([
     ...normalizedSearchQueries,
     roleWithoutSeniority,
-    categoryWithoutParentheses,
+  ]);
+
+  if (occupationQueries.length > 0) {
+    return occupationQueries.slice(0, limit);
+  }
+
+  return uniqueNonEmpty([
+    stripParenthetical(intent.jobCategoryName),
     intent.jobCategoryName,
-    ...normalizedKeywords,
   ]).slice(0, limit);
 }
 

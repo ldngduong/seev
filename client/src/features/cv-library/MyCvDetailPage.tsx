@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, FileText, History, RefreshCw } from 'lucide-react'
 import { useCallback } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { DashboardPageHeader } from '@/components/layouts/DashboardPageHeader'
+import { DataPagination } from '@/components/data/DataPagination'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,39 +19,53 @@ import {
 } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { useResearchProgress } from '@/hooks/use-research-progress'
-import { listCvResearchSessions, listUserCvs } from '@/services/cv-api'
+import {
+  listCvResearchSessions,
+  listUserCvs,
+  MAX_CV_PAGE_SIZE,
+  type PaginatedResponse,
+} from '@/services/cv-api'
 import type { CvResearchSession, UserCv } from '@/types/cv'
 
 export function MyCvDetailPage() {
   const { cvId } = useParams()
   const queryClient = useQueryClient()
+  const [historyPage, setHistoryPage] = useState(1)
   const cvsQuery = useQuery({
-    queryKey: ['user-cvs'],
-    queryFn: listUserCvs,
+    queryKey: ['user-cvs', { search: cvId, purpose: 'detail' }],
+    queryFn: () => listUserCvs({ page: 1, pageSize: MAX_CV_PAGE_SIZE }),
   })
   const sessionsQuery = useQuery({
-    queryKey: ['cv-research-sessions'],
-    queryFn: () => listCvResearchSessions(100),
+    queryKey: ['cv-research-sessions', { userCvId: cvId, page: historyPage }],
+    queryFn: () => listCvResearchSessions({
+      page: historyPage,
+      pageSize: 6,
+      userCvId: cvId,
+    }),
+    enabled: Boolean(cvId),
   })
   const handleProgress = useCallback(
     (event: import('@/types/research-progress').ResearchProgressEvent) => {
-      queryClient.setQueryData<CvResearchSession[]>(
-        ['cv-research-sessions'],
+      queryClient.setQueriesData<PaginatedResponse<CvResearchSession>>(
+        { queryKey: ['cv-research-sessions'] },
         (current) =>
-          current?.map((session) =>
-            session.id === event.session_id
-              ? {
-                  ...session,
-                  status: event.status,
-                  phase: event.phase,
-                  progress: event.progress,
-                  progress_message: event.message,
-                  attempt: event.attempt,
-                  error: event.error,
-                  updated_at: event.updated_at,
-                }
-              : session,
-          ),
+          current ? {
+            ...current,
+            items: current.items.map((session) =>
+              session.id === event.session_id
+                ? {
+                    ...session,
+                    status: event.status,
+                    phase: event.phase,
+                    progress: event.progress,
+                    progress_message: event.message,
+                    attempt: event.attempt,
+                    error: event.error,
+                    updated_at: event.updated_at,
+                  }
+                : session,
+            ),
+          } : current,
       )
       if (['completed', 'failed'].includes(event.status)) {
         void sessionsQuery.refetch()
@@ -61,9 +77,8 @@ export function MyCvDetailPage() {
     void sessionsQuery.refetch()
   }, [sessionsQuery])
   useResearchProgress(handleProgress, reconcileProgress)
-  const cv = cvsQuery.data?.find((item) => item.id === cvId)
-  const sessions =
-    sessionsQuery.data?.filter((session) => session.cv.id === cvId) ?? []
+  const cv = cvsQuery.data?.items.find((item) => item.id === cvId)
+  const sessions = sessionsQuery.data?.items ?? []
 
   if (cvsQuery.isLoading) {
     return <CvDetailSkeleton />
@@ -99,7 +114,7 @@ export function MyCvDetailPage() {
               className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="size-4" />
-              CV của tôi
+              My CVs
             </Link>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-3xl font-semibold tracking-normal text-zinc-700">
@@ -126,10 +141,10 @@ export function MyCvDetailPage() {
               Refresh
             </Button>
             <Link
-              to={`/research-cv?cvId=${cv.id}`}
+              to={`/research/new?cvId=${cv.id}`}
               className={cn(buttonVariants())}
             >
-              Research mới
+              New research
             </Link>
           </>
         }
@@ -170,6 +185,10 @@ export function MyCvDetailPage() {
             <CvResearchHistoryCard
               sessions={sessions}
               isLoading={sessionsQuery.isLoading}
+              page={sessionsQuery.data?.meta.page ?? 1}
+              totalPages={sessionsQuery.data?.meta.total_pages ?? 1}
+              total={sessionsQuery.data?.meta.total ?? 0}
+              onPageChange={setHistoryPage}
             />
           </TabsContent>
         </Tabs>
@@ -216,9 +235,17 @@ function CvInfoCard({ cv }: { cv: UserCv }) {
 function CvResearchHistoryCard({
   sessions,
   isLoading,
+  page,
+  totalPages,
+  total,
+  onPageChange,
 }: {
   sessions: CvResearchSession[]
   isLoading: boolean
+  page: number
+  totalPages: number
+  total: number
+  onPageChange: (page: number) => void
 }) {
   if (isLoading) {
     return (
@@ -289,6 +316,12 @@ function CvResearchHistoryCard({
             </div>
           </Link>
         ))}
+        <DataPagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          onPageChange={onPageChange}
+        />
       </CardContent>
     </Card>
   )

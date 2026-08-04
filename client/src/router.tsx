@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router'
+import { Navigate, createBrowserRouter } from 'react-router'
 
 import { AuthLayout } from './components/layouts/AuthLayout'
 import { GoogleSuccessGuard } from './features/auth/guards/GoogleSuccessGuard'
@@ -7,7 +7,6 @@ import { GuestGuard } from './features/auth/guards/GuestGuard'
 import LoginPage from './features/auth/LoginPage'
 import RegisterPage from './features/auth/RegisterPage'
 import { DashboardPage } from './features/dashboard/DashboardPage'
-import { ItemsPage } from './features/dashboard/ItemsPage'
 import { MyCvDetailPage } from './features/cv-library/MyCvDetailPage'
 import { MyCvsPage } from './features/cv-library/MyCvsPage'
 import { ResearchCvPage } from './features/cv-research/ResearchCvPage'
@@ -53,10 +52,6 @@ export const router = createBrowserRouter([
             element: <DashboardPage />,
           },
           {
-            path: '/items',
-            element: <ItemsPage />,
-          },
-          {
             path: '/my-cvs',
             element: <MyCvsPage />,
           },
@@ -66,6 +61,10 @@ export const router = createBrowserRouter([
           },
           {
             path: '/research-cv',
+            element: <Navigate to="/research-history" replace />,
+          },
+          {
+            path: '/research/new',
             element: <ResearchCvPage />,
           },
           {

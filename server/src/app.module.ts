@@ -16,6 +16,7 @@ import { CvModule } from './modules/cv/cv.module';
 import { JobCategoryModule } from './modules/job-category/job-category.module';
 import { SeniorityModule } from './modules/seniority/seniority.module';
 import { UsersModule } from './modules/users/users.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import type { Env } from './config/env.schema';
 
 @Module({
@@ -58,6 +59,7 @@ import type { Env } from './config/env.schema';
     JobCategoryModule,
     SeniorityModule,
     UsersModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

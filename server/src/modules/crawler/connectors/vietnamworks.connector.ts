@@ -11,6 +11,7 @@ import type {
 import { resolveJobSearchQueries } from '../utils/job-search-query';
 import { runWithConcurrency } from '../../../shared/utils/run-with-concurrency';
 import { resolveVietnamWorksLevelFilter } from '../utils/source-seniority-filters';
+import { buildSourceSearchVariants } from '../utils/source-search-variants';
 import { normalizeText, uniqueNonEmpty } from '../utils/text-normalizer';
 
 interface VietnamWorksSearchResponse {
@@ -66,27 +67,34 @@ export class VietnamWorksConnector implements JobSourceConnector {
     const seen = new Set<string>();
     const hitsPerPage = Math.min(intent.maxJobsPerSource, 50);
     const queries = resolveJobSearchQueries(intent);
+    const jobLevelId = resolveVietnamWorksLevelFilter(intent);
+    const variants = buildSourceSearchVariants(queries, Boolean(jobLevelId));
     const queryResults = await runWithConcurrency(
-      queries,
+      variants,
       this.config.get('JOB_RESEARCH_QUERY_CONCURRENCY', { infer: true }),
-      async (query) => {
+      async (variant) => {
         try {
           const response =
             await this.http.fetchJson<VietnamWorksSearchResponse>(
               this.config.get('VIETNAMWORKS_SEARCH_URL', { infer: true }),
-              this.buildSearchRequest(query, hitsPerPage, intent),
+              this.buildSearchRequest(
+                variant.query,
+                hitsPerPage,
+                jobLevelId,
+                variant.applySeniorityFilter,
+              ),
             );
           return {
             jobs: (Array.isArray(response.data) ? response.data : []).map(
-              (job) => this.mapJob(job, query),
+              (job) => this.mapJob(job, variant.query),
             ),
-            query,
+            variant,
             error: null,
           };
         } catch (error) {
           return {
             jobs: [] as CrawledJob[],
-            query,
+            variant,
             error: error instanceof Error ? error.message : String(error),
           };
         }
@@ -112,10 +120,13 @@ export class VietnamWorksConnector implements JobSourceConnector {
 
     const errors = queryResults.filter((result) => result.error);
 
-    if (queries.length > 0 && errors.length === queries.length) {
+    if (variants.length > 0 && errors.length === variants.length) {
       throw new Error(
         `VietnamWorks failed for every query: ${errors
-          .map((result) => `${result.query}: ${result.error}`)
+          .map(
+            (result) =>
+              `${result.variant.query} (${result.variant.applySeniorityFilter ? 'filtered' : 'role-only'}): ${result.error}`,
+          )
           .join(' | ')}`,
       );
     }
@@ -126,10 +137,9 @@ export class VietnamWorksConnector implements JobSourceConnector {
   private buildSearchRequest(
     query: string,
     hitsPerPage: number,
-    intent: JobSearchIntentPayload,
+    jobLevelId: string | null,
+    applySeniorityFilter: boolean,
   ) {
-    const jobLevelId = resolveVietnamWorksLevelFilter(intent);
-
     return {
       method: 'POST' as const,
       headers: {
@@ -142,7 +152,10 @@ export class VietnamWorksConnector implements JobSourceConnector {
       },
       body: JSON.stringify({
         query,
-        filter: jobLevelId ? [{ field: 'jobLevelId', value: jobLevelId }] : [],
+        filter:
+          applySeniorityFilter && jobLevelId
+            ? [{ field: 'jobLevelId', value: jobLevelId }]
+            : [],
         ranges: [],
         order: [],
         hitsPerPage,

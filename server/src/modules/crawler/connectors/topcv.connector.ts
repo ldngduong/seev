@@ -17,6 +17,7 @@ import {
 import { resolveJobSearchQueries } from '../utils/job-search-query';
 import { runWithConcurrency } from '../../../shared/utils/run-with-concurrency';
 import { resolveTopCvPositionFilter } from '../utils/source-seniority-filters';
+import { buildSourceSearchVariants } from '../utils/source-search-variants';
 
 @Injectable()
 export class TopCvConnector implements JobSourceConnector {
@@ -52,20 +53,30 @@ export class TopCvConnector implements JobSourceConnector {
     const cards: CrawledJob[] = [];
     const seen = new Set<string>();
     const queries = resolveJobSearchQueries(intent);
+    const position = resolveTopCvPositionFilter(intent);
+    const variants = buildSourceSearchVariants(queries, Boolean(position));
     const queryResults = await runWithConcurrency(
-      queries,
+      variants,
       this.config.get('JOB_RESEARCH_QUERY_CONCURRENCY', { infer: true }),
-      async (query) => {
+      async (variant) => {
         try {
           const html = await this.http.fetchText(
-            this.buildSearchUrl(query, intent),
+            this.buildSearchUrl(
+              variant.query,
+              position,
+              variant.applySeniorityFilter,
+            ),
             { viaBrightData: true },
           );
-          return { jobs: this.parseListing(html, query), query, error: null };
+          return {
+            jobs: this.parseListing(html, variant.query),
+            variant,
+            error: null,
+          };
         } catch (error) {
           return {
             jobs: [] as CrawledJob[],
-            query,
+            variant,
             error: error instanceof Error ? error.message : String(error),
           };
         }
@@ -91,10 +102,13 @@ export class TopCvConnector implements JobSourceConnector {
 
     const errors = queryResults.filter((result) => result.error);
 
-    if (queries.length > 0 && errors.length === queries.length) {
+    if (variants.length > 0 && errors.length === variants.length) {
       throw new Error(
         `TopCV failed for every query: ${errors
-          .map((result) => `${result.query}: ${result.error}`)
+          .map(
+            (result) =>
+              `${result.variant.query} (${result.variant.applySeniorityFilter ? 'filtered' : 'role-only'}): ${result.error}`,
+          )
           .join(' | ')}`,
       );
     }
@@ -102,15 +116,17 @@ export class TopCvConnector implements JobSourceConnector {
     return cards;
   }
 
-  private buildSearchUrl(query: string, intent: JobSearchIntentPayload) {
+  private buildSearchUrl(
+    query: string,
+    position: string | null,
+    applySeniorityFilter: boolean,
+  ) {
     const keyword = slugifyKeyword(query);
     const rawUrl = this.config
       .get('TOPCV_SEARCH_URL_TEMPLATE', { infer: true })
       .replace('{keyword}', encodeURIComponent(keyword));
     const url = new URL(rawUrl);
-    const position = resolveTopCvPositionFilter(intent);
-
-    if (position) {
+    if (applySeniorityFilter && position) {
       url.searchParams.set('position', position);
     }
 

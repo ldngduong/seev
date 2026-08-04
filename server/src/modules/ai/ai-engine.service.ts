@@ -20,6 +20,7 @@ import {
   type CvAuditResult,
   type CvTargetInference,
 } from './schemas/cv-audit-result.schema';
+import { buildAuditUnits } from './utils/audit-unit-builder';
 
 interface AnalyzeCvInput {
   target: {
@@ -36,12 +37,18 @@ interface AnalyzeCvInput {
   onLineBatchStart?: (event: LineBatchEvent) => Promise<void>;
   onLineBatchComplete?: (
     event: LineBatchEvent & {
+      completedBatches: number;
       result: ReturnType<typeof lineCvAuditResultSchema.parse>;
     },
   ) => Promise<void>;
   onLineBatchFailed?: (
     event: LineBatchEvent & { error: unknown },
   ) => Promise<void>;
+  onCoverageStart?: (event: AuditPlanEvent) => Promise<void>;
+  onCoverageBatchComplete?: (
+    event: AuditPlanEvent & { completedBatches: number },
+  ) => Promise<void>;
+  onFinalSynthesisStart?: () => Promise<void>;
 }
 
 interface LineBatchEvent {
@@ -50,8 +57,10 @@ interface LineBatchEvent {
   batch: CandidateHighlight[];
 }
 
-const LINE_AUDIT_BATCH_SIZE = 6;
-const LINE_AUDIT_CONCURRENCY = 4;
+interface AuditPlanEvent {
+  totalBatches: number;
+}
+
 const LINE_AUDIT_CONTEXT_OVERLAP = 3;
 
 @Injectable()
@@ -91,7 +100,7 @@ export class AiEngineService {
             '7. PDF extraction may letter-space header titles. If a top-line title is split into individual characters or unusual spacing, infer the normal phrase from that line instead of ignoring it.',
             '8. Preserve occupation wording from evidence. Do not transform a person/job title into a broader field noun unless the CV itself uses that broader wording.',
             '9. seniority_hint must be a concise level evidenced by the CV, such as Intern, Fresher, Junior, Middle, Senior, Lead, Manager, or empty only when the CV gives no evidence. If the header says Intern/Junior/etc., do not omit it.',
-            '10. search_queries are for job-board crawling, not for display. They must be short, searchable phrases that maximize recall while staying close to the CV target. If a seniority level is evidenced, include level-aware queries first, then role-only variants. Prefer concise job titles and core specializations over long titles with parenthetical details.',
+            '10. search_queries are occupation-title aliases for job-board crawling, not skill keywords and not display text. Return concise titles that employers genuinely use for the same occupation, including common aliases in the CV language and Vietnamese/English equivalents when the evidence supports them. Keep seniority separate because each source applies its own level filter; do not add seniority merely to make a query more specific. Never return tools, technologies, generic industries, degrees, or isolated skills as search queries.',
             '11. Do not rewrite a precise occupation title into a broader field noun, degree, major, or generic category. Preserve the explicit specialization and seniority when the CV provides them.',
             '',
             'Return this exact JSON shape:',
@@ -110,9 +119,9 @@ export class AiEngineService {
                 'relevant keyword 3',
               ],
               search_queries: [
-                'short searchable job title',
-                'alternative concise job title',
-                'core specialization keyword',
+                'primary searchable occupation title',
+                'common equivalent occupation title',
+                'localized occupation-title alias',
               ],
             }),
             '',
@@ -144,6 +153,7 @@ export class AiEngineService {
       ...firstPassFeedbacks,
       ...coverageResults.flatMap((result) => result.detailed_feedbacks),
     ]);
+    await input.onFinalSynthesisStart?.();
     const generalResult = await this.requestFinalAudit(
       client,
       input,
@@ -211,17 +221,31 @@ export class AiEngineService {
   }
 
   private async requestLineAudits(client: OpenAI, input: AnalyzeCvInput) {
-    const batches = this.chunkCandidateHighlights(input.candidateHighlights);
+    const batches = this.buildLineAuditUnits(input.candidateHighlights);
+    let completedBatches = 0;
 
-    return runWithConcurrency(batches, LINE_AUDIT_CONCURRENCY, (batch, index) =>
-      this.requestLineAudit(
-        client,
-        input,
-        batch,
-        this.getBatchContext(input.candidateHighlights, index),
-        index + 1,
-        batches.length,
-      ),
+    return runWithConcurrency(
+      batches,
+      this.getAuditConcurrency(),
+      async (batch, index) => {
+        const result = await this.requestLineAudit(
+          client,
+          input,
+          batch,
+          this.getLineContext(input.candidateHighlights, batch),
+          index + 1,
+          batches.length,
+        );
+        completedBatches += 1;
+        await input.onLineBatchComplete?.({
+          batchIndex: index,
+          totalBatches: batches.length,
+          batch,
+          completedBatches,
+          result,
+        });
+        return result;
+      },
     );
   }
 
@@ -232,27 +256,41 @@ export class AiEngineService {
       typeof lineCvAuditResultSchema.parse
     >['detailed_feedbacks'],
   ) {
-    const reviewedLineIds = new Set(
+    const flaggedLineIds = new Set(
       existingFeedbacks.map((feedback) => feedback.source_line_id),
     );
     const unreviewedHighlights = input.candidateHighlights.filter(
-      (highlight) => !reviewedLineIds.has(highlight.id),
+      (highlight) => !flaggedLineIds.has(highlight.id),
     );
 
     if (unreviewedHighlights.length === 0) {
+      await input.onCoverageStart?.({ totalBatches: 0 });
       return [];
     }
 
-    const batches = this.chunkCandidateHighlights(unreviewedHighlights);
+    const batches = this.buildCoverageAuditUnits(unreviewedHighlights);
+    let completedBatches = 0;
 
-    return runWithConcurrency(batches, LINE_AUDIT_CONCURRENCY, (batch) =>
-      this.requestCoverageAudit(
-        client,
-        input,
-        batch,
-        this.getLineContext(input.candidateHighlights, batch),
-        existingFeedbacks,
-      ),
+    await input.onCoverageStart?.({ totalBatches: batches.length });
+
+    return runWithConcurrency(
+      batches,
+      this.getAuditConcurrency(),
+      async (batch) => {
+        const result = await this.requestCoverageAudit(
+          client,
+          input,
+          batch,
+          this.getLineContext(input.candidateHighlights, batch),
+          existingFeedbacks,
+        );
+        completedBatches += 1;
+        await input.onCoverageBatchComplete?.({
+          totalBatches: batches.length,
+          completedBatches,
+        });
+        return result;
+      },
     );
   }
 
@@ -266,36 +304,32 @@ export class AiEngineService {
     return JSON.parse(normalized);
   }
 
-  private chunkCandidateHighlights(candidateHighlights: CandidateHighlight[]) {
-    const batches: CandidateHighlight[][] = [];
-
-    for (
-      let index = 0;
-      index < candidateHighlights.length;
-      index += LINE_AUDIT_BATCH_SIZE
-    ) {
-      batches.push(
-        candidateHighlights.slice(index, index + LINE_AUDIT_BATCH_SIZE),
-      );
-    }
-
-    return batches;
+  private buildLineAuditUnits(candidateHighlights: CandidateHighlight[]) {
+    return buildAuditUnits(candidateHighlights, {
+      targetCharacters: this.configService.get(
+        'CV_AUDIT_BATCH_TARGET_CHARACTERS',
+        { infer: true },
+      ),
+      maxLines: this.configService.get('CV_AUDIT_BATCH_MAX_LINES', {
+        infer: true,
+      }),
+    });
   }
 
-  private getBatchContext(
-    candidateHighlights: CandidateHighlight[],
-    batchIndex: number,
-  ) {
-    const start = Math.max(
-      0,
-      batchIndex * LINE_AUDIT_BATCH_SIZE - LINE_AUDIT_CONTEXT_OVERLAP,
-    );
-    const end = Math.min(
-      candidateHighlights.length,
-      (batchIndex + 1) * LINE_AUDIT_BATCH_SIZE + LINE_AUDIT_CONTEXT_OVERLAP,
-    );
+  private buildCoverageAuditUnits(candidateHighlights: CandidateHighlight[]) {
+    return buildAuditUnits(candidateHighlights, {
+      targetCharacters: this.configService.get(
+        'CV_AUDIT_COVERAGE_TARGET_CHARACTERS',
+        { infer: true },
+      ),
+      maxLines: this.configService.get('CV_AUDIT_COVERAGE_MAX_LINES', {
+        infer: true,
+      }),
+    });
+  }
 
-    return candidateHighlights.slice(start, end);
+  private getAuditConcurrency() {
+    return this.configService.get('CV_AUDIT_CONCURRENCY', { infer: true });
   }
 
   private getLineContext(
@@ -380,8 +414,9 @@ export class AiEngineService {
           const result = lineCvAuditResultSchema.parse(
             this.parseJsonContent(content),
           );
+          this.validateReviewedLineIds(result, batch);
+          this.validateFeedbackEvidence(result, batch, contextLines);
           this.validateFeedbackAnchors(result, batch);
-          await input.onLineBatchComplete?.({ ...event, result });
           return result;
         } catch (error) {
           lastError = error;
@@ -439,6 +474,8 @@ export class AiEngineService {
         const result = lineCvAuditResultSchema.parse(
           this.parseJsonContent(content),
         );
+        this.validateReviewedLineIds(result, batch);
+        this.validateFeedbackEvidence(result, batch, contextLines);
         this.validateFeedbackAnchors(result, batch);
         return result;
       } catch (error) {
@@ -751,13 +788,17 @@ export class AiEngineService {
             '- If original_text is Vietnamese, suggestion must be Vietnamese.',
             '- Suggestions must be truth-preserving. Do not invent years of experience, seniority, tools, certifications, metrics, leadership scope, or testing activities that are not supported by original_text or nearby context.',
             '- If the selected target requires evidence missing from the line, suggest a truthful rewrite using transferable evidence, or explicitly mark target-specific evidence as something to add only if true.',
+            '- Set suggestion_mode to direct_rewrite only when every factual claim in suggestion is supported by the cited CV lines. Otherwise use conditional_recommendation and phrase the suggestion conditionally, never as an achievement the candidate already completed.',
+            '- evidence_source_line_ids must include source_line_id plus every batch or surrounding-context line used to support factual claims in suggestion. Do not cite a line that does not contain the claimed evidence.',
             '- Never complain about missing spaces, extra spaces, letter spacing, joined words, kerning, or PDF extraction artifacts.',
             '- Treat isolated URL/link lines as valid evidence links unless the URL itself is semantically wrong or mislabeled.',
             '- Use red for critical target mismatch or misleading claims. Use yellow for improvements.',
             '- Avoid duplicate feedback for the same source_line_id unless there are truly separate issues.',
+            '- reviewed_source_line_ids must list every source_line_id in this batch exactly once, including lines that need no feedback. This is the audit coverage receipt.',
             '',
             'Return this exact JSON shape:',
             JSON.stringify({
+              reviewed_source_line_ids: batch.map((line) => line.id),
               detailed_feedbacks: [
                 {
                   id: 'fb_01',
@@ -768,6 +809,8 @@ export class AiEngineService {
                   issue: 'Vietnamese explanation of the issue.',
                   suggestion:
                     'Polished replacement text in the same language as original_text.',
+                  suggestion_mode: 'direct_rewrite',
+                  evidence_source_line_ids: [batch[0]?.id || 'hl_001'],
                   highlight_color: 'yellow',
                 },
               ],
@@ -840,12 +883,16 @@ export class AiEngineService {
             '- If original_text is English, suggestion must be English only. Do not put Vietnamese explanations, Vietnamese parentheticals, or translated notes inside suggestion.',
             '- If original_text is Vietnamese, suggestion must be Vietnamese.',
             '- Suggestions must be truth-preserving and must not invent experience, tools, metrics, seniority, or testing work.',
+            '- Set suggestion_mode to direct_rewrite only when every factual claim in suggestion is supported by the cited CV lines. Otherwise use conditional_recommendation and make the suggestion explicitly conditional.',
+            '- evidence_source_line_ids must include source_line_id plus every coverage-batch or surrounding-context line used as factual support. Cite only lines that actually contain that evidence.',
             '- Do not complain about missing spaces, extra spaces, joined words, letter spacing, kerning, or PDF extraction artifacts.',
             '- Treat isolated URL/link lines as valid evidence links unless the URL itself is semantically wrong or mislabeled.',
             '- Use red for critical target mismatch or misleading claims. Use yellow for improvements.',
+            '- reviewed_source_line_ids must list every source_line_id in this coverage batch exactly once, including lines that need no feedback.',
             '',
             'Return this exact JSON shape:',
             JSON.stringify({
+              reviewed_source_line_ids: batch.map((line) => line.id),
               detailed_feedbacks: [
                 {
                   id: 'fb_coverage_01',
@@ -856,6 +903,8 @@ export class AiEngineService {
                   issue: 'Vietnamese explanation of the missed issue.',
                   suggestion:
                     'Polished replacement text in the same language as original_text.',
+                  suggestion_mode: 'direct_rewrite',
+                  evidence_source_line_ids: [batch[0]?.id || 'hl_001'],
                   highlight_color: 'yellow',
                 },
               ],
@@ -904,8 +953,11 @@ export class AiEngineService {
             `Repair attempt: ${attempt}`,
             '',
             'The previous line-level JSON failed validation. Fix the JSON without inventing facts.',
-            'Return only { "detailed_feedbacks": [...] }.',
+            'Return only { "reviewed_source_line_ids": [...], "detailed_feedbacks": [...] }.',
+            'reviewed_source_line_ids must contain every source_line_id from this batch exactly once, including lines with no issue.',
             'Each detailed_feedback item must have source_line_id from this batch, original_text copied from that same line, and non-empty suggestion.',
+            'Each detailed_feedback item must have suggestion_mode as direct_rewrite or conditional_recommendation and a non-empty evidence_source_line_ids array that includes source_line_id.',
+            'Only use direct_rewrite when every factual claim in suggestion is supported by the cited batch lines. Otherwise use conditional_recommendation and phrase it conditionally rather than inventing experience.',
             'If a source line has label plus content, original_text must include the content, not only the label.',
             'Keep issue in Vietnamese. Keep suggestion in the dominant language of original_text.',
             'If original_text is English, suggestion must be English only. Do not put Vietnamese explanations, Vietnamese parentheticals, or translated notes inside suggestion.',
@@ -1013,6 +1065,68 @@ export class AiEngineService {
           'DeepSeek feedback anchors are invalid.',
           ...invalidFeedbacks.slice(0, 20),
         ].join('\n'),
+      );
+    }
+  }
+
+  private validateReviewedLineIds(
+    result: ReturnType<typeof lineCvAuditResultSchema.parse>,
+    batch: CandidateHighlight[],
+  ) {
+    const expectedIds = new Set(batch.map((line) => line.id));
+    const reviewedIds = result.reviewed_source_line_ids;
+    const reviewedSet = new Set(reviewedIds);
+    const missingIds = [...expectedIds].filter((id) => !reviewedSet.has(id));
+    const unknownIds = [...reviewedSet].filter((id) => !expectedIds.has(id));
+
+    if (
+      missingIds.length > 0 ||
+      unknownIds.length > 0 ||
+      reviewedIds.length !== reviewedSet.size
+    ) {
+      throw new Error(
+        [
+          'Invalid reviewed_source_line_ids coverage receipt.',
+          `missing=${missingIds.join(',') || 'none'}`,
+          `unknown=${unknownIds.join(',') || 'none'}`,
+          `duplicates=${reviewedIds.length !== reviewedSet.size}`,
+        ].join(' '),
+      );
+    }
+  }
+
+  private validateFeedbackEvidence(
+    result: ReturnType<typeof lineCvAuditResultSchema.parse>,
+    batch: CandidateHighlight[],
+    contextLines: CandidateHighlight[],
+  ) {
+    const allowedIds = new Set(
+      [...batch, ...contextLines].map((line) => line.id),
+    );
+    const invalidFeedbacks: string[] = [];
+
+    for (const feedback of result.detailed_feedbacks) {
+      const evidenceIds = new Set(feedback.evidence_source_line_ids);
+      const unknownIds = [...evidenceIds].filter((id) => !allowedIds.has(id));
+
+      if (!evidenceIds.has(feedback.source_line_id)) {
+        invalidFeedbacks.push(
+          `${feedback.id || feedback.source_line_id} does not cite its source_line_id as evidence.`,
+        );
+      }
+
+      if (unknownIds.length > 0) {
+        invalidFeedbacks.push(
+          `${feedback.id || feedback.source_line_id} cites unavailable evidence: ${unknownIds.join(',')}.`,
+        );
+      }
+    }
+
+    if (invalidFeedbacks.length > 0) {
+      throw new Error(
+        ['DeepSeek feedback evidence is invalid.', ...invalidFeedbacks].join(
+          '\n',
+        ),
       );
     }
   }

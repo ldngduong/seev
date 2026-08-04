@@ -81,6 +81,19 @@ const envSchema = z.object({
   DEEPSEEK_API_KEY: z.string().optional(),
   DEEPSEEK_BASE_URL: z.url().default('https://api.deepseek.com'),
   DEEPSEEK_MODEL: z.string().default('deepseek-v4-pro'),
+  CV_AUDIT_BATCH_TARGET_CHARACTERS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(1600),
+  CV_AUDIT_BATCH_MAX_LINES: z.coerce.number().int().positive().default(12),
+  CV_AUDIT_COVERAGE_TARGET_CHARACTERS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(2800),
+  CV_AUDIT_COVERAGE_MAX_LINES: z.coerce.number().int().positive().default(20),
+  CV_AUDIT_CONCURRENCY: z.coerce.number().int().positive().default(6),
   JOB_RESEARCH_DEFAULT_SOURCES: z
     .string()
     .min(1)

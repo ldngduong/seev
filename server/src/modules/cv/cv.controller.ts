@@ -31,6 +31,10 @@ import {
   CreateQuickCvResearchDto,
 } from './dto/create-cv-research.dto';
 import { UploadUserCvDto } from './dto/upload-user-cv.dto';
+import {
+  ResearchSessionListQueryDto,
+  UserCvListQueryDto,
+} from './dto/cv-list-query.dto';
 import { CvService } from './cv.service';
 
 const PDF_MAX_SIZE_BYTES = 5 * 1024 * 1024;
@@ -73,8 +77,11 @@ export class CvController {
   }
 
   @Get('my-cvs')
-  listUserCvs(@Req() req: AuthenticatedRequest) {
-    return this.cvService.listUserCvs(req.user.id);
+  listUserCvs(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: UserCvListQueryDto,
+  ) {
+    return this.cvService.listUserCvs(req.user.id, query);
   }
 
   @Get('my-cvs/:cvId/read-url')
@@ -126,9 +133,9 @@ export class CvController {
   @Get('research-sessions')
   listResearchSessions(
     @Req() req: AuthenticatedRequest,
-    @Query() query: JobResearchQueryDto,
+    @Query() query: ResearchSessionListQueryDto,
   ) {
-    return this.cvService.listResearchSessions(req.user.id, query.limit);
+    return this.cvService.listResearchSessions(req.user.id, query);
   }
 
   @Get('research-sessions/:sessionId')

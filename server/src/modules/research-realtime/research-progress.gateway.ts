@@ -62,6 +62,12 @@ export class ResearchProgressGateway implements OnGatewayConnection {
     this.server.to(this.userRoom(userId)).emit(RESEARCH_PROGRESS_EVENT, event);
   }
 
+  emitNotificationToUser(userId: string, notification: unknown) {
+    this.server
+      .to(this.userRoom(userId))
+      .emit('notification:updated', notification);
+  }
+
   private userRoom(userId: string) {
     return `research:user:${userId}`;
   }

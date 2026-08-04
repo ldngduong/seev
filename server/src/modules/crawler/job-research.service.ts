@@ -37,10 +37,10 @@ import {
 } from './types/job-source.type';
 import { createContentHash } from './utils/content-hash';
 import {
-  evaluateSeniorityFit,
-  resolveSeniorityGroup,
-  type SeniorityGroup,
-} from './utils/seniority-intent';
+  buildJobMatchProfile,
+  MIN_JOB_MATCH_SCORE,
+  scoreJobMatch,
+} from './utils/job-match';
 import {
   clamp,
   normalizeSearchText,
@@ -52,193 +52,6 @@ interface CreateIntentResult {
   intent: JobSearchIntent;
   queueJobId: string | number | undefined;
 }
-
-interface JobMatchProfile {
-  normalizedTargetRole: string;
-  roleTerms: string[];
-  positiveTerms: string[];
-  roleFamilies: Array<(typeof ROLE_FAMILIES)[number]>;
-  seniorityGroup: SeniorityGroup | null;
-}
-
-interface JobMatchResult {
-  score: number;
-  terms: string[];
-  accepted: boolean;
-}
-
-const MIN_JOB_MATCH_SCORE = 18;
-
-const GENERIC_JOB_TERMS = new Set([
-  'job',
-  'role',
-  'position',
-  'career',
-  'software',
-  'engineering',
-  'software engineering',
-  'information technology',
-  'technology',
-  'developer',
-  'engineer',
-  'intern',
-  'junior',
-  'middle',
-  'mid',
-  'senior',
-  'staff',
-]);
-
-const TOKEN_STOP_WORDS = new Set([
-  'a',
-  'an',
-  'and',
-  'or',
-  'of',
-  'the',
-  'for',
-  'to',
-  'with',
-  'in',
-  'on',
-  'job',
-  'role',
-  'position',
-  'developer',
-  'engineer',
-  'specialist',
-  'intern',
-  'junior',
-  'middle',
-  'mid',
-  'senior',
-]);
-
-const ROLE_FAMILIES = [
-  {
-    name: 'frontend',
-    triggers: [
-      'frontend',
-      'front end',
-      'front-end',
-      'react',
-      'nextjs',
-      'next.js',
-    ],
-    evidence: [
-      'frontend',
-      'front end',
-      'front-end',
-      'react',
-      'reactjs',
-      'nextjs',
-      'next.js',
-      'javascript',
-      'typescript',
-      'html',
-      'css',
-      'tailwind',
-      'ui',
-      'web interface',
-      'web developer',
-    ],
-  },
-  {
-    name: 'backend',
-    triggers: ['backend', 'back end', 'back-end', 'server', 'api', 'nestjs'],
-    evidence: [
-      'backend',
-      'back end',
-      'back-end',
-      'server',
-      'api',
-      'rest',
-      'nodejs',
-      'node.js',
-      'nestjs',
-      'express',
-      'database',
-      'postgresql',
-      'mysql',
-      'mongodb',
-      'java',
-      'spring',
-      'golang',
-      'python',
-    ],
-  },
-  {
-    name: 'qa',
-    triggers: [
-      'tester',
-      'testing',
-      'qa',
-      'quality assurance',
-      'test automation',
-    ],
-    evidence: [
-      'tester',
-      'testing',
-      'qa',
-      'quality assurance',
-      'test automation',
-      'manual test',
-      'automation test',
-      'selenium',
-      'cypress',
-      'playwright',
-      'test case',
-      'bug report',
-      'jira',
-    ],
-  },
-  {
-    name: 'mobile',
-    triggers: ['mobile', 'android', 'ios', 'flutter', 'react native'],
-    evidence: [
-      'mobile',
-      'android',
-      'ios',
-      'flutter',
-      'react native',
-      'swift',
-      'kotlin',
-    ],
-  },
-  {
-    name: 'data',
-    triggers: ['data', 'analytics', 'analyst', 'machine learning', 'ai'],
-    evidence: [
-      'data',
-      'analytics',
-      'analyst',
-      'machine learning',
-      'ai',
-      'python',
-      'sql',
-      'pandas',
-      'tensorflow',
-      'pytorch',
-    ],
-  },
-  {
-    name: 'devops',
-    triggers: ['devops', 'cloud', 'sre', 'infrastructure'],
-    evidence: [
-      'devops',
-      'cloud',
-      'sre',
-      'infrastructure',
-      'docker',
-      'kubernetes',
-      'aws',
-      'gcp',
-      'azure',
-      'ci cd',
-      'ci/cd',
-    ],
-  },
-] as const;
 
 @Injectable()
 export class JobResearchService {
@@ -346,7 +159,7 @@ export class JobResearchService {
           status: 'processing',
           phase: 'job_matching',
           progress: 76,
-          message: 'Starting job collection.',
+          message: 'Searching for current jobs that fit your CV.',
         },
         intent.researchSessionAttempt ?? undefined,
       );
@@ -401,7 +214,8 @@ export class JobResearchService {
                   progress:
                     76 +
                     Math.floor((finishedSources / payload.sources.length) * 19),
-                  message: `Completed ${finishedSources} of ${payload.sources.length} job sources.`,
+                  message:
+                    'Comparing available jobs with your experience and career level.',
                 },
                 intent.researchSessionAttempt ?? undefined,
               );
@@ -760,7 +574,7 @@ export class JobResearchService {
     crawledJobs: CrawledJob[],
   ) {
     let savedCount = 0;
-    const profile = this.buildMatchProfile(intent);
+    const profile = buildJobMatchProfile(intent);
 
     for (const crawledJob of crawledJobs) {
       if (!crawledJob.sourceJobId || !crawledJob.title) {
@@ -768,7 +582,7 @@ export class JobResearchService {
       }
 
       const jobPost = await this.upsertJobPost(intent, crawledJob);
-      const match = this.scoreJobMatch(profile, jobPost);
+      const match = scoreJobMatch(profile, jobPost);
 
       if (!match.accepted) {
         continue;
@@ -828,10 +642,10 @@ export class JobResearchService {
       salaryText: crawledJob.salaryText,
       locations: crawledJob.locations,
       seniorityText: crawledJob.seniorityText,
-      jobCategoryId: intent.jobCategoryId,
-      jobCategoryName: intent.jobCategoryName,
-      seniorityLevelId: intent.seniorityLevelId,
-      seniorityLevelName: intent.seniorityLevelName,
+      jobCategoryId: null,
+      jobCategoryName: null,
+      seniorityLevelId: null,
+      seniorityLevelName: null,
       description: crawledJob.description,
       requirements: crawledJob.requirements,
       benefits: crawledJob.benefits,
@@ -845,151 +659,6 @@ export class JobResearchService {
     });
 
     return this.jobPostRepository.save(jobPost);
-  }
-
-  private buildMatchProfile(intent: JobSearchIntent): JobMatchProfile {
-    const normalizedTargetRole = normalizeSearchText(intent.targetRole);
-    const roleTerms = this.tokenizeMeaningfulTerms(intent.targetRole);
-    const targetSourceText = normalizeSearchText(
-      [intent.targetRole, intent.seniorityLevelName].join(' '),
-    );
-    const keywordSourceText = normalizeSearchText(
-      (intent.keywords ?? []).join(' '),
-    );
-    const primaryRoleFamilies = ROLE_FAMILIES.filter((family) =>
-      family.triggers.some((trigger) =>
-        targetSourceText.includes(normalizeSearchText(trigger)),
-      ),
-    );
-    const roleFamilyCandidates =
-      primaryRoleFamilies.length > 0 ? primaryRoleFamilies : ROLE_FAMILIES;
-    const roleFamilySourceText =
-      primaryRoleFamilies.length > 0 ? targetSourceText : keywordSourceText;
-    const roleFamilies = roleFamilyCandidates.filter((family) =>
-      family.triggers.some((trigger) =>
-        roleFamilySourceText.includes(normalizeSearchText(trigger)),
-      ),
-    );
-    const positiveTerms = uniqueNonEmpty([
-      intent.targetRole,
-      ...(intent.keywords ?? []),
-    ]).filter((term) => this.isUsefulMatchTerm(term));
-
-    return {
-      normalizedTargetRole,
-      roleTerms,
-      positiveTerms,
-      roleFamilies,
-      seniorityGroup: resolveSeniorityGroup(
-        [intent.seniorityLevelName, intent.targetRole].join(' '),
-      ),
-    };
-  }
-
-  private scoreJobMatch(
-    profile: JobMatchProfile,
-    jobPost: JobPost,
-  ): JobMatchResult {
-    const normalizedTitle = normalizeSearchText(jobPost.title);
-    const normalizedSearch = jobPost.searchText;
-    const matchedTerms: string[] = [];
-    let score = 0;
-
-    const familyMatches = this.collectRoleFamilyMatches(
-      profile,
-      normalizedTitle,
-      normalizedSearch,
-    );
-    const roleTermMatches = profile.roleTerms.filter((term) =>
-      normalizedSearch.includes(term),
-    );
-    const titleRoleTermMatches = profile.roleTerms.filter((term) =>
-      normalizedTitle.includes(term),
-    );
-    const hasRoleEvidence =
-      profile.roleFamilies.length === 0 ||
-      familyMatches.length > 0 ||
-      titleRoleTermMatches.length > 0;
-
-    if (!hasRoleEvidence) {
-      return { score: 0, terms: [], accepted: false };
-    }
-
-    if (
-      profile.normalizedTargetRole &&
-      normalizedTitle.includes(profile.normalizedTargetRole)
-    ) {
-      score += 42;
-      matchedTerms.push(jobPost.title);
-    } else if (titleRoleTermMatches.length > 0) {
-      score += Math.min(28, titleRoleTermMatches.length * 12);
-      matchedTerms.push(...titleRoleTermMatches);
-    } else if (roleTermMatches.length > 0) {
-      score += Math.min(16, roleTermMatches.length * 5);
-      matchedTerms.push(...roleTermMatches);
-    }
-
-    if (familyMatches.length > 0) {
-      score += Math.min(24, familyMatches.length * 6);
-      matchedTerms.push(...familyMatches);
-    }
-
-    for (const term of profile.positiveTerms) {
-      const normalizedTerm = normalizeSearchText(term);
-
-      if (!normalizedTerm) {
-        continue;
-      }
-
-      if (normalizedTitle.includes(normalizedTerm)) {
-        score += 8;
-        matchedTerms.push(term);
-        continue;
-      }
-
-      if (normalizedSearch.includes(normalizedTerm)) {
-        score += 3;
-        matchedTerms.push(term);
-      }
-    }
-
-    const seniorityFit = evaluateSeniorityFit({
-      targetGroup: profile.seniorityGroup,
-      titleText: jobPost.title,
-      explicitLevelText: jobPost.seniorityText,
-      bodyText: [
-        jobPost.description,
-        jobPost.requirements,
-        jobPost.benefits,
-      ].join(' '),
-    });
-
-    if (!seniorityFit.accepted) {
-      return {
-        score: 0,
-        terms: uniqueNonEmpty([...matchedTerms, ...seniorityFit.matchedTerms]),
-        accepted: false,
-      };
-    }
-
-    score += seniorityFit.score;
-    matchedTerms.push(...seniorityFit.matchedTerms);
-
-    const finalScore = clamp(score, 0, 100);
-
-    if (finalScore < MIN_JOB_MATCH_SCORE) {
-      return {
-        score: finalScore,
-        terms: uniqueNonEmpty(matchedTerms),
-        accepted: false,
-      };
-    }
-
-    return {
-      score: finalScore,
-      terms: uniqueNonEmpty(matchedTerms),
-      accepted: true,
-    };
   }
 
   private async snapshotResearchSessionJobs(intentId: string) {
@@ -1060,64 +729,5 @@ export class JobResearchService {
     }
 
     return String(error);
-  }
-
-  private tokenizeMeaningfulTerms(value: string | null | undefined) {
-    return uniqueNonEmpty(
-      normalizeSearchText(value)
-        .split(' ')
-        .map((token) => token.trim())
-        .filter(
-          (token) =>
-            token.length >= 3 &&
-            !TOKEN_STOP_WORDS.has(token) &&
-            !GENERIC_JOB_TERMS.has(token),
-        ),
-    );
-  }
-
-  private isUsefulMatchTerm(value: string | null | undefined) {
-    const normalized = normalizeSearchText(value);
-
-    if (!normalized || normalized.length < 3) {
-      return false;
-    }
-
-    if (GENERIC_JOB_TERMS.has(normalized)) {
-      return false;
-    }
-
-    return normalized
-      .split(' ')
-      .some((token) => token.length >= 3 && !TOKEN_STOP_WORDS.has(token));
-  }
-
-  private collectRoleFamilyMatches(
-    profile: JobMatchProfile,
-    normalizedTitle: string,
-    normalizedSearch: string,
-  ) {
-    const matches: string[] = [];
-
-    for (const family of profile.roleFamilies) {
-      for (const evidence of family.evidence) {
-        const normalizedEvidence = normalizeSearchText(evidence);
-
-        if (!normalizedEvidence) {
-          continue;
-        }
-
-        if (normalizedTitle.includes(normalizedEvidence)) {
-          matches.push(evidence);
-          continue;
-        }
-
-        if (normalizedSearch.includes(normalizedEvidence)) {
-          matches.push(evidence);
-        }
-      }
-    }
-
-    return uniqueNonEmpty(matches);
   }
 }

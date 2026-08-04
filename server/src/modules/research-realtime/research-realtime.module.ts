@@ -3,11 +3,16 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthModule } from '../auth/auth.module';
 import { CvResearchSession } from '../cv/entities/cv-research-session.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ResearchProgressGateway } from './research-progress.gateway';
 import { ResearchProgressService } from './research-progress.service';
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature([CvResearchSession])],
+  imports: [
+    AuthModule,
+    NotificationsModule,
+    TypeOrmModule.forFeature([CvResearchSession]),
+  ],
   providers: [ResearchProgressGateway, ResearchProgressService],
   exports: [ResearchProgressService],
 })

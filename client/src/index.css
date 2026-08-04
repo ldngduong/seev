@@ -172,3 +172,15 @@
   animation: seev-preview-popover 5.8s cubic-bezier(0.22, 1, 0.36, 1) infinite both;
   animation-delay: var(--popover-delay, 0ms);
 }
+
+@keyframes seev-research-magnifier {
+  0%, 100% { transform: translate3d(-135%, -80%, 0) rotate(-8deg); }
+  25% { transform: translate3d(35%, -125%, 0) rotate(5deg); }
+  50% { transform: translate3d(60%, 35%, 0) rotate(8deg); }
+  75% { transform: translate3d(-120%, 55%, 0) rotate(-5deg); }
+}
+
+.seev-research-magnifier {
+  animation: seev-research-magnifier 5.5s ease-in-out infinite;
+  will-change: transform;
+}

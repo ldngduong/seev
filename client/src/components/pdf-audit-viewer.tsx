@@ -13,20 +13,14 @@ interface PdfAuditViewerProps {
   file: File | Blob | string | null
   feedbacks: AuditFeedback[]
   activeFeedback: AuditFeedback | null
-  onHighlightStatsChange?: (stats: HighlightStats) => void
-}
-
-export interface HighlightStats {
-  matchedCount: number
-  totalCount: number
-  unmatchedFeedbackIds: string[]
+  bare?: boolean
 }
 
 export function PdfAuditViewer({
   file,
   feedbacks,
   activeFeedback,
-  onHighlightStatsChange,
+  bare = false,
 }: PdfAuditViewerProps) {
   const [totalPages, setTotalPages] = useState(0)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -36,7 +30,6 @@ export function PdfAuditViewer({
   const [popoverPosition, setPopoverPosition] =
     useState<PdfFeedbackPopoverPosition | null>(null)
   const viewerRef = useRef<HTMLDivElement | null>(null)
-  const lastStatsRef = useRef<HighlightStats | null>(null)
   const openFeedbackPopover = useAuditStore(
     (state) => state.openFeedbackPopover,
   )
@@ -58,29 +51,16 @@ export function PdfAuditViewer({
   )
 
   const updateHighlights = useCallback(() => {
-    const result = buildPdfHighlightRects(
+    const { rects } = buildPdfHighlightRects(
       viewerRef.current,
       searchableFeedbacks,
     )
     setHighlightRects((currentRects) =>
-      areHighlightRectsEqual(currentRects, result.rects)
+      areHighlightRectsEqual(currentRects, rects)
         ? currentRects
-        : result.rects,
+        : rects,
     )
-
-    const stats = {
-      matchedCount: result.matchedFeedbackIds.size,
-      totalCount: searchableFeedbacks.length,
-      unmatchedFeedbackIds: searchableFeedbacks
-        .map((item) => item.feedback.id)
-        .filter((id) => !result.matchedFeedbackIds.has(id)),
-    }
-
-    if (!areHighlightStatsEqual(lastStatsRef.current, stats)) {
-      lastStatsRef.current = stats
-      onHighlightStatsChange?.(stats)
-    }
-  }, [onHighlightStatsChange, searchableFeedbacks])
+  }, [searchableFeedbacks])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -147,13 +127,8 @@ export function PdfAuditViewer({
 
   if (!file) {
     return (
-      <div className="grid flex-1 place-items-center bg-muted/30 p-6">
-        <div className="w-full max-w-xl rounded-md border border-dashed bg-background p-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Upload a CV PDF to render it here. After AI feedback returns, click
-            a note to highlight matching text in yellow or red.
-          </p>
-        </div>
+      <div className="grid min-h-72 flex-1 place-items-center bg-background">
+        <p className="text-sm text-muted-foreground">Loading CV...</p>
       </div>
     )
   }
@@ -162,7 +137,9 @@ export function PdfAuditViewer({
     <>
       <div
         ref={viewerRef}
-        className="relative flex-1 overflow-auto bg-muted/30 p-4"
+        className={bare
+          ? 'relative flex-1 overflow-auto bg-background'
+          : 'relative flex-1 overflow-auto bg-muted/30 p-4'}
         onClickCapture={(event) => {
           const target = event.target as HTMLElement
 
@@ -192,16 +169,20 @@ export function PdfAuditViewer({
             </div>
           }
         >
-          <div className="mx-auto flex max-w-3xl flex-col gap-4">
+          <div className={bare ? 'flex flex-col gap-4' : 'mx-auto flex max-w-3xl flex-col gap-4'}>
             {Array.from({ length: totalPages }, (_, index) => (
               <div
                 key={index}
-                className="overflow-hidden rounded-md border bg-background shadow-sm"
+                className={bare
+                  ? 'overflow-hidden bg-background'
+                  : 'overflow-hidden rounded-md border bg-background shadow-sm'}
                 data-pdf-page-number={index + 1}
               >
-                <div className="border-b px-3 py-2">
-                  <Badge variant="outline">Page {index + 1}</Badge>
-                </div>
+                {!bare ? (
+                  <div className="border-b px-3 py-2">
+                    <Badge variant="outline">Page {index + 1}</Badge>
+                  </div>
+                ) : null}
                 <div className="relative">
                   <Page
                     pageNumber={index + 1}
@@ -555,9 +536,26 @@ function createOverlayRectsFromRange(
 function mergeInlineRects(
   rects: Array<{ left: number; top: number; width: number; height: number }>,
 ) {
+  const lineGroups: Array<
+    Array<{ left: number; top: number; width: number; height: number }>
+  > = []
   const sortedRects = [...rects].sort(
     (left, right) => left.top - right.top || left.left - right.left,
   )
+
+  sortedRects.forEach((rect) => {
+    const line = lineGroups.find((candidate) =>
+      candidate.some((lineRect) => areRectsOnSameLine(lineRect, rect)),
+    )
+
+    if (line) {
+      line.push(rect)
+      return
+    }
+
+    lineGroups.push([rect])
+  })
+
   const mergedRects: Array<{
     left: number
     top: number
@@ -565,32 +563,48 @@ function mergeInlineRects(
     height: number
   }> = []
 
-  sortedRects.forEach((rect) => {
-    const previous = mergedRects.at(-1)
+  lineGroups.forEach((line) => {
+    line
+      .sort((left, right) => left.left - right.left)
+      .forEach((rect) => {
+        const previous = mergedRects.at(-1)
+        const lineGap = previous
+          ? Math.max(
+              6,
+              Math.min(18, Math.max(previous.height, rect.height) * 0.75),
+            )
+          : 0
 
-    const sameLine =
-      previous &&
-      Math.abs(previous.top - rect.top) <= 2 &&
-      Math.abs(previous.height - rect.height) <= 2
-    const lineGap = previous
-      ? Math.max(6, Math.min(18, Math.max(previous.height, rect.height) * 0.75))
-      : 0
+        if (
+          previous &&
+          areRectsOnSameLine(previous, rect) &&
+          rect.left <= previous.left + previous.width + lineGap
+        ) {
+          const left = Math.min(previous.left, rect.left)
+          const top = Math.min(previous.top, rect.top)
+          const right = Math.max(
+            previous.left + previous.width,
+            rect.left + rect.width,
+          )
+          const bottom = Math.max(
+            previous.top + previous.height,
+            rect.top + rect.height,
+          )
 
-    if (
-      previous &&
-      sameLine &&
-      rect.left <= previous.left + previous.width + lineGap
-    ) {
-      const right = Math.max(previous.left + previous.width, rect.left + rect.width)
-      previous.left = Math.min(previous.left, rect.left)
-      previous.top = Math.min(previous.top, rect.top)
-      previous.width = right - previous.left
-      previous.height = Math.max(previous.height, rect.height)
-      return
-    }
+          previous.left = left
+          previous.top = top
+          previous.width = right - left
+          previous.height = bottom - top
+          return
+        }
 
-    mergedRects.push({ ...rect })
+        mergedRects.push({ ...rect })
+      })
   })
+
+  mergedRects.sort(
+    (left, right) => left.top - right.top || left.left - right.left,
+  )
 
   return mergedRects.map((rect) => ({
     left: Math.max(0, rect.left - 1),
@@ -600,23 +614,18 @@ function mergeInlineRects(
   }))
 }
 
-function areHighlightStatsEqual(
-  leftStats: HighlightStats | null,
-  rightStats: HighlightStats,
+function areRectsOnSameLine(
+  left: { top: number; height: number },
+  right: { top: number; height: number },
 ) {
-  if (!leftStats) {
-    return false
-  }
-
-  return (
-    leftStats.matchedCount === rightStats.matchedCount &&
-    leftStats.totalCount === rightStats.totalCount &&
-    leftStats.unmatchedFeedbackIds.length ===
-      rightStats.unmatchedFeedbackIds.length &&
-    leftStats.unmatchedFeedbackIds.every(
-      (id, index) => id === rightStats.unmatchedFeedbackIds[index],
-    )
+  const overlap = Math.max(
+    0,
+    Math.min(left.top + left.height, right.top + right.height) -
+      Math.max(left.top, right.top),
   )
+  const minimumHeight = Math.min(left.height, right.height)
+
+  return minimumHeight > 0 && overlap / minimumHeight >= 0.6
 }
 
 function rangesOverlapAny(

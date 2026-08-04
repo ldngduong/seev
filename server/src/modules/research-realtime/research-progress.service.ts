@@ -7,6 +7,7 @@ import {
   type CvResearchPhase,
   type CvResearchStatus,
 } from '../cv/entities/cv-research-session.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ResearchProgressGateway } from './research-progress.gateway';
 import type { ResearchProgressEvent } from './types/research-progress.type';
 
@@ -26,6 +27,7 @@ export class ResearchProgressService {
     @InjectRepository(CvResearchSession)
     private readonly sessions: Repository<CvResearchSession>,
     private readonly gateway: ResearchProgressGateway,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async update(
@@ -129,7 +131,9 @@ export class ResearchProgressService {
     if (!session) return null;
 
     const event = this.toEvent(session);
+    const notification = await this.notifications.syncResearch(session);
     this.gateway.emitToUser(session.userId, event);
+    this.gateway.emitNotificationToUser(session.userId, notification);
     return event;
   }
 

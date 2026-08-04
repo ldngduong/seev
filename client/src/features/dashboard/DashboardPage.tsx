@@ -12,7 +12,7 @@ export function DashboardPage() {
         title="Dashboard"
         actions={
           <Link to="/my-cvs" className={cn(buttonVariants())}>
-            CV của tôi
+            My CVs
           </Link>
         }
       />

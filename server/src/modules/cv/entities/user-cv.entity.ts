@@ -64,6 +64,9 @@ export class UserCv {
   @Column({ name: 'total_pages', type: 'int' })
   totalPages!: number;
 
+  @Column({ name: 'parser_version', type: 'int', default: 1 })
+  parserVersion!: number;
+
   @Column({ nullable: true, type: 'text' })
   error!: string | null;
 

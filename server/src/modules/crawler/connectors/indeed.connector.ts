@@ -17,6 +17,7 @@ import {
 import { resolveJobSearchQueries } from '../utils/job-search-query';
 import { runWithConcurrency } from '../../../shared/utils/run-with-concurrency';
 import { resolveIndeedSearchParams } from '../utils/source-seniority-filters';
+import { buildSourceSearchVariants } from '../utils/source-search-variants';
 
 @Injectable()
 export class IndeedConnector implements JobSourceConnector {
@@ -35,20 +36,34 @@ export class IndeedConnector implements JobSourceConnector {
     const jobs: CrawledJob[] = [];
     const seen = new Set<string>();
     const queries = resolveJobSearchQueries(intent);
-    const queryResults = await runWithConcurrency(
+    const seniorityParams = resolveIndeedSearchParams(intent);
+    const variants = buildSourceSearchVariants(
       queries,
+      Object.keys(seniorityParams).length > 0,
+    );
+    const queryResults = await runWithConcurrency(
+      variants,
       this.config.get('JOB_RESEARCH_QUERY_CONCURRENCY', { infer: true }),
-      async (query) => {
+      async (variant) => {
         try {
           const html = await this.http.fetchText(
-            this.buildSearchUrl(intent, query),
+            this.buildSearchUrl(
+              intent,
+              variant.query,
+              seniorityParams,
+              variant.applySeniorityFilter,
+            ),
             { viaBrightData: true },
           );
-          return { jobs: this.parseListing(html, query), query, error: null };
+          return {
+            jobs: this.parseListing(html, variant.query),
+            variant,
+            error: null,
+          };
         } catch (error) {
           return {
             jobs: [] as CrawledJob[],
-            query,
+            variant,
             error: error instanceof Error ? error.message : String(error),
           };
         }
@@ -74,10 +89,13 @@ export class IndeedConnector implements JobSourceConnector {
 
     const errors = queryResults.filter((result) => result.error);
 
-    if (queries.length > 0 && errors.length === queries.length) {
+    if (variants.length > 0 && errors.length === variants.length) {
       throw new Error(
         `Indeed failed for every query: ${errors
-          .map((result) => `${result.query}: ${result.error}`)
+          .map(
+            (result) =>
+              `${result.variant.query} (${result.variant.applySeniorityFilter ? 'filtered' : 'role-only'}): ${result.error}`,
+          )
           .join(' | ')}`,
       );
     }
@@ -85,7 +103,12 @@ export class IndeedConnector implements JobSourceConnector {
     return jobs;
   }
 
-  private buildSearchUrl(intent: JobSearchIntentPayload, query: string) {
+  private buildSearchUrl(
+    intent: JobSearchIntentPayload,
+    query: string,
+    seniorityParams: Record<string, string>,
+    applySeniorityFilter: boolean,
+  ) {
     const keyword = slugifyKeyword(query);
     const location = intent.locations[0] || '';
     const rawUrl = this.config
@@ -93,11 +116,11 @@ export class IndeedConnector implements JobSourceConnector {
       .replace('{keyword}', encodeURIComponent(keyword))
       .replace('{location}', encodeURIComponent(location));
     const url = new URL(rawUrl);
-    const params = resolveIndeedSearchParams(intent);
-
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.set(key, value);
-    });
+    if (applySeniorityFilter) {
+      Object.entries(seniorityParams).forEach(([key, value]) => {
+        url.searchParams.set(key, value);
+      });
+    }
 
     return url.toString();
   }

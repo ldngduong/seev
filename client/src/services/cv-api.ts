@@ -39,8 +39,31 @@ export async function uploadUserCv(values: { file: File; name?: string }) {
   return data;
 }
 
-export async function listUserCvs() {
-  const { data } = await apiClient.get<UserCv[]>("/cv/my-cvs");
+export interface PageMeta {
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  meta: PageMeta;
+}
+
+export interface CvListQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: string;
+}
+
+export const MAX_CV_PAGE_SIZE = 50;
+
+export async function listUserCvs(query: CvListQuery = {}) {
+  const { data } = await apiClient.get<PaginatedResponse<UserCv>>("/cv/my-cvs", {
+    params: query,
+  });
   return data;
 }
 
@@ -76,11 +99,18 @@ export async function createCustomCvResearch(values: {
   return data;
 }
 
-export async function listCvResearchSessions(limit = 30) {
-  const { data } = await apiClient.get<CvResearchSession[]>(
+export interface ResearchSessionListQuery extends CvListQuery {
+  type?: 'quick' | 'custom';
+  userCvId?: string;
+}
+
+export async function listCvResearchSessions(
+  query: ResearchSessionListQuery = {},
+) {
+  const { data } = await apiClient.get<PaginatedResponse<CvResearchSession>>(
     "/cv/research-sessions",
     {
-      params: { limit },
+      params: query,
     },
   );
 

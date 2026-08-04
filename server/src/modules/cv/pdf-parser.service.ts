@@ -1,35 +1,54 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { PDFParse } from 'pdf-parse';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import type { TextItem } from 'pdfjs-dist/types/src/display/api';
 
 import type {
   CandidateHighlight,
   ParsedResume,
   ResumeTextLine,
 } from './interfaces/parsed-resume.interface';
+import {
+  reconstructPdfTextLines,
+  type PdfLayoutTextItem,
+} from './utils/pdf-text-layout';
 
 const MAX_AI_TEXT_LENGTH = 18_000;
-const PDF_TEXT_OPTIONS = {
-  lineEnforce: true,
-  lineThreshold: 4.5,
-  cellSeparator: '\n',
-  cellThreshold: 7,
-  pageJoiner: '\n',
-};
+export const CURRENT_PDF_PARSER_VERSION = 2;
 
 @Injectable()
 export class PdfParserService {
   async parse(file: Express.Multer.File): Promise<ParsedResume> {
-    const parser = new PDFParse({ data: file.buffer });
+    return this.parseBuffer(file.buffer);
+  }
+
+  async parseBuffer(buffer: Buffer): Promise<ParsedResume> {
+    const loadingTask = getDocument({ data: new Uint8Array(buffer) });
+    const document = await loadingTask.promise;
 
     try {
-      const result = await parser.getText(PDF_TEXT_OPTIONS);
-      const lines = result.pages.flatMap((page) =>
-        this.toTextLines(page.text, page.num),
-      );
-      const text = this.normalizeDocumentText(result.text).slice(
-        0,
-        MAX_AI_TEXT_LENGTH,
-      );
+      const lines: ResumeTextLine[] = [];
+
+      for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+        const page = await document.getPage(pageNumber);
+        const content = await page.getTextContent();
+        const pageLines = reconstructPdfTextLines(
+          content.items.filter(isTextItem).map(toLayoutTextItem),
+        );
+
+        lines.push(
+          ...pageLines
+            .map((line) => this.normalizeText(line))
+            .filter(Boolean)
+            .map((text) => ({ pageNumber, text })),
+        );
+        page.cleanup();
+      }
+
+      const text = lines
+        .map((line) => line.text)
+        .join('\n')
+        .slice(0, MAX_AI_TEXT_LENGTH)
+        .trim();
 
       if (!text) {
         throw new BadRequestException(
@@ -39,11 +58,12 @@ export class PdfParserService {
 
       return {
         text,
-        totalPages: result.total,
+        totalPages: document.numPages,
         lines,
       };
     } finally {
-      await parser.destroy();
+      await document.destroy();
+      await loadingTask.destroy();
     }
   }
 
@@ -215,61 +235,21 @@ export class PdfParserService {
     return /^(?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?$/i.test(text);
   }
 
-  private toTextLines(pageText: string, pageNumber: number): ResumeTextLine[] {
-    return pageText
-      .split(/[\n\t]+/)
-      .map((line) => this.normalizeText(line))
-      .filter(Boolean)
-      .map((text) => ({ pageNumber, text }));
-  }
-
   private normalizeText(text: string) {
-    return this.repairPdfLetterSpacing(text).replace(/\s+/g, ' ').trim();
+    return text.replace(/\s+/g, ' ').trim();
   }
+}
 
-  private normalizeDocumentText(text: string) {
-    return this.repairPdfLetterSpacing(text)
-      .split('\n')
-      .map((line) => line.replace(/[^\S\n]+/g, ' ').trim())
-      .filter(Boolean)
-      .join('\n')
-      .trim();
-  }
+function isTextItem(item: unknown): item is TextItem {
+  return typeof item === 'object' && item !== null && 'str' in item;
+}
 
-  private repairPdfLetterSpacing(text: string) {
-    return text
-      .split('\n')
-      .map((line) => this.repairPdfLetterSpacingLine(line))
-      .join('\n');
-  }
-
-  private repairPdfLetterSpacingLine(line: string) {
-    let repaired = line;
-
-    repaired = repaired.replace(/\b(?:[A-Z]\s+){1,}[A-Z]\b/g, (match) => {
-      const letters = match.replace(/\s+/g, '');
-
-      if (letters.length <= 4) {
-        return letters;
-      }
-
-      return match;
-    });
-
-    repaired = repaired.replace(
-      /(?:[A-Za-z0-9._%+-]\s*)+@\s*(?:[A-Za-z0-9-]\s*)+(?:\.\s*(?:[A-Za-z]\s*){2,})+/g,
-      (match) => match.replace(/\s+/g, ''),
-    );
-
-    repaired = repaired.replace(
-      /\b(?:[A-Za-z0-9-]\s*){2,}\.\s*(?:[A-Za-z]\s*){2,}\b/g,
-      (match) => match.replace(/\s+/g, ''),
-    );
-
-    repaired = repaired.replace(/(?:\+?\d\s*){7,}/g, (match) =>
-      match.replace(/\s+/g, ''),
-    );
-
-    return repaired;
-  }
+function toLayoutTextItem(item: TextItem): PdfLayoutTextItem {
+  return {
+    str: item.str,
+    transform: item.transform,
+    width: item.width,
+    height: item.height,
+    hasEOL: item.hasEOL,
+  };
 }

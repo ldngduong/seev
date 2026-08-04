@@ -1,7 +1,6 @@
 import {
   BriefcaseBusiness,
   FileText,
-  FolderOpen,
   LayoutDashboard,
 } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router'
@@ -20,8 +19,8 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarRail,
-  SidebarTrigger,
 } from '@/components/ui/sidebar'
+import { DashboardTopbar } from './DashboardTopbar'
 const navItems = [
   {
     title: 'Dashboard',
@@ -29,18 +28,13 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
-    title: 'Items',
-    to: '/items',
-    icon: FolderOpen,
-  },
-  {
-    title: 'CV của tôi',
+    title: 'My CVs',
     to: '/my-cvs',
     icon: FileText,
   },
   {
     title: 'Research',
-    to: '/research-cv',
+    to: '/research-history',
     icon: BriefcaseBusiness,
   },
 ]
@@ -103,9 +97,7 @@ export function AuthLayout() {
         <SidebarRail />
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-[var(--content-pad)] [--content-pad:1rem] sm:[--content-pad:1.25rem] lg:[--content-pad:1.5rem]">
-          <SidebarTrigger className="size-9 rounded-xl text-zinc-700" />
-        </header>
+        <DashboardTopbar />
         <div className="flex flex-1 flex-col gap-6 px-[var(--content-pad)] py-[var(--content-pad)] [--content-pad:1rem] sm:[--content-pad:1.25rem] lg:[--content-pad:1.5rem]">
           <Outlet />
         </div>

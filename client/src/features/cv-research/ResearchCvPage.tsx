@@ -1,344 +1,130 @@
-import { FileText, Search, ShieldCheck, Upload } from 'lucide-react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { ArrowLeft, FileSearch, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 
-import { AuditResultPanel } from '@/components/audit-result-panel'
 import { DashboardPageHeader } from '@/components/layouts/DashboardPageHeader'
 import { JobCategoryPicker } from '@/components/job-category-picker'
-import {
-  PdfAuditViewer,
-  type HighlightStats,
-} from '@/components/pdf-audit-viewer'
-import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
-import { SessionJobSuggestionsPanel } from '@/features/job-research/components/SessionJobSuggestionsPanel'
-import { useUserCvPdfFile } from '@/hooks/use-user-cv-pdf-file'
-import { useResearchProgress } from '@/hooks/use-research-progress'
 import { cn } from '@/lib/utils'
 import { getSeniorityLevels } from '@/services/career-api'
 import {
   createCustomCvResearch,
-  getCvResearchSession,
   createQuickCvResearch,
   listUserCvs,
-  listCvResearchSessions,
-  retryCvResearchSession,
+  MAX_CV_PAGE_SIZE,
 } from '@/services/cv-api'
-import { useAuditStore } from '@/stores/audit-store'
-import type { AuditSummary, CvResearchSession } from '@/types/cv'
 
-const workflow = [
-  {
-    label: 'Upload CV',
-    value: 'PDF <= 5MB',
-    icon: Upload,
-  },
-  {
-    label: 'Visual Audit',
-    value: 'DeepSeek scoring',
-    icon: FileText,
-  },
-  {
-    label: 'Career Fit',
-    value: 'Keyword + role ideas',
-    icon: Search,
-  },
-]
+type ResearchMode = 'quick' | 'custom'
 
 export const ResearchCvPage = () => {
-  const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [audit, setAudit] = useState<AuditSummary | null>(null)
-  const [highlightStats, setHighlightStats] = useState<HighlightStats | null>(
-    null,
-  )
-  const [session, setSession] = useState<CvResearchSession | null>(null)
+  const [mode, setMode] = useState<ResearchMode | null>(null)
   const [selectedCvId, setSelectedCvId] = useState('')
   const [selectedCategoryId, setSelectedCategoryId] = useState(0)
   const [targetRole, setTargetRole] = useState('')
   const [seniorityLevelId, setSeniorityLevelId] = useState('')
   const [jobDescription, setJobDescription] = useState('')
-  const sessionPhases = useRef(new Map<string, CvResearchSession['phase']>())
-  const selectedFeedbackId = useAuditStore((state) => state.selectedFeedbackId)
-  const setSelectedFeedbackId = useAuditStore(
-    (state) => state.setSelectedFeedbackId,
-  )
   const cvsQuery = useQuery({
-    queryKey: ['user-cvs'],
-    queryFn: listUserCvs,
+    queryKey: ['user-cvs', { page: 1, status: 'ready', purpose: 'research' }],
+    queryFn: () => listUserCvs({ page: 1, pageSize: MAX_CV_PAGE_SIZE, status: 'ready' }),
   })
   const seniorityQuery = useQuery({
     queryKey: ['seniority-levels'],
     queryFn: getSeniorityLevels,
   })
-  const sessionsQuery = useQuery({
-    queryKey: ['cv-research-sessions'],
-    queryFn: () => listCvResearchSessions(100),
-  })
-  const sessionRefreshQuery = useQuery({
-    queryKey: ['cv-research-session', session?.id],
-    queryFn: () => getCvResearchSession(session?.id as string),
-    enabled: Boolean(session?.id),
-  })
-  const cvFileQuery = useUserCvPdfFile(selectedCvId)
 
   useEffect(() => {
     const cvId = searchParams.get('cvId')
-    if (cvId) {
-      setSelectedCvId(cvId)
-    }
+    if (cvId) setSelectedCvId(cvId)
   }, [searchParams])
 
-  useEffect(() => {
-    if (!sessionRefreshQuery.data) {
-      return
-    }
-
-    setSession(sessionRefreshQuery.data)
-    setAudit(sessionRefreshQuery.data.audit)
-  }, [sessionRefreshQuery.data])
-
-  const activeSession = useMemo(
-    () =>
-      sessionsQuery.data?.find(
-        (item) =>
-          item.cv.id === selectedCvId &&
-          ['queued', 'processing'].includes(item.status),
-      ) ?? null,
-    [selectedCvId, sessionsQuery.data],
-  )
-
-  useEffect(() => {
-    if (activeSession) {
-      setSession(activeSession)
-      setAudit(activeSession.audit)
-    } else if (session?.cv.id !== selectedCvId) {
-      setSession(null)
-      setAudit(null)
-    }
-  }, [activeSession, selectedCvId, session?.cv.id])
-
-  const handleProgress = useCallback(
-    (event: import('@/types/research-progress').ResearchProgressEvent) => {
-      queryClient.setQueryData<CvResearchSession[]>(
-        ['cv-research-sessions'],
-        (current) =>
-          current?.map((item) =>
-            item.id === event.session_id
-              ? {
-                  ...item,
-                  status: event.status,
-                  phase: event.phase,
-                  progress: event.progress,
-                  progress_message: event.message,
-                  attempt: event.attempt,
-                  error: event.error,
-                  updated_at: event.updated_at,
-                }
-              : item,
-          ),
-      )
-      setSession((current) =>
-        current?.id === event.session_id
-          ? {
-              ...current,
-              status: event.status,
-              phase: event.phase,
-              progress: event.progress,
-              progress_message: event.message,
-              attempt: event.attempt,
-              error: event.error,
-              updated_at: event.updated_at,
-            }
-          : current,
-      )
-
-      const previousPhase = sessionPhases.current.get(event.session_id)
-      sessionPhases.current.set(event.session_id, event.phase)
-      if (previousPhase !== event.phase) {
-        void queryClient.invalidateQueries({
-          queryKey: ['cv-research-session', event.session_id],
-        })
-        void queryClient.invalidateQueries({ queryKey: ['cv-research-sessions'] })
-      }
-    },
-    [queryClient],
-  )
-  const reconcileProgress = useCallback(() => {
-    void sessionsQuery.refetch()
-    if (session?.id) {
-      void queryClient.invalidateQueries({
-        queryKey: ['cv-research-session', session.id],
-      })
-    }
-  }, [queryClient, session?.id, sessionsQuery])
-  useResearchProgress(handleProgress, reconcileProgress)
-
-  const activeFeedback = useMemo(
-    () =>
-      audit?.detailed_feedbacks.find(
-        (feedback) => feedback.id === selectedFeedbackId,
-      ) ?? null,
-    [audit, selectedFeedbackId],
-  )
-
-  const handleResearchComplete = useCallback((nextSession: CvResearchSession) => {
-    setHighlightStats(null)
-    setSession(nextSession)
-    setAudit(nextSession.audit)
-    setSelectedCvId(nextSession.cv.id)
-    setSelectedFeedbackId(nextSession.audit?.detailed_feedbacks[0]?.id ?? null)
-    void queryClient.invalidateQueries({ queryKey: ['cv-research-sessions'] })
-    void queryClient.invalidateQueries({ queryKey: ['job-research-intents'] })
-  }, [queryClient, setSelectedFeedbackId])
-
-  const quickResearchMutation = useMutation({
+  const handleCreated = (session: { id: string }) => {
+    void navigate(`/research-history/${session.id}`)
+  }
+  const quickMutation = useMutation({
     mutationFn: createQuickCvResearch,
-    onSuccess: handleResearchComplete,
+    onSuccess: handleCreated,
   })
-  const customResearchMutation = useMutation({
+  const customMutation = useMutation({
     mutationFn: createCustomCvResearch,
-    onSuccess: handleResearchComplete,
+    onSuccess: handleCreated,
   })
-  const retryResearchMutation = useMutation({
-    mutationFn: retryCvResearchSession,
-    onSuccess: handleResearchComplete,
-  })
-  const researchIsActive =
-    session?.cv.id === selectedCvId &&
-    ['queued', 'processing'].includes(session.status)
-  const researchIsBusy =
-    researchIsActive ||
-    quickResearchMutation.isPending ||
-    customResearchMutation.isPending ||
-    retryResearchMutation.isPending
-
-  const handleHighlightStatsChange = useCallback((stats: HighlightStats) => {
-    setHighlightStats((current) => {
-      if (
-        current?.matchedCount === stats.matchedCount &&
-        current.totalCount === stats.totalCount &&
-        current.unmatchedFeedbackIds.join('|') ===
-          stats.unmatchedFeedbackIds.join('|')
-      ) {
-        return current
-      }
-
-      return stats
-    })
-  }, [])
+  const isSubmitting = quickMutation.isPending || customMutation.isPending
+  const hasCustomTarget = Boolean(selectedCategoryId || jobDescription.trim())
 
   return (
-    <main className="flex w-full flex-col gap-6">
+    <main className="flex w-full flex-col gap-5">
       <DashboardPageHeader
-        title="Smart CV auditor workspace"
+        title="New research"
         actions={
-          <>
-            <Link
-              to="/research-history"
-              className={cn(buttonVariants({ variant: 'outline' }))}
-            >
-              Research history
-            </Link>
-            <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-              <ShieldCheck className="size-4 text-primary" />
-              React TS + NestJS
-            </div>
-          </>
+          <Link
+            to="/research-history"
+            className={cn(buttonVariants({ variant: 'outline' }))}
+          >
+            <ArrowLeft />
+            Research history
+          </Link>
         }
       />
 
-      <section className="grid gap-3 md:grid-cols-3">
-        {workflow.map((item) => (
-          <Card key={item.label} className="rounded-2xl shadow-none">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
-              <CardTitle className="text-sm font-medium text-zinc-700">
-                {item.label}
-              </CardTitle>
-              <item.icon className="size-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-lg font-semibold text-zinc-700">
-                {item.value}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </section>
-
-      <section className="grid min-h-[680px] gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-        <div className="flex min-h-[620px] flex-col rounded-2xl border bg-card">
-          <div className="flex items-center justify-between border-b px-4 py-3">
+      {!mode ? (
+        <section className="grid gap-4 md:grid-cols-2">
+          <ResearchModeButton
+            icon={Sparkles}
+            title="Quick research"
+            description="Use the CV's own direction to review its content and find suitable jobs."
+            onClick={() => setMode('quick')}
+          />
+          <ResearchModeButton
+            icon={SlidersHorizontal}
+            title="Custom research"
+            description="Compare a CV with a selected job category, level, or employer job description."
+            onClick={() => setMode('custom')}
+          />
+        </section>
+      ) : (
+        <section className="rounded-xl border bg-card p-5">
+          <div className="mb-5 flex items-start justify-between gap-4 border-b pb-4">
             <div>
-              <h2 className="text-base font-semibold text-zinc-700">
-                PDF viewer
+              <h2 className="text-xl font-semibold text-zinc-700">
+                {mode === 'quick' ? 'Quick research' : 'Custom research'}
               </h2>
-              <p className="text-sm text-muted-foreground">
-                Click highlighted PDF text to view the detailed feedback.
+              <p className="mt-1 text-sm text-muted-foreground">
+                {mode === 'quick'
+                  ? 'Choose the CV you want Seev to review.'
+                  : 'Choose a CV and provide the role context you want to compare it with.'}
               </p>
             </div>
-            <Badge variant={selectedFeedbackId ? 'default' : 'outline'}>
-              {highlightStats
-                ? `${highlightStats.matchedCount}/${highlightStats.totalCount} highlights`
-                : selectedFeedbackId ?? 'No feedback selected'}
-            </Badge>
+            <Button type="button" variant="ghost" onClick={() => setMode(null)}>
+              Change mode
+            </Button>
           </div>
-          <PdfAuditViewer
-            file={cvFileQuery.data ?? null}
-            feedbacks={audit?.detailed_feedbacks ?? []}
-            activeFeedback={activeFeedback}
-            onHighlightStatsChange={handleHighlightStatsChange}
-          />
-          {cvFileQuery.isError ? (
-            <p className="border-t px-4 py-3 text-sm text-destructive">
-              Could not load the selected CV file from backend.
-            </p>
-          ) : null}
-        </div>
 
-        <aside className="flex flex-col gap-4">
-          <Card className="rounded-2xl shadow-none">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold text-zinc-700">
-                Start research
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="userCvId">CV của tôi</Label>
-                <select
-                  id="userCvId"
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  value={selectedCvId}
-                  disabled={cvsQuery.isLoading}
-                  onChange={(event) => setSelectedCvId(event.target.value)}
-                >
-                  <option value="">
-                    {cvsQuery.isLoading ? 'Loading...' : 'Choose saved CV'}
-                  </option>
-                  {cvsQuery.data?.map((cv) => (
-                    <option key={cv.id} value={cv.id}>
-                      {cv.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <Button
-                type="button"
-                className="w-full"
-                disabled={!selectedCvId || researchIsBusy}
-                onClick={() => quickResearchMutation.mutate(selectedCvId)}
+          <div className="grid gap-5">
+            <div className="space-y-2">
+              <Label htmlFor="userCvId">CV</Label>
+              <select
+                id="userCvId"
+                className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+                value={selectedCvId}
+                disabled={cvsQuery.isLoading || isSubmitting}
+                onChange={(event) => setSelectedCvId(event.target.value)}
               >
-                {researchIsActive ? 'Research in progress' : 'Quick research'}
-              </Button>
+                <option value="">
+                  {cvsQuery.isLoading ? 'Loading CVs...' : 'Choose a saved CV'}
+                </option>
+                {cvsQuery.data?.items.map((cv) => (
+                  <option key={cv.id} value={cv.id}>{cv.name}</option>
+                ))}
+              </select>
+            </div>
 
-              <div className="space-y-3 rounded-md border p-3">
+            {mode === 'custom' ? (
+              <div className="grid gap-5 border-t pt-5">
                 <JobCategoryPicker
                   onChange={(ids, label) => {
                     setSelectedCategoryId(ids[0] ?? 0)
@@ -346,104 +132,91 @@ export const ResearchCvPage = () => {
                   }}
                 />
                 <div className="space-y-2">
-                  <Label htmlFor="seniorityLevelId">
-                    Seniority / position level
-                  </Label>
+                  <Label htmlFor="seniorityLevelId">Seniority or position level</Label>
                   <select
                     id="seniorityLevelId"
-                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
                     value={seniorityLevelId}
-                    disabled={seniorityQuery.isLoading}
+                    disabled={seniorityQuery.isLoading || isSubmitting}
                     onChange={(event) => setSeniorityLevelId(event.target.value)}
                   >
-                    <option value="">
-                      {seniorityQuery.isLoading ? 'Loading...' : 'Choose level'}
-                    </option>
+                    <option value="">Choose a level when applicable</option>
                     {seniorityQuery.data?.map((level) => (
-                      <option key={level.id} value={level.id}>
-                        {level.displayName}
-                      </option>
+                      <option key={level.id} value={level.id}>{level.displayName}</option>
                     ))}
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="jobDescription">Paste JD</Label>
+                  <Label htmlFor="jobDescription">Employer job description</Label>
                   <Textarea
                     id="jobDescription"
                     value={jobDescription}
+                    disabled={isSubmitting}
                     onChange={(event) => setJobDescription(event.target.value)}
-                    placeholder="Paste employer job description..."
+                    placeholder="Paste the job description here"
+                    className="min-h-40"
                   />
-                </div>
-                <Button
-                  type="button"
-                  className="w-full"
-                  disabled={!selectedCvId || researchIsBusy}
-                  onClick={() =>
-                    customResearchMutation.mutate({
-                      userCvId: selectedCvId,
-                      jobCategoryId: selectedCategoryId || undefined,
-                      seniorityLevelId: seniorityLevelId || undefined,
-                      targetRole: targetRole || undefined,
-                      jobDescription: jobDescription || undefined,
-                    })
-                  }
-                >
-                  Custom research
-                </Button>
-              </div>
-
-              {quickResearchMutation.isError || customResearchMutation.isError ? (
-                <p className="text-sm text-destructive">
-                  Research failed. Please check the selected CV and target.
-                </p>
-              ) : null}
-
-              {session?.cv.id === selectedCvId ? (
-                <div className="space-y-2 rounded-md bg-muted/50 p-3">
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="font-medium text-zinc-700">
-                      {formatResearchPhase(session.phase)}
-                    </span>
-                    <span className="tabular-nums text-muted-foreground">
-                      {session.progress}%
-                    </span>
-                  </div>
-                  <Progress value={session.progress} />
-                  <p className="text-sm text-muted-foreground">
-                    {session.progress_message}
+                  <p className="text-xs text-muted-foreground">
+                    A job category or job description is required. You may provide both.
                   </p>
-                  {session.status === 'failed' ? (
-                    <>
-                      <p className="text-sm text-destructive">{session.error}</p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full"
-                        disabled={retryResearchMutation.isPending}
-                        onClick={() => retryResearchMutation.mutate(session.id)}
-                      >
-                        {retryResearchMutation.isPending
-                          ? 'Retrying...'
-                          : 'Retry this research'}
-                      </Button>
-                    </>
-                  ) : null}
                 </div>
-              ) : null}
-            </CardContent>
-          </Card>
-          <AuditResultPanel audit={audit} />
-          <SessionJobSuggestionsPanel
-            jobs={session?.job_suggestions ?? []}
-            status={session?.status}
-          />
-        </aside>
-      </section>
+              </div>
+            ) : null}
+
+            {quickMutation.isError || customMutation.isError ? (
+              <p className="text-sm text-destructive">
+                Research could not be started. Check the selected CV and try again.
+              </p>
+            ) : null}
+
+            <div className="flex justify-end border-t pt-5">
+              <Button
+                type="button"
+                disabled={!selectedCvId || isSubmitting || (mode === 'custom' && !hasCustomTarget)}
+                onClick={() => {
+                  if (mode === 'quick') {
+                    quickMutation.mutate(selectedCvId)
+                    return
+                  }
+                  customMutation.mutate({
+                    userCvId: selectedCvId,
+                    jobCategoryId: selectedCategoryId || undefined,
+                    seniorityLevelId: seniorityLevelId || undefined,
+                    targetRole: targetRole || undefined,
+                    jobDescription: jobDescription.trim() || undefined,
+                  })
+                }}
+              >
+                <FileSearch />
+                {isSubmitting ? 'Starting research...' : 'Start research'}
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
     </main>
   )
 }
 
-function formatResearchPhase(phase: CvResearchSession['phase']) {
-  return phase.replaceAll('_', ' ')
+function ResearchModeButton({ icon: Icon, title, description, onClick }: {
+  icon: typeof Sparkles
+  title: string
+  description: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex min-h-52 items-start gap-4 rounded-xl border bg-card p-5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+    >
+      <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="size-5" />
+      </span>
+      <span>
+        <span className="block text-xl font-semibold text-zinc-700">{title}</span>
+        <span className="mt-2 block text-sm leading-6 text-muted-foreground">{description}</span>
+      </span>
+    </button>
+  )
 }

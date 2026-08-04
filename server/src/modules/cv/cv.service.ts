@@ -12,6 +12,10 @@ import { JobResearchService } from '../crawler/job-research.service';
 import { JobFamilyCategory } from '../job-category/entities/job-family-category.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
 import { ResearchProgressService } from '../research-realtime/research-progress.service';
+import type {
+  ResearchSessionListQueryDto,
+  UserCvListQueryDto,
+} from './dto/cv-list-query.dto';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { CreateCvAuditDto } from './dto/create-cv-audit.dto';
 import {
@@ -28,7 +32,10 @@ import {
 } from './entities/cv-research-session.entity';
 import { UserCv } from './entities/user-cv.entity';
 import type { ParsedResume } from './interfaces/parsed-resume.interface';
-import { PdfParserService } from './pdf-parser.service';
+import {
+  CURRENT_PDF_PARSER_VERSION,
+  PdfParserService,
+} from './pdf-parser.service';
 import {
   CV_RESEARCH_JOB,
   CV_RESEARCH_QUEUE,
@@ -160,6 +167,7 @@ export class CvService {
         extractedText: parsedResume.text,
         parsedLines: parsedResume.lines,
         totalPages: parsedResume.totalPages,
+        parserVersion: CURRENT_PDF_PARSER_VERSION,
         error: null,
       }),
     );
@@ -167,13 +175,29 @@ export class CvService {
     return this.toUserCvResponse(cv);
   }
 
-  async listUserCvs(userId: string): Promise<UserCvResponse[]> {
-    const cvs = await this.userCvRepository.find({
-      where: { userId },
-      order: { createdAt: 'DESC' },
-    });
+  async listUserCvs(userId: string, query: UserCvListQueryDto) {
+    const builder = this.userCvRepository
+      .createQueryBuilder('cv')
+      .where('cv.user_id = :userId', { userId })
+      .orderBy('cv.created_at', 'DESC')
+      .skip((query.page - 1) * query.pageSize)
+      .take(query.pageSize);
+    const search = query.search?.trim();
+    if (search) {
+      builder.andWhere(
+        '(cv.name ILIKE :search OR cv.original_file_name ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+    if (query.status) {
+      builder.andWhere('cv.status = :status', { status: query.status });
+    }
+    const [cvs, total] = await builder.getManyAndCount();
 
-    return Promise.all(cvs.map((cv) => this.toUserCvResponse(cv)));
+    return {
+      items: await Promise.all(cvs.map((cv) => this.toUserCvResponse(cv))),
+      meta: this.pageMeta(query.page, query.pageSize, total),
+    };
   }
 
   async createCvReadUrl(userId: string, cvId: string) {
@@ -199,7 +223,9 @@ export class CvService {
     dto: CreateQuickCvResearchDto,
     userId: string,
   ): Promise<CvResearchSessionResponse> {
-    const cv = await this.findUserCvOrThrow(userId, dto.userCvId);
+    const cv = await this.ensureCurrentCvParsing(
+      await this.findUserCvOrThrow(userId, dto.userCvId),
+    );
     return this.createResearchSession({
       userId,
       cv,
@@ -224,7 +250,9 @@ export class CvService {
       );
     }
 
-    const cv = await this.findUserCvOrThrow(userId, dto.userCvId);
+    const cv = await this.ensureCurrentCvParsing(
+      await this.findUserCvOrThrow(userId, dto.userCvId),
+    );
     const target = await this.resolveAuditTarget({
       jobCategoryId: dto.jobCategoryId,
       seniorityLevelId: dto.seniorityLevelId,
@@ -246,20 +274,43 @@ export class CvService {
     });
   }
 
-  async listResearchSessions(
-    userId: string,
-    limit = 30,
-  ): Promise<CvResearchSessionResponse[]> {
-    const sessions = await this.researchSessionRepository.find({
-      where: { userId },
-      relations: { userCv: true },
-      order: { createdAt: 'DESC' },
-      take: Math.min(Math.max(limit, 1), 100),
-    });
+  async listResearchSessions(userId: string, query: ResearchSessionListQueryDto) {
+    const builder = this.researchSessionRepository
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.userCv', 'cv')
+      .where('session.user_id = :userId', { userId })
+      .orderBy('session.created_at', 'DESC')
+      .skip((query.page - 1) * query.pageSize)
+      .take(query.pageSize);
+    const search = query.search?.trim();
+    if (search) {
+      builder.andWhere(
+        `(cv.name ILIKE :search
+          OR cv.original_file_name ILIKE :search
+          OR session.target_role ILIKE :search
+          OR session.job_category_name ILIKE :search)`,
+        { search: `%${search}%` },
+      );
+    }
+    if (query.status) {
+      builder.andWhere('session.status = :status', { status: query.status });
+    }
+    if (query.type) {
+      builder.andWhere('session.type = :type', { type: query.type });
+    }
+    if (query.userCvId) {
+      builder.andWhere('session.user_cv_id = :userCvId', {
+        userCvId: query.userCvId,
+      });
+    }
+    const [sessions, total] = await builder.getManyAndCount();
 
-    return Promise.all(
-      sessions.map((session) => this.toResearchResponse(session)),
-    );
+    return {
+      items: await Promise.all(
+        sessions.map((session) => this.toResearchResponse(session)),
+      ),
+      meta: this.pageMeta(query.page, query.pageSize, total),
+    };
   }
 
   async getResearchSession(
@@ -292,6 +343,12 @@ export class CvService {
     }
     if (session.status !== 'failed') {
       throw new BadRequestException('Only failed research can be retried.');
+    }
+
+    // A completed audit is an immutable checkpoint. A failure after this point
+    // resumes job collection instead of repeating the expensive CV review.
+    if (session.auditSnapshot && session.jobSearchIntentId) {
+      return this.retryResearchSessionJobs(userId, sessionId);
     }
 
     const nextAttempt = await this.dataSource.transaction(async (manager) => {
@@ -388,10 +445,6 @@ export class CvService {
       );
     }
 
-    await this.jobResearchService.retryIntent(
-      session.jobSearchIntentId,
-      userId,
-    );
     await this.researchSessionRepository.update(session.id, {
       status: 'processing',
       phase: 'job_matching',
@@ -401,6 +454,20 @@ export class CvService {
       completedAt: null,
       jobSuggestionsSnapshot: [],
     });
+
+    try {
+      await this.jobResearchService.retryIntent(
+        session.jobSearchIntentId,
+        userId,
+      );
+    } catch (error) {
+      await this.progressService.fail(
+        session.id,
+        session.attempt,
+        this.formatError(error),
+      );
+      throw error;
+    }
 
     const updated = await this.researchSessionRepository.findOneOrFail({
       where: { id: session.id },
@@ -599,7 +666,7 @@ export class CvService {
           status: 'processing',
           phase: 'cv_audit',
           progress: 20,
-          message: 'Auditing CV evidence against the target.',
+          message: 'Reviewing your CV against the selected direction.',
         },
         expectedAttempt,
       );
@@ -638,7 +705,7 @@ export class CvService {
         {
           phase: 'job_matching',
           progress: 72,
-          message: 'Preparing job-search intent.',
+          message: 'Preparing a focused job search from your CV results.',
         },
         expectedAttempt,
       );
@@ -668,7 +735,7 @@ export class CvService {
         {
           phase: 'job_matching',
           progress: 75,
-          message: 'Collecting and matching jobs from configured sources.',
+          message: 'Searching for suitable jobs and checking each match.',
         },
         expectedAttempt,
       );
@@ -760,17 +827,6 @@ export class CvService {
         resumeText: input.parsedResume.text,
         candidateHighlights,
         onLineBatchStart: async ({ batchIndex, totalBatches, batch }) => {
-          if (input.researchSessionId) {
-            await this.progressService.update(
-              input.researchSessionId,
-              {
-                phase: 'cv_audit',
-                progress: 25 + Math.floor((batchIndex / totalBatches) * 40),
-                message: `Auditing CV section ${batchIndex + 1} of ${totalBatches}.`,
-              },
-              input.researchAttempt ?? undefined,
-            );
-          }
           await this.cvAuditBatchRepository.upsert(
             {
               auditId: audit.id,
@@ -783,7 +839,12 @@ export class CvService {
             ['auditId', 'batchIndex'],
           );
         },
-        onLineBatchComplete: async ({ batchIndex, result }) => {
+        onLineBatchComplete: async ({
+          batchIndex,
+          completedBatches,
+          totalBatches,
+          result,
+        }) => {
           await this.cvAuditBatchRepository.update(
             { auditId: audit.id, batchIndex },
             {
@@ -797,7 +858,10 @@ export class CvService {
               input.researchSessionId,
               {
                 phase: 'cv_audit',
-                message: `Completed CV section ${batchIndex + 1}.`,
+                progress:
+                  25 + Math.floor((completedBatches / totalBatches) * 30),
+                message:
+                  'Reviewing your CV and checking the evidence behind each recommendation.',
               },
               input.researchAttempt ?? undefined,
             );
@@ -810,6 +874,49 @@ export class CvService {
               status: 'failed',
               error: this.formatError(error),
             },
+          );
+        },
+        onCoverageStart: async ({ totalBatches }) => {
+          if (!input.researchSessionId) return;
+
+          await this.progressService.update(
+            input.researchSessionId,
+            {
+              phase: 'cv_audit',
+              progress: 56,
+              message:
+                totalBatches > 0
+                  ? 'Checking the CV again for missed or inconsistent feedback.'
+                  : 'The CV review is complete. Preparing your results.',
+            },
+            input.researchAttempt ?? undefined,
+          );
+        },
+        onCoverageBatchComplete: async ({ completedBatches, totalBatches }) => {
+          if (!input.researchSessionId) return;
+
+          await this.progressService.update(
+            input.researchSessionId,
+            {
+              phase: 'cv_audit',
+              progress: 55 + Math.floor((completedBatches / totalBatches) * 10),
+              message:
+                'Checking the CV again for missed or inconsistent feedback.',
+            },
+            input.researchAttempt ?? undefined,
+          );
+        },
+        onFinalSynthesisStart: async () => {
+          if (!input.researchSessionId) return;
+
+          await this.progressService.update(
+            input.researchSessionId,
+            {
+              phase: 'cv_audit',
+              progress: 66,
+              message: 'Preparing your score and prioritized recommendations.',
+            },
+            input.researchAttempt ?? undefined,
           );
         },
       });
@@ -917,6 +1024,23 @@ export class CvService {
     return cv;
   }
 
+  private async ensureCurrentCvParsing(cv: UserCv) {
+    if (cv.parserVersion >= CURRENT_PDF_PARSER_VERSION) {
+      return cv;
+    }
+
+    const storedFile = await this.r2StorageService.getPdfBuffer(cv.storageKey);
+    const parsedResume = await this.pdfParserService.parseBuffer(storedFile.body);
+
+    cv.extractedText = parsedResume.text;
+    cv.parsedLines = parsedResume.lines;
+    cv.totalPages = parsedResume.totalPages;
+    cv.parserVersion = CURRENT_PDF_PARSER_VERSION;
+    cv.error = null;
+
+    return this.userCvRepository.save(cv);
+  }
+
   private async toUserCvResponse(cv: UserCv): Promise<UserCvResponse> {
     return {
       id: cv.id,
@@ -981,6 +1105,15 @@ export class CvService {
 
   private createFileHash(buffer: Buffer) {
     return createHash('sha256').update(buffer).digest('hex');
+  }
+
+  private pageMeta(page: number, pageSize: number, total: number) {
+    return {
+      page,
+      page_size: pageSize,
+      total,
+      total_pages: Math.ceil(total / pageSize),
+    };
   }
 
   private getHeaderLines(cv: UserCv) {

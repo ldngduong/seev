@@ -9,6 +9,8 @@ const feedbackSchema = z.object({
   severity: z.enum(['info', 'warning', 'critical']).default('warning'),
   issue: z.string().min(1),
   suggestion: z.string().trim().min(1),
+  suggestion_mode: z.enum(['direct_rewrite', 'conditional_recommendation']),
+  evidence_source_line_ids: z.array(z.string().min(1)).min(1),
   highlight_color: z.enum(['yellow', 'red']).optional().default('yellow'),
 });
 
@@ -66,6 +68,7 @@ export const generalCvAuditResultSchema = z.object({
 });
 
 export const lineCvAuditResultSchema = z.object({
+  reviewed_source_line_ids: z.array(z.string().min(1)).min(1),
   detailed_feedbacks: z.array(feedbackSchema).default([]),
 });
 
