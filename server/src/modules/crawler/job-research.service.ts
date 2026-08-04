@@ -10,10 +10,12 @@ import { Queue } from 'bullmq';
 import { In, Repository } from 'typeorm';
 
 import type { Env } from '../../config/env.schema';
+import { runWithConcurrency } from '../../shared/utils/run-with-concurrency';
 import { CvResearchSession } from '../cv/entities/cv-research-session.entity';
 import { CvAudit } from '../cv/entities/cv-audit.entity';
 import { JobFamilyCategory } from '../job-category/entities/job-family-category.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
+import { ResearchProgressService } from '../research-realtime/research-progress.service';
 import { IndeedConnector } from './connectors/indeed.connector';
 import { TopCvConnector } from './connectors/topcv.connector';
 import { VietnamWorksConnector } from './connectors/vietnamworks.connector';
@@ -262,6 +264,7 @@ export class JobResearchService {
     @InjectRepository(SeniorityLevel)
     private readonly seniorityRepository: Repository<SeniorityLevel>,
     private readonly config: ConfigService<Env, true>,
+    private readonly progressService: ResearchProgressService,
     topCvConnector: TopCvConnector,
     vietnamWorksConnector: VietnamWorksConnector,
     indeedConnector: IndeedConnector,
@@ -276,13 +279,31 @@ export class JobResearchService {
   async createIntent(
     dto: CreateJobResearchIntentDto,
     userId: string,
-    options: { researchSessionId?: string } = {},
+    options: {
+      researchSessionId?: string;
+      researchSessionAttempt?: number;
+    } = {},
   ): Promise<CreateIntentResult> {
+    if (options.researchSessionId) {
+      const existingIntent = await this.intentRepository.findOneBy({
+        researchSessionId: options.researchSessionId,
+        userId,
+      });
+
+      if (existingIntent) {
+        return {
+          intent: existingIntent,
+          queueJobId: undefined,
+        };
+      }
+    }
+
     const resolved = await this.resolveIntent(dto, userId);
     const intent = await this.intentRepository.save(
       this.intentRepository.create({
         ...resolved,
         researchSessionId: options.researchSessionId ?? null,
+        researchSessionAttempt: options.researchSessionAttempt ?? null,
         status: 'queued',
         completedSources: [],
         totalJobs: 0,
@@ -293,8 +314,7 @@ export class JobResearchService {
       JOB_RESEARCH_JOB,
       { intentId: intent.id },
       {
-        attempts: 2,
-        backoff: { type: 'exponential', delay: 3000 },
+        attempts: 1,
         removeOnComplete: { age: 86400, count: 1000 },
         removeOnFail: { age: 86400, count: 1000 },
       },
@@ -319,34 +339,86 @@ export class JobResearchService {
     });
     await this.matchRepository.delete({ intentId: intent.id });
 
+    if (intent.researchSessionId) {
+      await this.progressService.update(
+        intent.researchSessionId,
+        {
+          status: 'processing',
+          phase: 'job_matching',
+          progress: 76,
+          message: 'Starting job collection.',
+        },
+        intent.researchSessionAttempt ?? undefined,
+      );
+    }
+
     try {
       const payload = this.toPayload(intent);
-      const completedSources: JobSource[] = [];
-      const errors: string[] = [];
-      let totalJobs = 0;
+      let finishedSources = 0;
+      const sourceResults = await runWithConcurrency(
+        payload.sources,
+        this.config.get('JOB_RESEARCH_SOURCE_CONCURRENCY', { infer: true }),
+        async (source) => {
+          const connector = this.connectors.get(source);
 
-      for (const source of payload.sources) {
-        const connector = this.connectors.get(source);
+          if (!connector) {
+            return {
+              source,
+              savedCount: 0,
+              completed: false,
+              error: 'connector is not registered',
+            };
+          }
 
-        if (!connector) {
-          errors.push(`${source}: connector is not registered`);
-          continue;
-        }
+          const run = await this.startRun(intent, source, payload);
 
-        const run = await this.startRun(intent, source, payload);
-
-        try {
-          const crawledJobs = await connector.search(payload);
-          const savedCount = await this.saveCrawledJobs(intent, crawledJobs);
-          totalJobs += savedCount;
-          completedSources.push(source);
-          await this.completeRun(run, crawledJobs.length, savedCount);
-        } catch (error) {
-          const message = this.formatError(error);
-          errors.push(`${source}: ${message}`);
-          await this.failRun(run, message);
-        }
-      }
+          try {
+            const crawledJobs = await connector.search(payload);
+            const savedCount = await this.saveCrawledJobs(intent, crawledJobs);
+            await this.completeRun(run, crawledJobs.length, savedCount);
+            return {
+              source,
+              savedCount,
+              completed: true,
+              error: null,
+            };
+          } catch (error) {
+            const message = this.formatError(error);
+            await this.failRun(run, message);
+            return {
+              source,
+              savedCount: 0,
+              completed: false,
+              error: message,
+            };
+          } finally {
+            finishedSources += 1;
+            if (intent.researchSessionId) {
+              await this.progressService.update(
+                intent.researchSessionId,
+                {
+                  phase: 'job_matching',
+                  progress:
+                    76 +
+                    Math.floor((finishedSources / payload.sources.length) * 19),
+                  message: `Completed ${finishedSources} of ${payload.sources.length} job sources.`,
+                },
+                intent.researchSessionAttempt ?? undefined,
+              );
+            }
+          }
+        },
+      );
+      const completedSources = sourceResults
+        .filter((result) => result.completed)
+        .map((result) => result.source);
+      const errors = sourceResults
+        .filter((result) => result.error)
+        .map((result) => `${result.source}: ${result.error}`);
+      const totalJobs = sourceResults.reduce(
+        (total, result) => total + result.savedCount,
+        0,
+      );
 
       await this.intentRepository.update(intent.id, {
         status: completedSources.length > 0 ? 'completed' : 'failed',
@@ -407,6 +479,20 @@ export class JobResearchService {
   async retryIntent(intentId: string, userId: string) {
     const intent = await this.findUserIntentOrThrow(intentId, userId);
 
+    await this.crawlRunRepository
+      .createQueryBuilder()
+      .update(JobCrawlRun)
+      .set({
+        status: 'failed',
+        completedAt: () => 'CURRENT_TIMESTAMP',
+        error: 'Superseded by a retry after the previous queue job stopped.',
+      })
+      .where('intent_id = :intentId', { intentId: intent.id })
+      .andWhere('status IN (:...statuses)', {
+        statuses: ['queued', 'processing'],
+      })
+      .execute();
+
     await this.intentRepository.update(intent.id, {
       status: 'queued',
       completedSources: [],
@@ -418,8 +504,7 @@ export class JobResearchService {
       JOB_RESEARCH_JOB,
       { intentId: intent.id },
       {
-        attempts: 2,
-        backoff: { type: 'exponential', delay: 3000 },
+        attempts: 1,
         removeOnComplete: { age: 86400, count: 1000 },
         removeOnFail: { age: 86400, count: 1000 },
       },
@@ -429,6 +514,24 @@ export class JobResearchService {
       intent: await this.buildIntentResponse(intent.id),
       queueJobId: queueJob.id,
     };
+  }
+
+  async markWorkerFailure(intentId: string, error: string) {
+    const intent = await this.intentRepository.findOneBy({ id: intentId });
+    if (!intent || ['completed', 'failed'].includes(intent.status)) return;
+
+    await this.intentRepository.update(intent.id, {
+      status: 'failed',
+      error,
+    });
+
+    if (intent.researchSessionId && intent.researchSessionAttempt) {
+      await this.progressService.fail(
+        intent.researchSessionId,
+        intent.researchSessionAttempt,
+        error,
+      );
+    }
   }
 
   private async buildIntentResponse(intentId: string) {
@@ -445,10 +548,9 @@ export class JobResearchService {
     };
   }
 
-  async getIntentJobs(intentId: string, userId: string, limit = 30) {
+  async getIntentJobs(intentId: string, userId: string, limit?: number) {
     await this.findUserIntentOrThrow(intentId, userId);
-    const safeLimit = clamp(limit, 1, 100);
-    const rows = await this.matchRepository
+    const query = this.matchRepository
       .createQueryBuilder('match')
       .innerJoinAndSelect('match.jobPost', 'job')
       .where('match.intent_id = :intentId', { intentId })
@@ -456,9 +558,13 @@ export class JobResearchService {
         minScore: MIN_JOB_MATCH_SCORE,
       })
       .orderBy('match.match_score', 'DESC')
-      .addOrderBy('job.last_seen_at', 'DESC')
-      .limit(safeLimit)
-      .getMany();
+      .addOrderBy('job.last_seen_at', 'DESC');
+
+    if (limit !== undefined) {
+      query.limit(clamp(limit, 1, 100));
+    }
+
+    const rows = await query.getMany();
 
     return rows.map((match) => ({
       match_score: match.matchScore,
@@ -636,7 +742,7 @@ export class JobResearchService {
       status: 'completed',
       fetchedCount,
       savedCount,
-      completedAt: new Date(),
+      completedAt: () => 'CURRENT_TIMESTAMP',
       error: null,
     });
   }
@@ -645,7 +751,7 @@ export class JobResearchService {
     await this.crawlRunRepository.update(run.id, {
       status: 'failed',
       error,
-      completedAt: new Date(),
+      completedAt: () => 'CURRENT_TIMESTAMP',
     });
   }
 
@@ -889,7 +995,7 @@ export class JobResearchService {
   private async snapshotResearchSessionJobs(intentId: string) {
     const intent = await this.intentRepository.findOneBy({ id: intentId });
 
-    if (!intent?.researchSessionId) {
+    if (!intent?.researchSessionId || !intent.researchSessionAttempt) {
       return;
     }
 
@@ -902,29 +1008,50 @@ export class JobResearchService {
       })
       .orderBy('match.match_score', 'DESC')
       .addOrderBy('job.last_seen_at', 'DESC')
-      .limit(12)
       .getMany();
 
-    await this.researchSessionRepository.update(intent.researchSessionId, {
-      status: intent.status === 'failed' ? 'failed' : 'completed',
-      completedAt: new Date(),
-      error: intent.error,
-      jobSuggestionsSnapshot: matches.map((match) => ({
-        match_score: match.matchScore,
-        matched_terms: match.matchedTerms,
-        job: {
-          id: match.jobPost.id,
-          source: match.jobPost.source,
-          source_url: match.jobPost.sourceUrl,
-          title: match.jobPost.title,
-          company_name: match.jobPost.companyName,
-          salary_text: match.jobPost.salaryText,
-          locations: match.jobPost.locations,
-          seniority_text: match.jobPost.seniorityText,
-          skills: match.jobPost.skills,
-        },
-      })),
-    });
+    const snapshotResult = await this.researchSessionRepository.update(
+      {
+        id: intent.researchSessionId,
+        attempt: intent.researchSessionAttempt,
+        status: In(['queued', 'processing']),
+      },
+      {
+        jobSuggestionsSnapshot: matches.map((match) => ({
+          match_score: match.matchScore,
+          matched_terms: match.matchedTerms,
+          job: {
+            id: match.jobPost.id,
+            source: match.jobPost.source,
+            source_url: match.jobPost.sourceUrl,
+            title: match.jobPost.title,
+            company_name: match.jobPost.companyName,
+            salary_text: match.jobPost.salaryText,
+            locations: match.jobPost.locations,
+            seniority_text: match.jobPost.seniorityText,
+            skills: match.jobPost.skills,
+          },
+        })),
+      },
+    );
+
+    if (snapshotResult.affected !== 1) {
+      return;
+    }
+
+    if (intent.status === 'failed') {
+      await this.progressService.fail(
+        intent.researchSessionId,
+        intent.researchSessionAttempt,
+        intent.error || 'All configured job sources failed.',
+      );
+    } else {
+      await this.progressService.complete(
+        intent.researchSessionId,
+        intent.researchSessionAttempt,
+        `Research completed with ${matches.length} matching jobs.`,
+      );
+    }
   }
 
   private formatError(error: unknown) {

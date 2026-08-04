@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, FileText, History, RefreshCw } from 'lucide-react'
+import { useCallback } from 'react'
 import { Link, useParams } from 'react-router'
 
 import { DashboardPageHeader } from '@/components/layouts/DashboardPageHeader'
@@ -7,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Progress } from '@/components/ui/progress'
 import {
   Tabs,
   TabsContent,
@@ -14,11 +16,13 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { useResearchProgress } from '@/hooks/use-research-progress'
 import { listCvResearchSessions, listUserCvs } from '@/services/cv-api'
 import type { CvResearchSession, UserCv } from '@/types/cv'
 
 export function MyCvDetailPage() {
   const { cvId } = useParams()
+  const queryClient = useQueryClient()
   const cvsQuery = useQuery({
     queryKey: ['user-cvs'],
     queryFn: listUserCvs,
@@ -26,11 +30,37 @@ export function MyCvDetailPage() {
   const sessionsQuery = useQuery({
     queryKey: ['cv-research-sessions'],
     queryFn: () => listCvResearchSessions(100),
-    refetchInterval: (query) =>
-      query.state.data?.some((session) => session.status === 'processing')
-        ? 3_000
-        : false,
   })
+  const handleProgress = useCallback(
+    (event: import('@/types/research-progress').ResearchProgressEvent) => {
+      queryClient.setQueryData<CvResearchSession[]>(
+        ['cv-research-sessions'],
+        (current) =>
+          current?.map((session) =>
+            session.id === event.session_id
+              ? {
+                  ...session,
+                  status: event.status,
+                  phase: event.phase,
+                  progress: event.progress,
+                  progress_message: event.message,
+                  attempt: event.attempt,
+                  error: event.error,
+                  updated_at: event.updated_at,
+                }
+              : session,
+          ),
+      )
+      if (['completed', 'failed'].includes(event.status)) {
+        void sessionsQuery.refetch()
+      }
+    },
+    [queryClient, sessionsQuery],
+  )
+  const reconcileProgress = useCallback(() => {
+    void sessionsQuery.refetch()
+  }, [sessionsQuery])
+  useResearchProgress(handleProgress, reconcileProgress)
   const cv = cvsQuery.data?.find((item) => item.id === cvId)
   const sessions =
     sessionsQuery.data?.filter((session) => session.cv.id === cvId) ?? []
@@ -236,6 +266,19 @@ function CvResearchHistoryCard({
                 <p className="mt-1 text-xs text-muted-foreground">
                   {formatDateTime(session.created_at)}
                 </p>
+                {['queued', 'processing'].includes(session.status) ? (
+                  <div className="mt-3 space-y-2">
+                    <Progress value={session.progress} />
+                    <p className="text-xs text-muted-foreground">
+                      {session.progress_message}
+                    </p>
+                  </div>
+                ) : null}
+                {session.status === 'failed' ? (
+                  <p className="mt-3 line-clamp-2 text-xs text-destructive">
+                    {session.error}
+                  </p>
+                ) : null}
               </div>
               <div className="text-right">
                 <p className="text-2xl font-semibold text-zinc-700">

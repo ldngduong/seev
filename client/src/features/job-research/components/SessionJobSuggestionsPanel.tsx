@@ -13,7 +13,7 @@ export function SessionJobSuggestionsPanel({
   isRetrying = false,
 }: {
   jobs: CvResearchJobSuggestion[]
-  status?: 'processing' | 'completed' | 'failed'
+  status?: 'queued' | 'processing' | 'completed' | 'failed'
   onRetry?: () => void
   isRetrying?: boolean
 }) {
@@ -29,8 +29,10 @@ export function SessionJobSuggestionsPanel({
         {jobs.length === 0 ? (
           <div className="space-y-3 rounded-md bg-muted px-3 py-2">
             <p className="text-sm text-muted-foreground">
-              {status === 'processing'
-                ? 'Job suggestions are being collected in the background.'
+              {status === 'queued'
+                ? 'Research is waiting for an available worker.'
+                : status === 'processing'
+                  ? 'Job suggestions are being collected in the background.'
                 : 'No matching jobs were saved for this research.'}
             </p>
             {onRetry ? (

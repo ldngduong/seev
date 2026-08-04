@@ -1,17 +1,17 @@
+import { InjectQueue } from '@nestjs/bullmq';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash, randomUUID } from 'crypto';
-import { Repository } from 'typeorm';
+import type { Queue } from 'bullmq';
+import { DataSource, In, Repository } from 'typeorm';
+import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 import { AiEngineService } from '../ai/ai-engine.service';
-import type {
-  CvAuditResult,
-  CvTargetInference,
-} from '../ai/schemas/cv-audit-result.schema';
-import { CreateJobResearchIntentDto } from '../crawler/dto/create-job-research-intent.dto';
+import type { CvAuditResult } from '../ai/schemas/cv-audit-result.schema';
 import { JobResearchService } from '../crawler/job-research.service';
 import { JobFamilyCategory } from '../job-category/entities/job-family-category.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
+import { ResearchProgressService } from '../research-realtime/research-progress.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { CreateCvAuditDto } from './dto/create-cv-audit.dto';
 import {
@@ -29,6 +29,11 @@ import {
 import { UserCv } from './entities/user-cv.entity';
 import type { ParsedResume } from './interfaces/parsed-resume.interface';
 import { PdfParserService } from './pdf-parser.service';
+import {
+  CV_RESEARCH_JOB,
+  CV_RESEARCH_QUEUE,
+  type CvResearchJobData,
+} from './types/cv-research-queue.type';
 
 export interface CvAuditResponse extends CvAuditResult {
   audit_id: string;
@@ -71,6 +76,10 @@ export interface CvResearchSessionResponse {
   type: CvResearchType;
   target_source: CvResearchTargetSource;
   status: CvResearchSession['status'];
+  phase: CvResearchSession['phase'];
+  progress: number;
+  progress_message: string | null;
+  attempt: number;
   cv: UserCvResponse;
   cv_file_url: string;
   audit: CvAuditResponse | null;
@@ -86,12 +95,16 @@ export interface CvResearchSessionResponse {
   };
   created_at: Date;
   completed_at: Date | null;
+  started_at: Date | null;
+  updated_at: Date;
   error: string | null;
 }
 
 @Injectable()
 export class CvService {
   constructor(
+    @InjectQueue(CV_RESEARCH_QUEUE)
+    private readonly researchQueue: Queue<CvResearchJobData>,
     @InjectRepository(CvAudit)
     private readonly cvAuditRepository: Repository<CvAudit>,
     @InjectRepository(CvAuditBatch)
@@ -108,6 +121,8 @@ export class CvService {
     private readonly aiEngineService: AiEngineService,
     private readonly r2StorageService: R2StorageService,
     private readonly jobResearchService: JobResearchService,
+    private readonly progressService: ResearchProgressService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async uploadUserCv(
@@ -185,26 +200,17 @@ export class CvService {
     userId: string,
   ): Promise<CvResearchSessionResponse> {
     const cv = await this.findUserCvOrThrow(userId, dto.userCvId);
-    const inferredTarget = await this.aiEngineService.inferCvTarget({
-      resumeText: cv.extractedText,
-      headerLines: this.getHeaderLines(cv),
-    });
-
     return this.createResearchSession({
       userId,
       cv,
       type: 'quick',
       targetSource: 'ai_inferred',
-      targetRole: inferredTarget.target_role,
+      targetRole: null,
       jobCategoryId: null,
-      jobCategoryName: inferredTarget.target_category_hint || null,
+      jobCategoryName: null,
       seniorityLevelId: null,
-      seniorityLevelName: inferredTarget.seniority_hint || null,
-      seniorityDescription: null,
+      seniorityLevelName: null,
       jobDescription: null,
-      extraKeywords: inferredTarget.keywords,
-      searchQueries: inferredTarget.search_queries,
-      inference: inferredTarget,
     });
   }
 
@@ -236,10 +242,7 @@ export class CvService {
       jobCategoryName: target.jobCategoryName,
       seniorityLevelId: target.seniorityLevelId,
       seniorityLevelName: target.seniorityLevelName,
-      seniorityDescription: target.seniorityDescription,
       jobDescription,
-      extraKeywords: [],
-      searchQueries: [],
     });
   }
 
@@ -254,7 +257,9 @@ export class CvService {
       take: Math.min(Math.max(limit, 1), 100),
     });
 
-    return Promise.all(sessions.map((session) => this.toResearchResponse(session)));
+    return Promise.all(
+      sessions.map((session) => this.toResearchResponse(session)),
+    );
   }
 
   async getResearchSession(
@@ -271,6 +276,97 @@ export class CvService {
     }
 
     return this.toResearchResponse(session);
+  }
+
+  async retryResearchSession(
+    userId: string,
+    sessionId: string,
+  ): Promise<CvResearchSessionResponse> {
+    const session = await this.researchSessionRepository.findOne({
+      where: { id: sessionId, userId },
+      relations: { userCv: true },
+    });
+
+    if (!session) {
+      throw new BadRequestException('CV research session does not exist.');
+    }
+    if (session.status !== 'failed') {
+      throw new BadRequestException('Only failed research can be retried.');
+    }
+
+    const nextAttempt = await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [`${userId}:${session.userCvId}`],
+      );
+      const repository = manager.getRepository(CvResearchSession);
+      const current = await repository.findOneBy({ id: session.id, userId });
+      if (!current || current.status !== 'failed') {
+        throw new BadRequestException('Only failed research can be retried.');
+      }
+
+      const active = await repository.findOne({
+        where: {
+          userId,
+          userCvId: session.userCvId,
+          status: In(['queued', 'processing']),
+        },
+      });
+      if (active && active.id !== session.id) {
+        throw new BadRequestException(
+          'This CV already has an active research session.',
+        );
+      }
+
+      if (current.jobSearchIntentId) {
+        await manager.query(
+          'UPDATE job_search_intents SET research_session_id = NULL WHERE id = $1',
+          [current.jobSearchIntentId],
+        );
+      }
+
+      const attempt = current.attempt + 1;
+      await repository.update(session.id, {
+        status: 'queued',
+        phase: 'queued',
+        progress: 0,
+        progressMessage: 'Research is queued.',
+        attempt,
+        startedAt: null,
+        heartbeatAt: () => 'CURRENT_TIMESTAMP',
+        completedAt: null,
+        cvAuditId: null,
+        auditSnapshot: null,
+        jobSearchIntentId: null,
+        jobSuggestionsSnapshot: [],
+        error: null,
+        ...(current.type === 'quick'
+          ? {
+              targetRole: null,
+              jobCategoryName: null,
+              seniorityLevelName: null,
+            }
+          : {}),
+      });
+      return attempt;
+    });
+
+    const oldJob = await this.researchQueue.getJob(session.id);
+    if (oldJob && (await oldJob.getState()) === 'active') {
+      await this.progressService.fail(
+        session.id,
+        nextAttempt,
+        'The previous worker is still active. Retry again after it stops.',
+      );
+      throw new BadRequestException('The previous worker is still active.');
+    }
+    if (oldJob) {
+      await oldJob.remove();
+    }
+    await this.enqueueResearchSession(session.id, nextAttempt);
+    await this.progressService.emitCurrent(session.id, nextAttempt);
+
+    return this.getResearchSession(userId, session.id);
   }
 
   async retryResearchSessionJobs(
@@ -292,9 +388,15 @@ export class CvService {
       );
     }
 
-    await this.jobResearchService.retryIntent(session.jobSearchIntentId, userId);
+    await this.jobResearchService.retryIntent(
+      session.jobSearchIntentId,
+      userId,
+    );
     await this.researchSessionRepository.update(session.id, {
       status: 'processing',
+      phase: 'job_matching',
+      progress: 75,
+      progressMessage: 'Collecting and matching jobs.',
       error: null,
       completedAt: null,
       jobSuggestionsSnapshot: [],
@@ -320,6 +422,7 @@ export class CvService {
       userId,
       userCvId: null,
       researchSessionId: null,
+      researchAttempt: null,
       researchType: null,
       fileName: file.originalname,
       parsedResume,
@@ -327,10 +430,7 @@ export class CvService {
     });
   }
 
-  async listAudits(
-    userId: string,
-    limit = 30,
-  ): Promise<CvAuditHistoryItem[]> {
+  async listAudits(userId: string, limit = 30): Promise<CvAuditHistoryItem[]> {
     const audits = await this.cvAuditRepository.find({
       where: { userId },
       order: { createdAt: 'DESC' },
@@ -365,83 +465,219 @@ export class CvService {
     jobCategoryName: string | null;
     seniorityLevelId: string | null;
     seniorityLevelName: string | null;
-    seniorityDescription: string | null;
     jobDescription: string | null;
-    extraKeywords: string[];
-    searchQueries: string[];
-    inference?: CvTargetInference;
   }): Promise<CvResearchSessionResponse> {
-    const session = await this.researchSessionRepository.save(
-      this.researchSessionRepository.create({
-        userId: input.userId,
-        userCvId: input.cv.id,
-        type: input.type,
-        targetSource: input.targetSource,
-        targetRole: input.targetRole,
-        jobCategoryId: input.jobCategoryId,
-        jobCategoryName: input.jobCategoryName,
-        seniorityLevelId: input.seniorityLevelId,
-        seniorityLevelName: input.seniorityLevelName,
-        jobDescription: input.jobDescription,
-        status: 'processing',
-        auditSnapshot: null,
-        jobSuggestionsSnapshot: [],
-        error: null,
-        completedAt: null,
-      }),
-    );
+    const creation = await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [`${input.userId}:${input.cv.id}`],
+      );
+      const repository = manager.getRepository(CvResearchSession);
+      const active = await repository.findOne({
+        where: {
+          userId: input.userId,
+          userCvId: input.cv.id,
+          status: In(['queued', 'processing']),
+        },
+      });
+      if (active) return { session: active, created: false };
 
-    try {
-      const audit = await this.createAuditFromStoredCv({
-        userId: input.userId,
-        cv: input.cv,
-        session,
-        type: input.type,
-        target: {
+      const session = await repository.save(
+        repository.create({
+          userId: input.userId,
+          userCvId: input.cv.id,
+          type: input.type,
+          targetSource: input.targetSource,
           targetRole: input.targetRole,
           jobCategoryId: input.jobCategoryId,
           jobCategoryName: input.jobCategoryName,
           seniorityLevelId: input.seniorityLevelId,
           seniorityLevelName: input.seniorityLevelName,
-          seniorityDescription: input.seniorityDescription,
           jobDescription: input.jobDescription,
+          status: 'queued',
+          phase: 'queued',
+          progress: 0,
+          progressMessage: 'Research is queued.',
+          attempt: 1,
+          startedAt: null,
+          heartbeatAt: new Date(),
+          auditSnapshot: null,
+          jobSuggestionsSnapshot: [],
+          error: null,
+          completedAt: null,
+        }),
+      );
+      return { session, created: true };
+    });
+    const { session } = creation;
+
+    session.userCv = input.cv;
+    if (!creation.created) {
+      return this.toResearchResponse(session);
+    }
+
+    try {
+      await this.enqueueResearchSession(session.id, session.attempt);
+      await this.progressService.emitCurrent(session.id, session.attempt);
+      return this.toResearchResponse(session);
+    } catch (error) {
+      await this.progressService.fail(
+        session.id,
+        session.attempt,
+        this.formatError(error),
+      );
+      throw error;
+    }
+  }
+
+  private enqueueResearchSession(sessionId: string, attempt: number) {
+    return this.researchQueue.add(
+      CV_RESEARCH_JOB,
+      { sessionId, attempt },
+      {
+        jobId: sessionId,
+        attempts: 1,
+        removeOnComplete: { age: 86_400, count: 1_000 },
+        removeOnFail: { age: 86_400, count: 1_000 },
+      },
+    );
+  }
+
+  async processResearchSession(
+    sessionId: string,
+    expectedAttempt: number,
+  ): Promise<void> {
+    const session = await this.researchSessionRepository.findOne({
+      where: { id: sessionId },
+      relations: { userCv: true },
+    });
+
+    if (
+      !session ||
+      session.attempt !== expectedAttempt ||
+      !['queued', 'processing'].includes(session.status)
+    ) {
+      return;
+    }
+
+    try {
+      let targetRole = session.targetRole;
+      let jobCategoryName = session.jobCategoryName;
+      let seniorityLevelName = session.seniorityLevelName;
+      let keywords: string[] = [];
+      let searchQueries: string[] = [];
+
+      if (session.type === 'quick') {
+        await this.progressService.start(
+          session.id,
+          'target_inference',
+          5,
+          'Reading the CV and identifying its target role.',
+          expectedAttempt,
+        );
+        const inferredTarget = await this.aiEngineService.inferCvTarget({
+          resumeText: session.userCv.extractedText,
+          headerLines: this.getHeaderLines(session.userCv),
+        });
+        targetRole = inferredTarget.target_role;
+        jobCategoryName = inferredTarget.target_category_hint || null;
+        seniorityLevelName = inferredTarget.seniority_hint || null;
+        keywords = inferredTarget.keywords;
+        searchQueries = inferredTarget.search_queries;
+
+        await this.updateActiveResearchAttempt(session.id, expectedAttempt, {
+          targetRole,
+          jobCategoryName,
+          seniorityLevelName,
+          error: null,
+        });
+      }
+
+      await this.progressService.update(
+        session.id,
+        {
+          status: 'processing',
+          phase: 'cv_audit',
+          progress: 20,
+          message: 'Auditing CV evidence against the target.',
         },
-      });
-      const jobIntentPayload: CreateJobResearchIntentDto = {
-        auditId: audit.audit_id,
-        targetRole: input.targetRole ?? undefined,
-        seniorityLevelId: input.seniorityLevelId ?? undefined,
-        seniorityLevelName: input.seniorityLevelName ?? undefined,
-        keywords: input.extraKeywords,
-        searchQueries: input.searchQueries,
-      };
-      const jobIntent = await this.jobResearchService.createIntent(
-        jobIntentPayload,
-        input.userId,
-        { researchSessionId: session.id },
+        expectedAttempt,
       );
 
-      await this.researchSessionRepository.update(session.id, {
+      const seniority = session.seniorityLevelId
+        ? await this.seniorityRepository.findOneBy({
+            id: session.seniorityLevelId,
+            isActive: true,
+          })
+        : null;
+      const audit = await this.createAuditFromStoredCv({
+        userId: session.userId,
+        cv: session.userCv,
+        session,
+        researchAttempt: expectedAttempt,
+        type: session.type,
+        target: {
+          targetRole,
+          jobCategoryId: session.jobCategoryId,
+          jobCategoryName,
+          seniorityLevelId: session.seniorityLevelId,
+          seniorityLevelName,
+          seniorityDescription: seniority?.description ?? null,
+          jobDescription: session.jobDescription,
+        },
+      });
+
+      await this.updateActiveResearchAttempt(session.id, expectedAttempt, {
         cvAuditId: audit.audit_id,
-        jobSearchIntentId: jobIntent.intent.id,
         auditSnapshot: audit,
-        status: 'processing',
-        completedAt: null,
         error: null,
       });
 
-      const completedSession = await this.researchSessionRepository.findOneOrFail({
-        where: { id: session.id },
-        relations: { userCv: true },
-      });
+      await this.progressService.update(
+        session.id,
+        {
+          phase: 'job_matching',
+          progress: 72,
+          message: 'Preparing job-search intent.',
+        },
+        expectedAttempt,
+      );
 
-      return this.toResearchResponse(completedSession);
-    } catch (error) {
-      await this.researchSessionRepository.update(session.id, {
-        status: 'failed',
-        error: this.formatError(error),
-        completedAt: new Date(),
+      const intent = await this.jobResearchService.createIntent(
+        {
+          auditId: audit.audit_id,
+          targetRole: targetRole ?? undefined,
+          seniorityLevelId: session.seniorityLevelId ?? undefined,
+          seniorityLevelName: seniorityLevelName ?? undefined,
+          keywords,
+          searchQueries,
+        },
+        session.userId,
+        {
+          researchSessionId: session.id,
+          researchSessionAttempt: expectedAttempt,
+        },
+      );
+
+      await this.updateActiveResearchAttempt(session.id, expectedAttempt, {
+        jobSearchIntentId: intent.intent.id,
+        error: null,
       });
+      await this.progressService.update(
+        session.id,
+        {
+          phase: 'job_matching',
+          progress: 75,
+          message: 'Collecting and matching jobs from configured sources.',
+        },
+        expectedAttempt,
+      );
+    } catch (error) {
+      await this.progressService.fail(
+        session.id,
+        expectedAttempt,
+        this.formatError(error),
+      );
       throw error;
     }
   }
@@ -450,6 +686,7 @@ export class CvService {
     userId: string;
     cv: UserCv;
     session: CvResearchSession;
+    researchAttempt: number;
     type: CvResearchType;
     target: {
       targetRole: string | null;
@@ -465,6 +702,7 @@ export class CvService {
       userId: input.userId,
       userCvId: input.cv.id,
       researchSessionId: input.session.id,
+      researchAttempt: input.researchAttempt,
       researchType: input.type,
       fileName: input.cv.originalFileName,
       parsedResume: {
@@ -480,6 +718,7 @@ export class CvService {
     userId: string;
     userCvId: string | null;
     researchSessionId: string | null;
+    researchAttempt: number | null;
     researchType: CvResearchType | null;
     fileName: string;
     parsedResume: ParsedResume;
@@ -512,14 +751,26 @@ export class CvService {
     );
 
     try {
-      const candidateHighlights = this.pdfParserService.buildCandidateHighlights(
-        input.parsedResume.lines,
-      );
+      const candidateHighlights =
+        this.pdfParserService.buildCandidateHighlights(
+          input.parsedResume.lines,
+        );
       const result = await this.aiEngineService.analyzeCv({
         target: input.target,
         resumeText: input.parsedResume.text,
         candidateHighlights,
         onLineBatchStart: async ({ batchIndex, totalBatches, batch }) => {
+          if (input.researchSessionId) {
+            await this.progressService.update(
+              input.researchSessionId,
+              {
+                phase: 'cv_audit',
+                progress: 25 + Math.floor((batchIndex / totalBatches) * 40),
+                message: `Auditing CV section ${batchIndex + 1} of ${totalBatches}.`,
+              },
+              input.researchAttempt ?? undefined,
+            );
+          }
           await this.cvAuditBatchRepository.upsert(
             {
               auditId: audit.id,
@@ -541,6 +792,16 @@ export class CvService {
               error: null,
             },
           );
+          if (input.researchSessionId) {
+            await this.progressService.update(
+              input.researchSessionId,
+              {
+                phase: 'cv_audit',
+                message: `Completed CV section ${batchIndex + 1}.`,
+              },
+              input.researchAttempt ?? undefined,
+            );
+          }
         },
         onLineBatchFailed: async ({ batchIndex, error }) => {
           await this.cvAuditBatchRepository.update(
@@ -582,6 +843,27 @@ export class CvService {
     }
 
     return String(error);
+  }
+
+  private async updateActiveResearchAttempt(
+    sessionId: string,
+    expectedAttempt: number,
+    patch: QueryDeepPartialEntity<CvResearchSession>,
+  ) {
+    const result = await this.researchSessionRepository.update(
+      {
+        id: sessionId,
+        attempt: expectedAttempt,
+        status: In(['queued', 'processing']),
+      },
+      patch,
+    );
+
+    if (result.affected !== 1) {
+      throw new Error(
+        'Research attempt was superseded or is no longer active.',
+      );
+    }
   }
 
   private async resolveAuditTarget(dto: CreateCvAuditDto) {
@@ -653,16 +935,22 @@ export class CvService {
   private async toResearchResponse(
     session: CvResearchSession,
   ): Promise<CvResearchSessionResponse> {
-    const cv = session.userCv ?? (await this.userCvRepository.findOneByOrFail({
-      id: session.userCvId,
-      userId: session.userId,
-    }));
+    const cv =
+      session.userCv ??
+      (await this.userCvRepository.findOneByOrFail({
+        id: session.userCvId,
+        userId: session.userId,
+      }));
 
     return {
       id: session.id,
       type: session.type,
       target_source: session.targetSource,
       status: session.status,
+      phase: session.phase,
+      progress: session.progress,
+      progress_message: session.progressMessage,
+      attempt: session.attempt,
       cv: await this.toUserCvResponse(cv),
       cv_file_url: await this.r2StorageService.createReadUrl(cv.storageKey),
       audit: session.auditSnapshot
@@ -685,6 +973,8 @@ export class CvService {
       },
       created_at: session.createdAt,
       completed_at: session.completedAt,
+      started_at: session.startedAt,
+      updated_at: session.updatedAt,
       error: session.error,
     };
   }

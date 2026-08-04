@@ -18,7 +18,16 @@ import { CvAudit } from './cv-audit.entity';
 import { UserCv } from './user-cv.entity';
 
 export type CvResearchType = 'quick' | 'custom';
-export type CvResearchTargetSource = 'ai_inferred' | 'job_category' | 'job_description';
+export type CvResearchStatus = 'queued' | 'processing' | 'completed' | 'failed';
+export type CvResearchPhase =
+  | 'queued'
+  | 'target_inference'
+  | 'cv_audit'
+  | 'job_matching'
+  | 'completed'
+  | 'failed';
+export type CvResearchTargetSource =
+  'ai_inferred' | 'job_category' | 'job_description';
 
 export interface CvResearchJobSuggestionSnapshot {
   match_score: number;
@@ -38,6 +47,10 @@ export interface CvResearchJobSuggestionSnapshot {
 
 @Entity({ name: 'cv_research_sessions' })
 @Index('IDX_cv_research_sessions_user_created', ['userId', 'createdAt'])
+@Index('UQ_cv_research_sessions_active_cv', ['userId', 'userCvId'], {
+  unique: true,
+  where: `"status" IN ('queued', 'processing')`,
+})
 export class CvResearchSession {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -102,8 +115,26 @@ export class CvResearchSession {
   @Column({ name: 'job_description', nullable: true, type: 'text' })
   jobDescription!: string | null;
 
-  @Column({ default: 'processing', type: 'varchar' })
-  status!: 'processing' | 'completed' | 'failed';
+  @Column({ default: 'queued', type: 'varchar' })
+  status!: CvResearchStatus;
+
+  @Column({ default: 'queued', type: 'varchar' })
+  phase!: CvResearchPhase;
+
+  @Column({ default: 0, type: 'smallint' })
+  progress!: number;
+
+  @Column({ name: 'progress_message', nullable: true, type: 'varchar' })
+  progressMessage!: string | null;
+
+  @Column({ default: 1, type: 'int' })
+  attempt!: number;
+
+  @Column({ name: 'started_at', nullable: true, type: 'timestamp' })
+  startedAt!: Date | null;
+
+  @Column({ name: 'heartbeat_at', nullable: true, type: 'timestamp' })
+  heartbeatAt!: Date | null;
 
   @Column({ name: 'audit_snapshot', nullable: true, type: 'jsonb' })
   auditSnapshot!: CvAuditResult | null;

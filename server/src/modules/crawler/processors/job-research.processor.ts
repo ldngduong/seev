@@ -1,11 +1,14 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 
 import { JobResearchService } from '../job-research.service';
 import { JOB_RESEARCH_JOB, JOB_RESEARCH_QUEUE } from '../types/job-source.type';
 
-@Processor(JOB_RESEARCH_QUEUE)
+@Processor(JOB_RESEARCH_QUEUE, {
+  maxStalledCount: 0,
+  maxStartedAttempts: 1,
+})
 export class JobResearchProcessor extends WorkerHost {
   private readonly logger = new Logger(JobResearchProcessor.name);
 
@@ -20,5 +23,18 @@ export class JobResearchProcessor extends WorkerHost {
     }
 
     await this.jobResearchService.processIntent(job.data.intentId);
+  }
+
+  @OnWorkerEvent('failed')
+  async onFailed(job: Job<{ intentId: string }> | undefined, error: Error) {
+    if (!job?.data.intentId) return;
+
+    this.logger.error(
+      `Job research ${job.data.intentId} failed: ${error.message}`,
+    );
+    await this.jobResearchService.markWorkerFailure(
+      job.data.intentId,
+      error.message,
+    );
   }
 }

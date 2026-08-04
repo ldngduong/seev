@@ -15,7 +15,8 @@ const envBoolean = z
   );
 
 const optionalUrl = z.preprocess(
-  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  (value) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
   z.url().optional(),
 );
 
@@ -37,10 +38,25 @@ const envSchema = z.object({
   BULL_BOARD_ROUTE: z.string().min(1).default('/queues'),
   BULL_BOARD_USER: z.string().min(1).default('admin'),
   BULL_BOARD_PASSWORD: z.string().min(1).default('admin123'),
-  JWT_SECRET: z.string().min(32).default('dev-only-change-this-jwt-secret-key-32-chars'),
-  JWT_EXPIRES_IN: z.string().default('7d'),
+  JWT_SECRET: z
+    .string()
+    .min(32)
+    .default('dev-only-change-this-jwt-secret-key-32-chars'),
+  JWT_EXPIRES_IN: z.string().default('15m'),
+  JWT_ISSUER: z.string().min(1).default('seev-api'),
+  JWT_AUDIENCE: z.string().min(1).default('seev-web'),
+  REFRESH_TOKEN_SECRET: z
+    .string()
+    .min(32)
+    .default('dev-only-change-refresh-secret-32-chars'),
+  REFRESH_TOKEN_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(2592000),
   AUTH_COOKIE_NAME: z.string().min(1).default('access_token'),
-  AUTH_COOKIE_MAX_AGE_SECONDS: z.coerce.number().int().positive().default(604800),
+  AUTH_COOKIE_MAX_AGE_SECONDS: z.coerce.number().int().positive().default(900),
+  REFRESH_COOKIE_NAME: z.string().min(1).default('refresh_token'),
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
@@ -74,30 +90,33 @@ const envSchema = z.object({
     .int()
     .positive()
     .default(20),
-  JOB_RESEARCH_CACHE_TTL_HOURS: z.coerce
+  JOB_RESEARCH_SOURCE_CONCURRENCY: z.coerce
     .number()
     .int()
     .positive()
-    .default(12),
+    .default(3),
+  JOB_RESEARCH_QUERY_CONCURRENCY: z.coerce.number().int().positive().default(4),
+  JOB_RESEARCH_CACHE_TTL_HOURS: z.coerce.number().int().positive().default(12),
   JOB_RESEARCH_HTTP_TIMEOUT_MS: z.coerce
     .number()
     .int()
     .positive()
     .default(30000),
-  BRIGHTDATA_API_KEY: z.string().optional(),
-  BRIGHTDATA_REQUEST_URL: z
-    .url()
-    .default('https://api.brightdata.com/request'),
-  BRIGHTDATA_ZONE: z.string().default('web_unlocker1'),
-  BRIGHTDATA_TIMEOUT_MS: z.coerce
+  JOB_RESEARCH_HTTP_RETRIES: z.coerce.number().int().min(0).default(2),
+  CV_RESEARCH_STALE_PROCESSING_MINUTES: z.coerce
     .number()
     .int()
     .positive()
-    .default(120000),
+    .default(60),
+  BRIGHTDATA_API_KEY: z.string().optional(),
+  BRIGHTDATA_REQUEST_URL: z.url().default('https://api.brightdata.com/request'),
+  BRIGHTDATA_ZONE: z.string().default('web_unlocker1'),
+  BRIGHTDATA_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
   TOPCV_ENABLED: envBoolean.default(true),
   TOPCV_BASE_URL: z.url().default('https://www.topcv.vn'),
   TOPCV_SEARCH_URL_TEMPLATE: z.string().min(1),
   TOPCV_MAX_DETAIL_JOBS: z.coerce.number().int().min(0).default(12),
+  TOPCV_DETAIL_CONCURRENCY: z.coerce.number().int().positive().default(4),
   VIETNAMWORKS_ENABLED: envBoolean.default(true),
   VIETNAMWORKS_BASE_URL: z.url().default('https://www.vietnamworks.com'),
   VIETNAMWORKS_SEARCH_URL: z.url(),

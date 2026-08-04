@@ -31,10 +31,16 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       ]),
       ignoreExpiration: false,
       secretOrKey: configService.get('JWT_SECRET', { infer: true }),
+      issuer: configService.get('JWT_ISSUER', { infer: true }),
+      audience: configService.get('JWT_AUDIENCE', { infer: true }),
     });
   }
 
   validate(payload: JwtPayload) {
+    if (payload.tokenType !== 'access') {
+      return null;
+    }
+
     return this.authService.validateJwtPayload(payload);
   }
 }

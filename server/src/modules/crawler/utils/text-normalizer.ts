@@ -1,9 +1,11 @@
 export function normalizeText(value: unknown) {
-  if (value === null || value === undefined) {
+  const text = toTextValue(value);
+
+  if (!text) {
     return '';
   }
 
-  return String(value)
+  return text
     .normalize('NFKC')
     .replace(/<[^>]*>/g, ' ')
     .replace(/&nbsp;/g, ' ')
@@ -24,11 +26,11 @@ export function slugifyKeyword(value: string) {
     .replace(/^-+|-+$/g, '');
 }
 
-export function uniqueNonEmpty(values: unknown[]) {
+export function uniqueNonEmpty(values: unknown) {
   const seen = new Set<string>();
   const result: string[] = [];
 
-  for (const value of values) {
+  for (const value of toValueList(values)) {
     const normalized = normalizeText(value);
 
     if (!normalized) {
@@ -46,6 +48,45 @@ export function uniqueNonEmpty(values: unknown[]) {
   }
 
   return result;
+}
+
+function toTextValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  ) {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(toTextValue).filter(Boolean).join(' ');
+  }
+
+  if (typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>)
+      .map(toTextValue)
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  return String(value);
+}
+
+function toValueList(values: unknown) {
+  if (values === null || values === undefined) {
+    return [];
+  }
+
+  return Array.isArray(values) ? values : [values];
 }
 
 export function clamp(value: number, min: number, max: number) {

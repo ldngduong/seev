@@ -36,6 +36,7 @@ export function PdfAuditViewer({
   const [popoverPosition, setPopoverPosition] =
     useState<PdfFeedbackPopoverPosition | null>(null)
   const viewerRef = useRef<HTMLDivElement | null>(null)
+  const lastStatsRef = useRef<HighlightStats | null>(null)
   const openFeedbackPopover = useAuditStore(
     (state) => state.openFeedbackPopover,
   )
@@ -67,13 +68,18 @@ export function PdfAuditViewer({
         : result.rects,
     )
 
-    onHighlightStatsChange?.({
+    const stats = {
       matchedCount: result.matchedFeedbackIds.size,
       totalCount: searchableFeedbacks.length,
       unmatchedFeedbackIds: searchableFeedbacks
         .map((item) => item.feedback.id)
         .filter((id) => !result.matchedFeedbackIds.has(id)),
-    })
+    }
+
+    if (!areHighlightStatsEqual(lastStatsRef.current, stats)) {
+      lastStatsRef.current = stats
+      onHighlightStatsChange?.(stats)
+    }
   }, [onHighlightStatsChange, searchableFeedbacks])
 
   useEffect(() => {
@@ -562,11 +568,18 @@ function mergeInlineRects(
   sortedRects.forEach((rect) => {
     const previous = mergedRects.at(-1)
 
-    if (
+    const sameLine =
       previous &&
       Math.abs(previous.top - rect.top) <= 2 &&
-      Math.abs(previous.height - rect.height) <= 2 &&
-      rect.left <= previous.left + previous.width + 4
+      Math.abs(previous.height - rect.height) <= 2
+    const lineGap = previous
+      ? Math.max(6, Math.min(18, Math.max(previous.height, rect.height) * 0.75))
+      : 0
+
+    if (
+      previous &&
+      sameLine &&
+      rect.left <= previous.left + previous.width + lineGap
     ) {
       const right = Math.max(previous.left + previous.width, rect.left + rect.width)
       previous.left = Math.min(previous.left, rect.left)
@@ -585,6 +598,25 @@ function mergeInlineRects(
     width: rect.width + 2,
     height: rect.height + 2,
   }))
+}
+
+function areHighlightStatsEqual(
+  leftStats: HighlightStats | null,
+  rightStats: HighlightStats,
+) {
+  if (!leftStats) {
+    return false
+  }
+
+  return (
+    leftStats.matchedCount === rightStats.matchedCount &&
+    leftStats.totalCount === rightStats.totalCount &&
+    leftStats.unmatchedFeedbackIds.length ===
+      rightStats.unmatchedFeedbackIds.length &&
+    leftStats.unmatchedFeedbackIds.every(
+      (id, index) => id === rightStats.unmatchedFeedbackIds[index],
+    )
+  )
 }
 
 function rangesOverlapAny(
@@ -621,7 +653,7 @@ function areHighlightRectsEqual(
   })
 }
 
-function createSearchProfile(text: string): SearchProfile {
+function createSearchProfile(text: unknown): SearchProfile {
   const plain = normalizeForSearch(text)
 
   return {
@@ -630,8 +662,8 @@ function createSearchProfile(text: string): SearchProfile {
   }
 }
 
-function compactCharacter(char: string) {
-  const normalized = char
+function compactCharacter(char: unknown) {
+  const normalized = String(char ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
@@ -639,8 +671,8 @@ function compactCharacter(char: string) {
   return /^[a-z0-9+#.]$/.test(normalized) ? normalized : ''
 }
 
-function normalizeForSearch(text: string) {
-  return text
+function normalizeForSearch(text: unknown) {
+  return String(text ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/([a-z])\s+([a-z])/gi, '$1 $2')

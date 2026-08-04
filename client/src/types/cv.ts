@@ -98,7 +98,17 @@ export interface CvResearchSession {
   id: string
   type: 'quick' | 'custom'
   target_source: 'ai_inferred' | 'job_category' | 'job_description'
-  status: 'processing' | 'completed' | 'failed'
+  status: 'queued' | 'processing' | 'completed' | 'failed'
+  phase:
+    | 'queued'
+    | 'target_inference'
+    | 'cv_audit'
+    | 'job_matching'
+    | 'completed'
+    | 'failed'
+  progress: number
+  progress_message: string | null
+  attempt: number
   cv: UserCv
   cv_file_url: string
   audit: AuditSummary | null
@@ -114,5 +124,7 @@ export interface CvResearchSession {
   }
   created_at: string
   completed_at: string | null
+  started_at: string | null
+  updated_at: string
   error: string | null
 }

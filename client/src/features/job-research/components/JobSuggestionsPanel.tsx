@@ -57,7 +57,7 @@ export function JobSuggestionsPanel({ audit }: JobSuggestionsPanelProps) {
 
   const jobsQuery = useQuery({
     queryKey: ['job-research-jobs', intentId],
-    queryFn: () => getJobResearchJobs(intentId as string, 12),
+    queryFn: () => getJobResearchJobs(intentId as string),
     enabled: Boolean(intentId),
     refetchInterval: () =>
       intentQuery.data?.status === 'queued' ||

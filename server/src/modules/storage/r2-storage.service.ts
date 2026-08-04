@@ -72,8 +72,7 @@ export class R2StorageService {
       }),
     );
     const body = result.Body as
-      | { transformToByteArray: () => Promise<Uint8Array> }
-      | undefined;
+      { transformToByteArray: () => Promise<Uint8Array> } | undefined;
 
     if (!body) {
       throw new ServiceUnavailableException('CV file could not be loaded.');
@@ -91,7 +90,9 @@ export class R2StorageService {
   }
 
   buildUserCvKey(userId: string, cvId: string, originalName: string) {
-    const extension = originalName.toLowerCase().endsWith('.pdf') ? 'pdf' : 'bin';
+    const extension = originalName.toLowerCase().endsWith('.pdf')
+      ? 'pdf'
+      : 'bin';
 
     return `users/${userId}/cvs/${cvId}/original.${extension}`;
   }

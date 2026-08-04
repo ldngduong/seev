@@ -100,3 +100,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   clearError: () => set({ error: null }),
 }))
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth:session-expired', () => {
+    useAuthStore.setState({ user: null, status: 'guest', error: null })
+  })
+}

@@ -102,3 +102,11 @@ export async function retryCvResearchSessionJobs(sessionId: string) {
 
   return data;
 }
+
+export async function retryCvResearchSession(sessionId: string) {
+  const { data } = await apiClient.post<CvResearchSession>(
+    `/cv/research-sessions/${sessionId}/retry`,
+  );
+
+  return data;
+}

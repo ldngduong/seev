@@ -33,7 +33,11 @@ export class JobIntentMatch {
   @Column({ name: 'match_score', default: 0, type: 'int' })
   matchScore!: number;
 
-  @Column({ name: 'matched_terms', default: () => "'[]'::jsonb", type: 'jsonb' })
+  @Column({
+    name: 'matched_terms',
+    default: () => "'[]'::jsonb",
+    type: 'jsonb',
+  })
   matchedTerms!: string[];
 
   @CreateDateColumn({ name: 'created_at' })

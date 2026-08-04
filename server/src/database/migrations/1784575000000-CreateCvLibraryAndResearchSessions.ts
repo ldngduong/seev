@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateCvLibraryAndResearchSessions1784575000000
-  implements MigrationInterface
-{
+export class CreateCvLibraryAndResearchSessions1784575000000 implements MigrationInterface {
   name = 'CreateCvLibraryAndResearchSessions1784575000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -16,9 +14,7 @@ export class CreateCvLibraryAndResearchSessions1784575000000
       `ALTER TABLE "user_cvs" ADD CONSTRAINT "FK_user_cvs_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
 
-    await queryRunner.query(
-      `ALTER TABLE "cv_audits" ADD "user_cv_id" uuid`,
-    );
+    await queryRunner.query(`ALTER TABLE "cv_audits" ADD "user_cv_id" uuid`);
     await queryRunner.query(
       `ALTER TABLE "cv_audits" ADD "research_session_id" uuid`,
     );
@@ -81,17 +77,23 @@ export class CreateCvLibraryAndResearchSessions1784575000000
     await queryRunner.query(
       `ALTER TABLE "cv_audits" DROP CONSTRAINT "FK_cv_audits_user_cv"`,
     );
-    await queryRunner.query(`DROP INDEX "IDX_cv_research_sessions_user_created"`);
+    await queryRunner.query(
+      `DROP INDEX "IDX_cv_research_sessions_user_created"`,
+    );
     await queryRunner.query(`DROP TABLE "cv_research_sessions"`);
     await queryRunner.query(
       `ALTER TABLE "job_search_intents" DROP COLUMN "research_session_id"`,
     );
-    await queryRunner.query(`ALTER TABLE "cv_audits" DROP COLUMN "research_type"`);
+    await queryRunner.query(
+      `ALTER TABLE "cv_audits" DROP COLUMN "research_type"`,
+    );
     await queryRunner.query(
       `ALTER TABLE "cv_audits" DROP COLUMN "research_session_id"`,
     );
     await queryRunner.query(`ALTER TABLE "cv_audits" DROP COLUMN "user_cv_id"`);
-    await queryRunner.query(`ALTER TABLE "user_cvs" DROP CONSTRAINT "FK_user_cvs_user"`);
+    await queryRunner.query(
+      `ALTER TABLE "user_cvs" DROP CONSTRAINT "FK_user_cvs_user"`,
+    );
     await queryRunner.query(`DROP INDEX "IDX_user_cvs_user_created"`);
     await queryRunner.query(`DROP TABLE "user_cvs"`);
   }

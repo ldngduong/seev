@@ -94,7 +94,10 @@ export class CvController {
     const file = await this.cvService.getUserCvFile(req.user.id, cvId);
 
     response.setHeader('Content-Type', file.contentType);
-    response.setHeader('Content-Length', String(file.contentLength ?? file.body.length));
+    response.setHeader(
+      'Content-Length',
+      String(file.contentLength ?? file.body.length),
+    );
     response.setHeader('Cache-Control', 'private, no-store');
     response.setHeader(
       'Content-Disposition',
@@ -142,6 +145,14 @@ export class CvController {
     @Req() req: AuthenticatedRequest,
   ) {
     return this.cvService.retryResearchSessionJobs(req.user.id, sessionId);
+  }
+
+  @Post('research-sessions/:sessionId/retry')
+  retryResearchSession(
+    @Param('sessionId') sessionId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.cvService.retryResearchSession(req.user.id, sessionId);
   }
 
   @Post('audits')

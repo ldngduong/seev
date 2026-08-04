@@ -1,5 +1,5 @@
 import type { JobSearchIntentPayload } from '../types/crawled-job.type';
-import { resolveSeniorityGroup, type SeniorityGroup } from './seniority-intent';
+import { resolveSeniorityGroup } from './seniority-intent';
 import { normalizeSearchText } from './text-normalizer';
 
 type SeniorityIntentSource = Pick<
@@ -73,7 +73,9 @@ export function resolveVietnamWorksLevelFilter(intent: SeniorityIntentSource) {
   return '7';
 }
 
-export function resolveIndeedSearchParams(intent: SeniorityIntentSource) {
+export function resolveIndeedSearchParams(
+  intent: SeniorityIntentSource,
+): Record<string, string> {
   const group = resolveSeniorityGroup(normalizeSenioritySourceText(intent));
 
   if (group !== 'intern') {

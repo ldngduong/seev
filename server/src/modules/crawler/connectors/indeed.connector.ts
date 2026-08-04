@@ -15,6 +15,7 @@ import {
   uniqueNonEmpty,
 } from '../utils/text-normalizer';
 import { resolveJobSearchQueries } from '../utils/job-search-query';
+import { runWithConcurrency } from '../../../shared/utils/run-with-concurrency';
 import { resolveIndeedSearchParams } from '../utils/source-seniority-filters';
 
 @Injectable()
@@ -33,20 +34,29 @@ export class IndeedConnector implements JobSourceConnector {
 
     const jobs: CrawledJob[] = [];
     const seen = new Set<string>();
+    const queries = resolveJobSearchQueries(intent);
+    const queryResults = await runWithConcurrency(
+      queries,
+      this.config.get('JOB_RESEARCH_QUERY_CONCURRENCY', { infer: true }),
+      async (query) => {
+        try {
+          const html = await this.http.fetchText(
+            this.buildSearchUrl(intent, query),
+            { viaBrightData: true },
+          );
+          return { jobs: this.parseListing(html, query), query, error: null };
+        } catch (error) {
+          return {
+            jobs: [] as CrawledJob[],
+            query,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
+    );
 
-    for (const query of resolveJobSearchQueries(intent)) {
-      if (jobs.length >= intent.maxJobsPerSource) {
-        break;
-      }
-
-      const html = await this.http.fetchText(
-        this.buildSearchUrl(intent, query),
-        {
-          viaBrightData: true,
-        },
-      );
-
-      for (const job of this.parseListing(html, query)) {
+    for (const result of queryResults) {
+      for (const job of result.jobs) {
         const key = `${job.source}:${job.sourceJobId}`;
 
         if (seen.has(key)) {
@@ -57,9 +67,19 @@ export class IndeedConnector implements JobSourceConnector {
         jobs.push(job);
 
         if (jobs.length >= intent.maxJobsPerSource) {
-          break;
+          return jobs;
         }
       }
+    }
+
+    const errors = queryResults.filter((result) => result.error);
+
+    if (queries.length > 0 && errors.length === queries.length) {
+      throw new Error(
+        `Indeed failed for every query: ${errors
+          .map((result) => `${result.query}: ${result.error}`)
+          .join(' | ')}`,
+      );
     }
 
     return jobs;

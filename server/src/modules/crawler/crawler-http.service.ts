@@ -10,15 +10,28 @@ export interface FetchTextOptions {
   viaBrightData?: boolean;
 }
 
+interface FetchAttemptResult {
+  ok: boolean;
+  status: number;
+  text: string;
+}
+
 @Injectable()
 export class CrawlerHttpService {
   constructor(private readonly config: ConfigService<Env, true>) {}
 
   async fetchText(url: string, options: FetchTextOptions = {}) {
-    if (options.viaBrightData) {
-      return this.fetchViaBrightData(url, options);
-    }
+    return this.withRetries(url, () =>
+      options.viaBrightData
+        ? this.fetchViaBrightData(url, options)
+        : this.fetchDirect(url, options),
+    );
+  }
 
+  private async fetchDirect(
+    url: string,
+    options: FetchTextOptions,
+  ): Promise<FetchAttemptResult> {
     const response = await fetch(url, {
       method: options.method ?? 'GET',
       headers: {
@@ -35,11 +48,7 @@ export class CrawlerHttpService {
 
     const text = await response.text();
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} while fetching ${url}`);
-    }
-
-    return text;
+    return { ok: response.ok, status: response.status, text };
   }
 
   async fetchJson<T>(url: string, options: FetchTextOptions = {}) {
@@ -47,7 +56,10 @@ export class CrawlerHttpService {
     return JSON.parse(text) as T;
   }
 
-  private async fetchViaBrightData(url: string, options: FetchTextOptions) {
+  private async fetchViaBrightData(
+    url: string,
+    options: FetchTextOptions,
+  ): Promise<FetchAttemptResult> {
     const apiKey = this.config.get('BRIGHTDATA_API_KEY', { infer: true });
 
     if (!apiKey) {
@@ -78,12 +90,76 @@ export class CrawlerHttpService {
 
     const text = await response.text();
 
-    if (!response.ok) {
-      throw new Error(
-        `Bright Data HTTP ${response.status} while fetching ${url}`,
-      );
+    return { ok: response.ok, status: response.status, text };
+  }
+
+  private async withRetries(
+    url: string,
+    attempt: () => Promise<FetchAttemptResult>,
+  ) {
+    const maxRetries = this.config.get('JOB_RESEARCH_HTTP_RETRIES', {
+      infer: true,
+    });
+    let lastError: unknown;
+
+    for (let attemptIndex = 0; attemptIndex <= maxRetries; attemptIndex += 1) {
+      try {
+        const response = await attempt();
+
+        if (response.ok) {
+          return response.text;
+        }
+
+        const error = new Error(
+          `HTTP ${response.status} while fetching ${url}`,
+        );
+
+        if (
+          !this.isRetryableStatus(response.status) ||
+          attemptIndex >= maxRetries
+        ) {
+          throw error;
+        }
+
+        lastError = error;
+      } catch (error) {
+        lastError = error;
+
+        if (!this.isRetryableError(error) || attemptIndex >= maxRetries) {
+          throw error;
+        }
+      }
+
+      await this.delay(500 * (attemptIndex + 1));
     }
 
-    return text;
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`Failed to fetch ${url}`);
+  }
+
+  private isRetryableStatus(status: number) {
+    return (
+      status === 408 ||
+      status === 409 ||
+      status === 425 ||
+      status === 429 ||
+      status >= 500
+    );
+  }
+
+  private isRetryableError(error: unknown) {
+    const message =
+      error instanceof Error ? `${error.name} ${error.message}` : String(error);
+
+    return /timeout|abort|network|fetch failed|econnreset|etimedout/i.test(
+      message,
+    );
+  }
+
+  private delay(ms: number) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
   }
 }

@@ -1,6 +1,6 @@
 import { FileText, Search, ShieldCheck, Upload } from 'lucide-react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
 import { AuditResultPanel } from '@/components/audit-result-panel'
@@ -14,9 +14,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { SessionJobSuggestionsPanel } from '@/features/job-research/components/SessionJobSuggestionsPanel'
 import { useUserCvPdfFile } from '@/hooks/use-user-cv-pdf-file'
+import { useResearchProgress } from '@/hooks/use-research-progress'
 import { cn } from '@/lib/utils'
 import { getSeniorityLevels } from '@/services/career-api'
 import {
@@ -24,6 +26,8 @@ import {
   getCvResearchSession,
   createQuickCvResearch,
   listUserCvs,
+  listCvResearchSessions,
+  retryCvResearchSession,
 } from '@/services/cv-api'
 import { useAuditStore } from '@/stores/audit-store'
 import type { AuditSummary, CvResearchSession } from '@/types/cv'
@@ -47,6 +51,7 @@ const workflow = [
 ]
 
 export const ResearchCvPage = () => {
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const [audit, setAudit] = useState<AuditSummary | null>(null)
   const [highlightStats, setHighlightStats] = useState<HighlightStats | null>(
@@ -58,6 +63,7 @@ export const ResearchCvPage = () => {
   const [targetRole, setTargetRole] = useState('')
   const [seniorityLevelId, setSeniorityLevelId] = useState('')
   const [jobDescription, setJobDescription] = useState('')
+  const sessionPhases = useRef(new Map<string, CvResearchSession['phase']>())
   const selectedFeedbackId = useAuditStore((state) => state.selectedFeedbackId)
   const setSelectedFeedbackId = useAuditStore(
     (state) => state.setSelectedFeedbackId,
@@ -70,12 +76,14 @@ export const ResearchCvPage = () => {
     queryKey: ['seniority-levels'],
     queryFn: getSeniorityLevels,
   })
+  const sessionsQuery = useQuery({
+    queryKey: ['cv-research-sessions'],
+    queryFn: () => listCvResearchSessions(100),
+  })
   const sessionRefreshQuery = useQuery({
     queryKey: ['cv-research-session', session?.id],
     queryFn: () => getCvResearchSession(session?.id as string),
     enabled: Boolean(session?.id),
-    refetchInterval: (query) =>
-      query.state.data?.status === 'processing' ? 3_000 : false,
   })
   const cvFileQuery = useUserCvPdfFile(selectedCvId)
 
@@ -95,6 +103,82 @@ export const ResearchCvPage = () => {
     setAudit(sessionRefreshQuery.data.audit)
   }, [sessionRefreshQuery.data])
 
+  const activeSession = useMemo(
+    () =>
+      sessionsQuery.data?.find(
+        (item) =>
+          item.cv.id === selectedCvId &&
+          ['queued', 'processing'].includes(item.status),
+      ) ?? null,
+    [selectedCvId, sessionsQuery.data],
+  )
+
+  useEffect(() => {
+    if (activeSession) {
+      setSession(activeSession)
+      setAudit(activeSession.audit)
+    } else if (session?.cv.id !== selectedCvId) {
+      setSession(null)
+      setAudit(null)
+    }
+  }, [activeSession, selectedCvId, session?.cv.id])
+
+  const handleProgress = useCallback(
+    (event: import('@/types/research-progress').ResearchProgressEvent) => {
+      queryClient.setQueryData<CvResearchSession[]>(
+        ['cv-research-sessions'],
+        (current) =>
+          current?.map((item) =>
+            item.id === event.session_id
+              ? {
+                  ...item,
+                  status: event.status,
+                  phase: event.phase,
+                  progress: event.progress,
+                  progress_message: event.message,
+                  attempt: event.attempt,
+                  error: event.error,
+                  updated_at: event.updated_at,
+                }
+              : item,
+          ),
+      )
+      setSession((current) =>
+        current?.id === event.session_id
+          ? {
+              ...current,
+              status: event.status,
+              phase: event.phase,
+              progress: event.progress,
+              progress_message: event.message,
+              attempt: event.attempt,
+              error: event.error,
+              updated_at: event.updated_at,
+            }
+          : current,
+      )
+
+      const previousPhase = sessionPhases.current.get(event.session_id)
+      sessionPhases.current.set(event.session_id, event.phase)
+      if (previousPhase !== event.phase) {
+        void queryClient.invalidateQueries({
+          queryKey: ['cv-research-session', event.session_id],
+        })
+        void queryClient.invalidateQueries({ queryKey: ['cv-research-sessions'] })
+      }
+    },
+    [queryClient],
+  )
+  const reconcileProgress = useCallback(() => {
+    void sessionsQuery.refetch()
+    if (session?.id) {
+      void queryClient.invalidateQueries({
+        queryKey: ['cv-research-session', session.id],
+      })
+    }
+  }, [queryClient, session?.id, sessionsQuery])
+  useResearchProgress(handleProgress, reconcileProgress)
+
   const activeFeedback = useMemo(
     () =>
       audit?.detailed_feedbacks.find(
@@ -109,7 +193,9 @@ export const ResearchCvPage = () => {
     setAudit(nextSession.audit)
     setSelectedCvId(nextSession.cv.id)
     setSelectedFeedbackId(nextSession.audit?.detailed_feedbacks[0]?.id ?? null)
-  }, [setSelectedFeedbackId])
+    void queryClient.invalidateQueries({ queryKey: ['cv-research-sessions'] })
+    void queryClient.invalidateQueries({ queryKey: ['job-research-intents'] })
+  }, [queryClient, setSelectedFeedbackId])
 
   const quickResearchMutation = useMutation({
     mutationFn: createQuickCvResearch,
@@ -119,6 +205,18 @@ export const ResearchCvPage = () => {
     mutationFn: createCustomCvResearch,
     onSuccess: handleResearchComplete,
   })
+  const retryResearchMutation = useMutation({
+    mutationFn: retryCvResearchSession,
+    onSuccess: handleResearchComplete,
+  })
+  const researchIsActive =
+    session?.cv.id === selectedCvId &&
+    ['queued', 'processing'].includes(session.status)
+  const researchIsBusy =
+    researchIsActive ||
+    quickResearchMutation.isPending ||
+    customResearchMutation.isPending ||
+    retryResearchMutation.isPending
 
   const handleHighlightStatsChange = useCallback((stats: HighlightStats) => {
     setHighlightStats((current) => {
@@ -234,10 +332,10 @@ export const ResearchCvPage = () => {
               <Button
                 type="button"
                 className="w-full"
-                disabled={!selectedCvId || quickResearchMutation.isPending}
+                disabled={!selectedCvId || researchIsBusy}
                 onClick={() => quickResearchMutation.mutate(selectedCvId)}
               >
-                Quick research
+                {researchIsActive ? 'Research in progress' : 'Quick research'}
               </Button>
 
               <div className="space-y-3 rounded-md border p-3">
@@ -280,7 +378,7 @@ export const ResearchCvPage = () => {
                 <Button
                   type="button"
                   className="w-full"
-                  disabled={!selectedCvId || customResearchMutation.isPending}
+                  disabled={!selectedCvId || researchIsBusy}
                   onClick={() =>
                     customResearchMutation.mutate({
                       userCvId: selectedCvId,
@@ -300,6 +398,39 @@ export const ResearchCvPage = () => {
                   Research failed. Please check the selected CV and target.
                 </p>
               ) : null}
+
+              {session?.cv.id === selectedCvId ? (
+                <div className="space-y-2 rounded-md bg-muted/50 p-3">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-zinc-700">
+                      {formatResearchPhase(session.phase)}
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {session.progress}%
+                    </span>
+                  </div>
+                  <Progress value={session.progress} />
+                  <p className="text-sm text-muted-foreground">
+                    {session.progress_message}
+                  </p>
+                  {session.status === 'failed' ? (
+                    <>
+                      <p className="text-sm text-destructive">{session.error}</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        disabled={retryResearchMutation.isPending}
+                        onClick={() => retryResearchMutation.mutate(session.id)}
+                      >
+                        {retryResearchMutation.isPending
+                          ? 'Retrying...'
+                          : 'Retry this research'}
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
             </CardContent>
           </Card>
           <AuditResultPanel audit={audit} />
@@ -311,4 +442,8 @@ export const ResearchCvPage = () => {
       </section>
     </main>
   )
+}
+
+function formatResearchPhase(phase: CvResearchSession['phase']) {
+  return phase.replaceAll('_', ' ')
 }

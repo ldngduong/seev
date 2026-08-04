@@ -29,6 +29,9 @@ export class JobSearchIntent {
   @Column({ name: 'research_session_id', nullable: true, type: 'uuid' })
   researchSessionId!: string | null;
 
+  @Column({ name: 'research_session_attempt', nullable: true, type: 'int' })
+  researchSessionAttempt!: number | null;
+
   @Column({ name: 'target_role', nullable: true, type: 'varchar' })
   targetRole!: string | null;
 
@@ -50,7 +53,11 @@ export class JobSearchIntent {
   @Column({ default: () => "'[]'::jsonb", type: 'jsonb' })
   keywords!: string[];
 
-  @Column({ name: 'search_queries', default: () => "'[]'::jsonb", type: 'jsonb' })
+  @Column({
+    name: 'search_queries',
+    default: () => "'[]'::jsonb",
+    type: 'jsonb',
+  })
   searchQueries!: string[];
 
   @Column({ default: () => "'[]'::jsonb", type: 'jsonb' })
@@ -59,7 +66,11 @@ export class JobSearchIntent {
   @Column({ name: 'requested_sources', type: 'jsonb' })
   requestedSources!: JobSource[];
 
-  @Column({ name: 'completed_sources', default: () => "'[]'::jsonb", type: 'jsonb' })
+  @Column({
+    name: 'completed_sources',
+    default: () => "'[]'::jsonb",
+    type: 'jsonb',
+  })
   completedSources!: JobSource[];
 
   @Column({ name: 'total_jobs', default: 0, type: 'int' })

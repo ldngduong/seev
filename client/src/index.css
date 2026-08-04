@@ -146,17 +146,17 @@
 }
 
 @keyframes seev-preview-popover {
-  0%, 34% {
+  0%, 16% {
     opacity: 0;
-    transform: translateY(8px) scale(0.96);
+    transform: translate3d(var(--popover-x, 0), calc(var(--popover-y, 0) + 10px), 0) scale(0.94);
   }
-  46%, 78% {
+  30%, 66% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate3d(var(--popover-x, 0), var(--popover-y, 0), 0) scale(1);
   }
-  100% {
+  82%, 100% {
     opacity: 0;
-    transform: translateY(8px) scale(0.96);
+    transform: translate3d(var(--popover-x, 0), calc(var(--popover-y, 0) - 6px), 0) scale(0.98);
   }
 }
 
@@ -165,5 +165,10 @@
 }
 
 .seev-preview-popover {
-  animation: seev-preview-popover 4.8s ease-in-out infinite;
+  opacity: 0;
+  transform: translate3d(var(--popover-x, 0), calc(var(--popover-y, 0) + 10px), 0) scale(0.94);
+  transform-origin: center;
+  will-change: opacity, transform;
+  animation: seev-preview-popover 5.8s cubic-bezier(0.22, 1, 0.36, 1) infinite both;
+  animation-delay: var(--popover-delay, 0ms);
 }

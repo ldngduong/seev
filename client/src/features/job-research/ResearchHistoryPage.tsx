@@ -1,20 +1,26 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BriefcaseBusiness, Clock3, FileText, RefreshCw } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useCallback, type ReactNode } from 'react'
 import { Link } from 'react-router'
 
 import { DashboardPageHeader } from '@/components/layouts/DashboardPageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Progress } from '@/components/ui/progress'
+import { useResearchProgress } from '@/hooks/use-research-progress'
 import { cn } from '@/lib/utils'
-import { listCvResearchSessions } from '@/services/cv-api'
+import {
+  listCvResearchSessions,
+  retryCvResearchSession,
+} from '@/services/cv-api'
 import type { CvResearchSession } from '@/types/cv'
 
 import { listJobResearchIntents } from './api/job-research-api'
 import type { JobSearchIntent } from './types/job-research.types'
 
 export function ResearchHistoryPage() {
+  const queryClient = useQueryClient()
   const intentsQuery = useQuery({
     queryKey: ['job-research-intents'],
     queryFn: () => listJobResearchIntents(50),
@@ -28,11 +34,48 @@ export function ResearchHistoryPage() {
   const sessionsQuery = useQuery({
     queryKey: ['cv-research-sessions'],
     queryFn: () => listCvResearchSessions(50),
-    refetchInterval: (query) =>
-      query.state.data?.some((session) => session.status === 'processing')
-        ? 3_000
-        : false,
   })
+  const retryMutation = useMutation({
+    mutationFn: retryCvResearchSession,
+    onSuccess: (session) => {
+      queryClient.setQueryData<CvResearchSession[]>(
+        ['cv-research-sessions'],
+        (current) =>
+          current?.map((item) => (item.id === session.id ? session : item)),
+      )
+    },
+  })
+  const handleProgress = useCallback(
+    (event: import('@/types/research-progress').ResearchProgressEvent) => {
+      queryClient.setQueryData<CvResearchSession[]>(
+        ['cv-research-sessions'],
+        (current) =>
+          current?.map((item) =>
+            item.id === event.session_id
+              ? {
+                  ...item,
+                  status: event.status,
+                  phase: event.phase,
+                  progress: event.progress,
+                  progress_message: event.message,
+                  attempt: event.attempt,
+                  error: event.error,
+                  updated_at: event.updated_at,
+                }
+              : item,
+          ),
+      )
+      if (['completed', 'failed'].includes(event.status)) {
+        void sessionsQuery.refetch()
+      }
+    },
+    [queryClient, sessionsQuery],
+  )
+  const reconcileProgress = useCallback(() => {
+    void sessionsQuery.refetch()
+    void intentsQuery.refetch()
+  }, [intentsQuery, sessionsQuery])
+  useResearchProgress(handleProgress, reconcileProgress)
   const isLoading = intentsQuery.isLoading || sessionsQuery.isLoading
   const isError = intentsQuery.isError || sessionsQuery.isError
   const isEmpty =
@@ -77,7 +120,14 @@ export function ResearchHistoryPage() {
       {(sessionsQuery.data?.length ?? 0) > 0 ? (
         <HistorySection title="CV research sessions">
           {sessionsQuery.data?.map((session) => (
-            <SessionHistoryItem key={session.id} session={session} />
+            <SessionHistoryItem
+              key={session.id}
+              session={session}
+              isRetrying={
+                retryMutation.isPending && retryMutation.variables === session.id
+              }
+              onRetry={() => retryMutation.mutate(session.id)}
+            />
           ))}
         </HistorySection>
       ) : null}
@@ -108,7 +158,15 @@ function HistorySection({
   )
 }
 
-function SessionHistoryItem({ session }: { session: CvResearchSession }) {
+function SessionHistoryItem({
+  session,
+  isRetrying,
+  onRetry,
+}: {
+  session: CvResearchSession
+  isRetrying: boolean
+  onRetry: () => void
+}) {
   const target =
     session.target.target_role ||
     [
@@ -152,6 +210,17 @@ function SessionHistoryItem({ session }: { session: CvResearchSession }) {
               </Badge>
             ))}
           </div>
+          {['queued', 'processing'].includes(session.status) ? (
+            <div className="max-w-xl space-y-2">
+              <Progress value={session.progress} />
+              <p className="text-xs text-muted-foreground">
+                {session.progress_message}
+              </p>
+            </div>
+          ) : null}
+          {session.status === 'failed' ? (
+            <p className="text-sm text-destructive">{session.error}</p>
+          ) : null}
         </div>
 
         <div className="grid min-w-[180px] gap-2 rounded-2xl bg-muted/40 p-3 text-sm">
@@ -169,6 +238,16 @@ function SessionHistoryItem({ session }: { session: CvResearchSession }) {
           >
             View detail
           </Link>
+          {session.status === 'failed' ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={onRetry}
+              disabled={isRetrying}
+            >
+              {isRetrying ? 'Retrying...' : 'Retry research'}
+            </Button>
+          ) : null}
         </div>
       </div>
     </article>

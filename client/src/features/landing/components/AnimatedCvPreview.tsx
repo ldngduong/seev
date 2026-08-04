@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 import { cn } from '@/lib/utils'
 
 const sections = [
@@ -19,10 +21,49 @@ const sections = [
 ]
 
 const popovers = [
-  'left-[6%] top-[28%]',
-  'right-[3%] top-[46%]',
-  'left-[14%] bottom-[13%]',
+  {
+    position: '-left-8 top-[25%]',
+    delay: '-4100ms',
+    x: '-8px',
+    y: '0px',
+    width: 'w-32',
+  },
+  {
+    position: '-right-10 top-[36%]',
+    delay: '-2550ms',
+    x: '8px',
+    y: '0px',
+    width: 'w-36',
+  },
+  {
+    position: '-left-7 top-[57%]',
+    delay: '-1200ms',
+    x: '-10px',
+    y: '2px',
+    width: 'w-32',
+  },
+  {
+    position: '-right-6 bottom-[18%]',
+    delay: '-3600ms',
+    x: '10px',
+    y: '2px',
+    width: 'w-32',
+  },
+  {
+    position: 'left-[29%] -bottom-5',
+    delay: '-1900ms',
+    x: '0px',
+    y: '8px',
+    width: 'w-36',
+  },
 ]
+
+const popoverStyle = (popover: (typeof popovers)[number]) =>
+  ({
+    '--popover-delay': popover.delay,
+    '--popover-x': popover.x,
+    '--popover-y': popover.y,
+  }) as CSSProperties
 
 export const AnimatedCvPreview = () => {
   return (
@@ -71,27 +112,29 @@ export const AnimatedCvPreview = () => {
           ))}
         </div>
 
-        {popovers.map((position, index) => (
-          <div
-            key={position}
-            className={cn(
-              'seev-preview-popover absolute w-32 rounded-2xl border bg-popover p-3 shadow-lg',
-              position,
-            )}
-            style={{ animationDelay: `${index * 360 + 1100}ms` }}
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <div className="size-3 rounded-sm bg-primary/45" />
-              <div className="size-3 rounded-sm bg-destructive/45" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <div className="h-1.5 w-full rounded-full bg-muted-foreground/25" />
-              <div className="h-1.5 w-9/12 rounded-full bg-muted-foreground/20" />
-              <div className="h-1.5 w-7/12 rounded-full bg-muted-foreground/15" />
-            </div>
-          </div>
-        ))}
       </div>
+
+      {popovers.map((popover, index) => (
+        <div
+          key={`${popover.position}-${index}`}
+          className={cn(
+            'seev-preview-popover pointer-events-none absolute z-20 rounded-2xl border bg-popover p-3 shadow-lg shadow-foreground/10',
+            popover.width,
+            popover.position,
+          )}
+          style={popoverStyle(popover)}
+        >
+          <div className="mb-2 flex items-center justify-between">
+            <div className="size-3 rounded-sm bg-primary/45" />
+            <div className="size-3 rounded-sm bg-destructive/45" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="h-1.5 w-full rounded-full bg-muted-foreground/25" />
+            <div className="h-1.5 w-9/12 rounded-full bg-muted-foreground/20" />
+            <div className="h-1.5 w-7/12 rounded-full bg-muted-foreground/15" />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

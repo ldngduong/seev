@@ -3,6 +3,7 @@ import { ExpressAdapter } from '@bull-board/express';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
 import basicAuth from 'express-basic-auth';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -15,6 +16,7 @@ import { CvModule } from './modules/cv/cv.module';
 import { JobCategoryModule } from './modules/job-category/job-category.module';
 import { SeniorityModule } from './modules/seniority/seniority.module';
 import { UsersModule } from './modules/users/users.module';
+import type { Env } from './config/env.schema';
 
 @Module({
   imports: [
@@ -25,6 +27,15 @@ import { UsersModule } from './modules/users/users.module';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: createTypeOrmOptions,
+    }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) => ({
+        connection: {
+          host: config.get('REDIS_HOST', { infer: true }),
+          port: config.get('REDIS_PORT', { infer: true }),
+        },
+      }),
     }),
     BullBoardModule.forRootAsync({
       inject: [ConfigService],

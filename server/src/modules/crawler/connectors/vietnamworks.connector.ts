@@ -9,6 +9,7 @@ import type {
   JobSourceConnector,
 } from '../types/crawled-job.type';
 import { resolveJobSearchQueries } from '../utils/job-search-query';
+import { runWithConcurrency } from '../../../shared/utils/run-with-concurrency';
 import { resolveVietnamWorksLevelFilter } from '../utils/source-seniority-filters';
 import { normalizeText, uniqueNonEmpty } from '../utils/text-normalizer';
 
@@ -64,19 +65,36 @@ export class VietnamWorksConnector implements JobSourceConnector {
     const jobs: CrawledJob[] = [];
     const seen = new Set<string>();
     const hitsPerPage = Math.min(intent.maxJobsPerSource, 50);
+    const queries = resolveJobSearchQueries(intent);
+    const queryResults = await runWithConcurrency(
+      queries,
+      this.config.get('JOB_RESEARCH_QUERY_CONCURRENCY', { infer: true }),
+      async (query) => {
+        try {
+          const response =
+            await this.http.fetchJson<VietnamWorksSearchResponse>(
+              this.config.get('VIETNAMWORKS_SEARCH_URL', { infer: true }),
+              this.buildSearchRequest(query, hitsPerPage, intent),
+            );
+          return {
+            jobs: (Array.isArray(response.data) ? response.data : []).map(
+              (job) => this.mapJob(job, query),
+            ),
+            query,
+            error: null,
+          };
+        } catch (error) {
+          return {
+            jobs: [] as CrawledJob[],
+            query,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
+    );
 
-    for (const query of resolveJobSearchQueries(intent)) {
-      if (jobs.length >= intent.maxJobsPerSource) {
-        break;
-      }
-
-      const response = await this.http.fetchJson<VietnamWorksSearchResponse>(
-        this.config.get('VIETNAMWORKS_SEARCH_URL', { infer: true }),
-        this.buildSearchRequest(query, hitsPerPage, intent),
-      );
-
-      for (const rawJob of response.data ?? []) {
-        const job = this.mapJob(rawJob, query);
+    for (const result of queryResults) {
+      for (const job of result.jobs) {
         const key = `${job.source}:${job.sourceJobId}`;
 
         if (!job.sourceJobId || seen.has(key)) {
@@ -87,9 +105,19 @@ export class VietnamWorksConnector implements JobSourceConnector {
         jobs.push(job);
 
         if (jobs.length >= intent.maxJobsPerSource) {
-          break;
+          return jobs;
         }
       }
+    }
+
+    const errors = queryResults.filter((result) => result.error);
+
+    if (queries.length > 0 && errors.length === queries.length) {
+      throw new Error(
+        `VietnamWorks failed for every query: ${errors
+          .map((result) => `${result.query}: ${result.error}`)
+          .join(' | ')}`,
+      );
     }
 
     return jobs;
@@ -167,7 +195,10 @@ export class VietnamWorksConnector implements JobSourceConnector {
         : normalizeText(job.companyName) || null,
       salaryText: normalizeText(job.prettySalary || job.salary) || null,
       locations: uniqueNonEmpty(
-        (job.workingLocations ?? []).flatMap((location) => [
+        (Array.isArray(job.workingLocations)
+          ? job.workingLocations
+          : []
+        ).flatMap((location) => [
           location.cityNameVI,
           location.cityName,
           location.address,
@@ -176,11 +207,13 @@ export class VietnamWorksConnector implements JobSourceConnector {
       seniorityText: normalizeText(job.jobLevelVI || job.jobLevel) || null,
       description: normalizeText(job.jobDescription) || null,
       requirements: normalizeText(job.jobRequirement) || null,
-      benefits: uniqueNonEmpty(job.benefits ?? []).join('\n') || null,
+      benefits: uniqueNonEmpty(job.benefits).join('\n') || null,
       skills: uniqueNonEmpty(
-        (job.skills ?? []).map((skill) =>
-          typeof skill === 'string' ? skill : skill.skillName || skill.name,
-        ),
+        Array.isArray(job.skills)
+          ? job.skills.map((skill) =>
+              typeof skill === 'string' ? skill : skill.skillName || skill.name,
+            )
+          : job.skills,
       ),
       postedAt: this.toDate(job.approvedOn),
       expiredAt: this.toDate(job.expiredOn),

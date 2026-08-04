@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateJobFamilyCategories1784562400000
-  implements MigrationInterface
-{
+export class CreateJobFamilyCategories1784562400000 implements MigrationInterface {
   name = 'CreateJobFamilyCategories1784562400000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

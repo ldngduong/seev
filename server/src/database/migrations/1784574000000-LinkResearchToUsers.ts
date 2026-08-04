@@ -4,9 +4,7 @@ export class LinkResearchToUsers1784574000000 implements MigrationInterface {
   name = 'LinkResearchToUsers1784574000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE "cv_audits" ADD "user_id" uuid`,
-    );
+    await queryRunner.query(`ALTER TABLE "cv_audits" ADD "user_id" uuid`);
     await queryRunner.query(
       `ALTER TABLE "job_search_intents" ADD "user_id" uuid`,
     );
@@ -31,11 +29,11 @@ export class LinkResearchToUsers1784574000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "cv_audits" DROP CONSTRAINT "FK_cv_audits_user"`,
     );
-    await queryRunner.query(
-      `DROP INDEX "IDX_job_search_intents_user_created"`,
-    );
+    await queryRunner.query(`DROP INDEX "IDX_job_search_intents_user_created"`);
     await queryRunner.query(`DROP INDEX "IDX_cv_audits_user_created"`);
-    await queryRunner.query(`ALTER TABLE "job_search_intents" DROP COLUMN "user_id"`);
+    await queryRunner.query(
+      `ALTER TABLE "job_search_intents" DROP COLUMN "user_id"`,
+    );
     await queryRunner.query(`ALTER TABLE "cv_audits" DROP COLUMN "user_id"`);
   }
 }

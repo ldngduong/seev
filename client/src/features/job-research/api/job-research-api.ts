@@ -34,11 +34,11 @@ export async function getJobResearchIntent(intentId: string) {
   return data
 }
 
-export async function getJobResearchJobs(intentId: string, limit = 12) {
+export async function getJobResearchJobs(intentId: string, limit?: number) {
   const { data } = await apiClient.get<JobIntentMatchResult[]>(
     `/job-research/intents/${intentId}/jobs`,
     {
-      params: { limit },
+      params: limit === undefined ? undefined : { limit },
     },
   )
 

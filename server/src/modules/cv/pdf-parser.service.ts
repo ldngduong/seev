@@ -8,6 +8,13 @@ import type {
 } from './interfaces/parsed-resume.interface';
 
 const MAX_AI_TEXT_LENGTH = 18_000;
+const PDF_TEXT_OPTIONS = {
+  lineEnforce: true,
+  lineThreshold: 4.5,
+  cellSeparator: '\n',
+  cellThreshold: 7,
+  pageJoiner: '\n',
+};
 
 @Injectable()
 export class PdfParserService {
@@ -15,11 +22,14 @@ export class PdfParserService {
     const parser = new PDFParse({ data: file.buffer });
 
     try {
-      const result = await parser.getText();
+      const result = await parser.getText(PDF_TEXT_OPTIONS);
       const lines = result.pages.flatMap((page) =>
         this.toTextLines(page.text, page.num),
       );
-      const text = this.normalizeText(result.text).slice(0, MAX_AI_TEXT_LENGTH);
+      const text = this.normalizeDocumentText(result.text).slice(
+        0,
+        MAX_AI_TEXT_LENGTH,
+      );
 
       if (!text) {
         throw new BadRequestException(
@@ -114,7 +124,7 @@ export class PdfParserService {
     }
 
     const previousEndsSentence = /[.!?;:]$/.test(previousText);
-    const currentContinuesSentence = /^[a-z(]/.test(currentText);
+    const currentContinuesSentence = /^[a-z(,]/.test(currentText);
     const previousEndsOpenPhrase =
       /(?:\b(?:and|or|to|of|for|with|via|using|in|on|at|by|from|into|including|integrated|designed|developed|built|handled)\b|[,/([{])$/i.test(
         previousText,
@@ -122,9 +132,7 @@ export class PdfParserService {
 
     return (
       !previousEndsSentence &&
-      (currentContinuesSentence ||
-        previousEndsOpenPhrase ||
-        !this.looksLikeStandaloneHeading(currentText))
+      (currentContinuesSentence || previousEndsOpenPhrase)
     );
   }
 
@@ -193,7 +201,10 @@ export class PdfParserService {
       (token) => token.length === 1,
     );
 
-    if (alphaTokens.length >= 4 && singleLetterTokens.length / alphaTokens.length >= 0.8) {
+    if (
+      alphaTokens.length >= 4 &&
+      singleLetterTokens.length / alphaTokens.length >= 0.8
+    ) {
       return true;
     }
 
@@ -206,7 +217,7 @@ export class PdfParserService {
 
   private toTextLines(pageText: string, pageNumber: number): ResumeTextLine[] {
     return pageText
-      .split('\n')
+      .split(/[\n\t]+/)
       .map((line) => this.normalizeText(line))
       .filter(Boolean)
       .map((text) => ({ pageNumber, text }));
@@ -214,6 +225,15 @@ export class PdfParserService {
 
   private normalizeText(text: string) {
     return this.repairPdfLetterSpacing(text).replace(/\s+/g, ' ').trim();
+  }
+
+  private normalizeDocumentText(text: string) {
+    return this.repairPdfLetterSpacing(text)
+      .split('\n')
+      .map((line) => line.replace(/[^\S\n]+/g, ' ').trim())
+      .filter(Boolean)
+      .join('\n')
+      .trim();
   }
 
   private repairPdfLetterSpacing(text: string) {

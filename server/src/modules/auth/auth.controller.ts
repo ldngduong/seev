@@ -7,10 +7,11 @@ import {
   Post,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { CookieOptions, Response } from 'express';
+import type { CookieOptions, Request, Response } from 'express';
 
 import type { Env } from '../../config/env.schema';
 import { toPublicUser } from '../users/types/public-user.type';
@@ -30,10 +31,17 @@ export class AuthController {
   ) {}
 
   @Post('register')
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
-    const session = await this.authService.register(dto);
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const session = await this.authService.register(
+      dto,
+      this.getSessionMetadata(req),
+    );
 
-    this.setAuthCookie(res, session.accessToken);
+    this.setSessionCookies(res, session);
 
     return { user: session.user };
   }
@@ -41,14 +49,17 @@ export class AuthController {
   @UseGuards(LocalAuthGuard)
   @HttpCode(HttpStatus.OK)
   @Post('login')
-  login(
+  async login(
     @Body() _dto: LoginDto,
     @Req() req: AuthenticatedRequest,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const session = this.authService.createSession(req.user);
+    const session = await this.authService.createSession(
+      req.user,
+      this.getSessionMetadata(req),
+    );
 
-    this.setAuthCookie(res, session.accessToken);
+    this.setSessionCookies(res, session);
 
     return { user: session.user };
   }
@@ -60,9 +71,31 @@ export class AuthController {
   }
 
   @HttpCode(HttpStatus.OK)
+  @Post('refresh')
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const refreshToken = this.getRefreshToken(req);
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token is missing.');
+    }
+
+    const session = await this.authService.refresh(
+      refreshToken,
+      this.getSessionMetadata(req),
+    );
+    this.setSessionCookies(res, session);
+
+    return { user: session.user };
+  }
+
+  @HttpCode(HttpStatus.OK)
   @Post('logout')
-  logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie(this.authService.getCookieName(), this.getCookieOptions());
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    await this.authService.revokeRefreshToken(this.getRefreshToken(req));
+    this.clearSessionCookies(res);
 
     return { ok: true };
   }
@@ -75,30 +108,82 @@ export class AuthController {
 
   @UseGuards(GoogleAuthGuard)
   @Get('google/callback')
-  googleCallback(
+  async googleCallback(
     @Req() req: AuthenticatedRequest,
     @Res({ passthrough: false }) res: Response,
   ) {
-    const session = this.authService.createSession(req.user);
+    const session = await this.authService.createSession(
+      req.user,
+      this.getSessionMetadata(req),
+    );
 
-    this.setAuthCookie(res, session.accessToken);
+    this.setSessionCookies(res, session);
     res.redirect(
       this.configService.get('GOOGLE_SUCCESS_REDIRECT_URL', { infer: true }),
     );
   }
 
-  private setAuthCookie(res: Response, token: string) {
-    res.cookie(this.authService.getCookieName(), token, this.getCookieOptions());
+  private setSessionCookies(
+    res: Response,
+    session: { accessToken: string; refreshToken: string },
+  ) {
+    res.cookie(
+      this.authService.getCookieName(),
+      session.accessToken,
+      this.getAccessCookieOptions(),
+    );
+    res.cookie(
+      this.authService.getRefreshCookieName(),
+      session.refreshToken,
+      this.getRefreshCookieOptions(),
+    );
   }
 
-  private getCookieOptions(): CookieOptions {
+  private clearSessionCookies(res: Response) {
+    res.clearCookie(this.authService.getCookieName(), {
+      ...this.getBaseCookieOptions(),
+      path: '/',
+    });
+    res.clearCookie(this.authService.getRefreshCookieName(), {
+      ...this.getBaseCookieOptions(),
+      path: '/auth',
+    });
+  }
+
+  private getAccessCookieOptions(): CookieOptions {
+    return {
+      ...this.getBaseCookieOptions(),
+      maxAge: this.authService.getCookieMaxAgeMs(),
+      path: '/',
+    };
+  }
+
+  private getRefreshCookieOptions(): CookieOptions {
+    return {
+      ...this.getBaseCookieOptions(),
+      maxAge: this.authService.getRefreshCookieMaxAgeMs(),
+      path: '/auth',
+    };
+  }
+
+  private getBaseCookieOptions(): CookieOptions {
     return {
       httpOnly: true,
       sameSite: 'lax',
       secure:
         this.configService.get('NODE_ENV', { infer: true }) === 'production',
-      maxAge: this.authService.getCookieMaxAgeMs(),
-      path: '/',
+    };
+  }
+
+  private getRefreshToken(req: Request) {
+    const cookies = req.cookies as Record<string, string> | undefined;
+    return cookies?.[this.authService.getRefreshCookieName()];
+  }
+
+  private getSessionMetadata(req: Request) {
+    return {
+      ipAddress: req.ip || null,
+      userAgent: req.get('user-agent') ?? null,
     };
   }
 }

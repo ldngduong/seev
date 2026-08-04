@@ -2,14 +2,13 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { BullBoardModule } from '@bull-board/nestjs';
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import type { Env } from '../../config/env.schema';
 import { CvResearchSession } from '../cv/entities/cv-research-session.entity';
 import { CvAudit } from '../cv/entities/cv-audit.entity';
 import { JobFamilyCategory } from '../job-category/entities/job-family-category.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
+import { ResearchRealtimeModule } from '../research-realtime/research-realtime.module';
 import { IndeedConnector } from './connectors/indeed.connector';
 import { TopCvConnector } from './connectors/topcv.connector';
 import { VietnamWorksConnector } from './connectors/vietnamworks.connector';
@@ -35,15 +34,7 @@ import { JOB_RESEARCH_QUEUE } from './types/job-source.type';
       JobPost,
       JobIntentMatch,
     ]),
-    BullModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService<Env, true>) => ({
-        connection: {
-          host: config.get('REDIS_HOST', { infer: true }),
-          port: config.get('REDIS_PORT', { infer: true }),
-        },
-      }),
-    }),
+    ResearchRealtimeModule,
     BullModule.registerQueue({
       name: JOB_RESEARCH_QUEUE,
     }),

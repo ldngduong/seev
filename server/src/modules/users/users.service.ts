@@ -64,7 +64,9 @@ export class UsersService {
 
   async update(user: User, patch: Partial<CreateUserInput>) {
     const nextUsername =
-      patch.username === undefined ? user.username : patch.username?.trim() || null;
+      patch.username === undefined
+        ? user.username
+        : patch.username?.trim() || null;
     const nextEmail =
       patch.email === undefined ? user.email : this.normalizeEmail(patch.email);
 
@@ -77,9 +79,12 @@ export class UsersService {
       email: nextEmail,
       username: nextUsername,
       fullName: patch.fullName?.trim() ?? user.fullName,
-      phone: patch.phone === undefined ? user.phone : patch.phone?.trim() || null,
+      phone:
+        patch.phone === undefined ? user.phone : patch.phone?.trim() || null,
       address:
-        patch.address === undefined ? user.address : patch.address?.trim() || null,
+        patch.address === undefined
+          ? user.address
+          : patch.address?.trim() || null,
       gender:
         patch.gender === undefined ? user.gender : patch.gender?.trim() || null,
       avatar:
@@ -90,7 +95,10 @@ export class UsersService {
     return this.userRepository.save(user);
   }
 
-  async generateAvailableUsername(email: string, preferredName?: string | null) {
+  async generateAvailableUsername(
+    email: string,
+    preferredName?: string | null,
+  ) {
     const seed =
       preferredName
         ?.normalize('NFD')
@@ -98,7 +106,8 @@ export class UsersService {
         .replace(/[^a-z0-9]+/gi, '_')
         .replace(/^_+|_+$/g, '')
         .toLowerCase() ||
-      email.split('@')[0]
+      email
+        .split('@')[0]
         ?.replace(/[^a-z0-9]+/gi, '_')
         .replace(/^_+|_+$/g, '')
         .toLowerCase() ||

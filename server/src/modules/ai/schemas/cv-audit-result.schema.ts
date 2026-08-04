@@ -6,9 +6,7 @@ const feedbackSchema = z.object({
   section: z.string().min(1),
   original_text: z.string().trim().min(8),
   highlight_text: z.string().optional().default(''),
-  severity: z
-    .enum(['info', 'warning', 'critical'])
-    .default('warning'),
+  severity: z.enum(['info', 'warning', 'critical']).default('warning'),
   issue: z.string().min(1),
   suggestion: z.string().trim().min(1),
   highlight_color: z.enum(['yellow', 'red']).optional().default('yellow'),

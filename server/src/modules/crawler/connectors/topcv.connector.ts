@@ -15,6 +15,7 @@ import {
   uniqueNonEmpty,
 } from '../utils/text-normalizer';
 import { resolveJobSearchQueries } from '../utils/job-search-query';
+import { runWithConcurrency } from '../../../shared/utils/run-with-concurrency';
 import { resolveTopCvPositionFilter } from '../utils/source-seniority-filters';
 
 @Injectable()
@@ -37,37 +38,42 @@ export class TopCvConnector implements JobSourceConnector {
       this.config.get('TOPCV_MAX_DETAIL_JOBS', { infer: true }),
     );
 
-    const jobs: CrawledJob[] = [];
+    const detailCards = cards.slice(0, maxDetail);
+    const enrichedCards = await runWithConcurrency(
+      detailCards,
+      this.config.get('TOPCV_DETAIL_CONCURRENCY', { infer: true }),
+      (card) => this.enrichWithDetail(card).catch(() => card),
+    );
 
-    for (const [index, card] of cards.entries()) {
-      if (index < maxDetail) {
-        jobs.push(await this.enrichWithDetail(card).catch(() => card));
-      } else {
-        jobs.push(card);
-      }
-    }
-
-    return jobs;
+    return [...enrichedCards, ...cards.slice(maxDetail)];
   }
 
   private async collectListingCards(intent: JobSearchIntentPayload) {
     const cards: CrawledJob[] = [];
     const seen = new Set<string>();
+    const queries = resolveJobSearchQueries(intent);
+    const queryResults = await runWithConcurrency(
+      queries,
+      this.config.get('JOB_RESEARCH_QUERY_CONCURRENCY', { infer: true }),
+      async (query) => {
+        try {
+          const html = await this.http.fetchText(
+            this.buildSearchUrl(query, intent),
+            { viaBrightData: true },
+          );
+          return { jobs: this.parseListing(html, query), query, error: null };
+        } catch (error) {
+          return {
+            jobs: [] as CrawledJob[],
+            query,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
+    );
 
-    for (const query of resolveJobSearchQueries(intent)) {
-      if (cards.length >= intent.maxJobsPerSource) {
-        break;
-      }
-
-      const html = await this.http.fetchText(
-        this.buildSearchUrl(query, intent),
-        {
-          viaBrightData: true,
-        },
-      );
-      const parsedCards = this.parseListing(html, query);
-
-      for (const card of parsedCards) {
+    for (const result of queryResults) {
+      for (const card of result.jobs) {
         const key = `${card.source}:${card.sourceJobId}`;
 
         if (seen.has(key)) {
@@ -78,9 +84,19 @@ export class TopCvConnector implements JobSourceConnector {
         cards.push(card);
 
         if (cards.length >= intent.maxJobsPerSource) {
-          break;
+          return cards;
         }
       }
+    }
+
+    const errors = queryResults.filter((result) => result.error);
+
+    if (queries.length > 0 && errors.length === queries.length) {
+      throw new Error(
+        `TopCV failed for every query: ${errors
+          .map((result) => `${result.query}: ${result.error}`)
+          .join(' | ')}`,
+      );
     }
 
     return cards;

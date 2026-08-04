@@ -25,10 +25,7 @@ export class CrawlerController {
     @Body() dto: CreateJobResearchIntentDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    const result = await this.jobResearchService.createIntent(
-      dto,
-      req.user.id,
-    );
+    const result = await this.jobResearchService.createIntent(dto, req.user.id);
 
     return {
       intent: result.intent,

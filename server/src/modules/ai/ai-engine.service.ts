@@ -9,6 +9,7 @@ import type { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/ch
 import { ZodError } from 'zod';
 
 import type { Env } from '../../config/env.schema';
+import { runWithConcurrency } from '../../shared/utils/run-with-concurrency';
 import type { CandidateHighlight } from '../cv/interfaces/parsed-resume.interface';
 import {
   cvAuditResultSchema,
@@ -91,17 +92,23 @@ export class AiEngineService {
             '8. Preserve occupation wording from evidence. Do not transform a person/job title into a broader field noun unless the CV itself uses that broader wording.',
             '9. seniority_hint must be a concise level evidenced by the CV, such as Intern, Fresher, Junior, Middle, Senior, Lead, Manager, or empty only when the CV gives no evidence. If the header says Intern/Junior/etc., do not omit it.',
             '10. search_queries are for job-board crawling, not for display. They must be short, searchable phrases that maximize recall while staying close to the CV target. If a seniority level is evidenced, include level-aware queries first, then role-only variants. Prefer concise job titles and core specializations over long titles with parenthetical details.',
-            '11. Do not rewrite a precise role into a different broad role. For example, a CV title like "Intern Frontend Developer" should remain a frontend developer target, not web development, software engineering, or a generic developer category.',
+            '11. Do not rewrite a precise occupation title into a broader field noun, degree, major, or generic category. Preserve the explicit specialization and seniority when the CV provides them.',
             '',
             'Return this exact JSON shape:',
             JSON.stringify({
               target_role: 'candidate-facing job title inferred from the CV',
-              target_category_hint: 'broad domain/category inferred from the CV',
-              seniority_hint: 'seniority or position level inferred from the CV',
+              target_category_hint:
+                'broad domain/category inferred from the CV',
+              seniority_hint:
+                'seniority or position level inferred from the CV',
               confidence: 0.8,
               reasoning:
                 'Vietnamese explanation of how the target was inferred from the evidence.',
-              keywords: ['relevant keyword 1', 'relevant keyword 2', 'relevant keyword 3'],
+              keywords: [
+                'relevant keyword 1',
+                'relevant keyword 2',
+                'relevant keyword 3',
+              ],
               search_queries: [
                 'short searchable job title',
                 'alternative concise job title',
@@ -153,9 +160,7 @@ export class AiEngineService {
       input.candidateHighlights,
     );
 
-    return cvAuditResultSchema.parse(
-      this.normalizeAuditResult(anchoredResult),
-    );
+    return cvAuditResultSchema.parse(this.normalizeAuditResult(anchoredResult));
   }
 
   private async requestFinalAudit(
@@ -208,7 +213,7 @@ export class AiEngineService {
   private async requestLineAudits(client: OpenAI, input: AnalyzeCvInput) {
     const batches = this.chunkCandidateHighlights(input.candidateHighlights);
 
-    return this.runWithConcurrency(batches, LINE_AUDIT_CONCURRENCY, (batch, index) =>
+    return runWithConcurrency(batches, LINE_AUDIT_CONCURRENCY, (batch, index) =>
       this.requestLineAudit(
         client,
         input,
@@ -240,7 +245,7 @@ export class AiEngineService {
 
     const batches = this.chunkCandidateHighlights(unreviewedHighlights);
 
-    return this.runWithConcurrency(batches, LINE_AUDIT_CONCURRENCY, (batch) =>
+    return runWithConcurrency(batches, LINE_AUDIT_CONCURRENCY, (batch) =>
       this.requestCoverageAudit(
         client,
         input,
@@ -318,37 +323,10 @@ export class AiEngineService {
     return candidateHighlights.slice(start, end);
   }
 
-  private async runWithConcurrency<TInput, TResult>(
-    items: TInput[],
-    concurrency: number,
-    worker: (item: TInput, index: number) => Promise<TResult>,
-  ) {
-    const results: TResult[] = [];
-    let nextIndex = 0;
-
-    async function runNext() {
-      const currentIndex = nextIndex;
-      nextIndex += 1;
-
-      if (currentIndex >= items.length) {
-        return;
-      }
-
-      results[currentIndex] = await worker(items[currentIndex], currentIndex);
-      await runNext();
-    }
-
-    await Promise.all(
-      Array.from({ length: Math.min(concurrency, items.length) }, () =>
-        runNext(),
-      ),
-    );
-
-    return results;
-  }
-
   private dedupeLineFeedbacks(
-    feedbacks: ReturnType<typeof lineCvAuditResultSchema.parse>['detailed_feedbacks'],
+    feedbacks: ReturnType<
+      typeof lineCvAuditResultSchema.parse
+    >['detailed_feedbacks'],
   ) {
     const seen = new Set<string>();
 
@@ -524,7 +502,8 @@ export class AiEngineService {
     const seniorityDescription =
       input.target.seniorityDescription || 'No seniority description provided.';
     const jobDescription =
-      input.target.jobDescription?.trim() || 'No employer job description provided.';
+      input.target.jobDescription?.trim() ||
+      'No employer job description provided.';
 
     return {
       model,
@@ -616,7 +595,11 @@ export class AiEngineService {
                     'Vietnamese recommendation for the overall CV direction.',
                 },
               ],
-              suggested_keywords: ['Target Skill A', 'Target Skill B', 'Target Tool'],
+              suggested_keywords: [
+                'Target Skill A',
+                'Target Skill B',
+                'Target Tool',
+              ],
               suggested_roles: ['Target Role A'],
               suggested_jobs: [
                 {
@@ -631,7 +614,8 @@ export class AiEngineService {
                 },
                 {
                   title: 'Adjacent Target Job',
-                  reason: 'Vietnamese explanation of why this job is a stretch.',
+                  reason:
+                    'Vietnamese explanation of why this job is a stretch.',
                   match_level: 'stretch',
                 },
               ],
@@ -713,13 +697,12 @@ export class AiEngineService {
     const model = this.configService.get('DEEPSEEK_MODEL', { infer: true });
     const targetRole = input.target.targetRole?.trim() || 'not specified';
     const targetCategory = input.target.jobCategoryName || 'not specified';
-    const targetSeniority =
-      input.target.seniorityLevelName || 'not specified';
+    const targetSeniority = input.target.seniorityLevelName || 'not specified';
     const seniorityDescription =
-      input.target.seniorityDescription ||
-      'No seniority description provided.';
+      input.target.seniorityDescription || 'No seniority description provided.';
     const jobDescription =
-      input.target.jobDescription?.trim() || 'No employer job description provided.';
+      input.target.jobDescription?.trim() ||
+      'No employer job description provided.';
 
     return {
       model,
@@ -813,13 +796,12 @@ export class AiEngineService {
     const model = this.configService.get('DEEPSEEK_MODEL', { infer: true });
     const targetRole = input.target.targetRole?.trim() || 'not specified';
     const targetCategory = input.target.jobCategoryName || 'not specified';
-    const targetSeniority =
-      input.target.seniorityLevelName || 'not specified';
+    const targetSeniority = input.target.seniorityLevelName || 'not specified';
     const seniorityDescription =
-      input.target.seniorityDescription ||
-      'No seniority description provided.';
+      input.target.seniorityDescription || 'No seniority description provided.';
     const jobDescription =
-      input.target.jobDescription?.trim() || 'No employer job description provided.';
+      input.target.jobDescription?.trim() ||
+      'No employer job description provided.';
 
     return {
       model,
@@ -999,7 +981,10 @@ export class AiEngineService {
       }
 
       if (
-        !this.isTextAnchoredToSourceLine(feedback.original_text, sourceLine.text)
+        !this.isTextAnchoredToSourceLine(
+          feedback.original_text,
+          sourceLine.text,
+        )
       ) {
         invalidFeedbacks.push(
           `${feedback.id || feedback.source_line_id} original_text is not copied from ${feedback.source_line_id}.`,
@@ -1132,7 +1117,9 @@ export class AiEngineService {
       typeof rawCvAuditResultSchema.parse
     >['detailed_feedbacks'][number],
   ) {
-    const originalLanguage = this.detectDominantLanguage(feedback.original_text);
+    const originalLanguage = this.detectDominantLanguage(
+      feedback.original_text,
+    );
 
     if (
       originalLanguage === 'english' &&
@@ -1176,7 +1163,9 @@ export class AiEngineService {
   }
 
   private formatLineFindings(
-    feedbacks: ReturnType<typeof lineCvAuditResultSchema.parse>['detailed_feedbacks'],
+    feedbacks: ReturnType<
+      typeof lineCvAuditResultSchema.parse
+    >['detailed_feedbacks'],
   ) {
     if (feedbacks.length === 0) {
       return '- No line-level findings were returned.';
@@ -1184,16 +1173,15 @@ export class AiEngineService {
 
     return feedbacks
       .slice(0, 80)
-      .map(
-        (feedback, index) =>
-          [
-            `${index + 1}. ${feedback.severity.toUpperCase()}`,
-            `source=${feedback.source_line_id}`,
-            `section=${feedback.section}`,
-            `text=${feedback.original_text}`,
-            `issue=${feedback.issue}`,
-            `suggestion=${feedback.suggestion}`,
-          ].join(' | '),
+      .map((feedback, index) =>
+        [
+          `${index + 1}. ${feedback.severity.toUpperCase()}`,
+          `source=${feedback.source_line_id}`,
+          `section=${feedback.section}`,
+          `text=${feedback.original_text}`,
+          `issue=${feedback.issue}`,
+          `suggestion=${feedback.suggestion}`,
+        ].join(' | '),
       )
       .join('\n');
   }
