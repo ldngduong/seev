@@ -20,6 +20,10 @@ import {
   type CvAuditResult,
   type CvTargetInference,
 } from './schemas/cv-audit-result.schema';
+import {
+  jobMatchBatchSchema,
+  type JobMatchResult,
+} from './schemas/job-match.schema';
 import { buildAuditUnits } from './utils/audit-unit-builder';
 
 interface AnalyzeCvInput {
@@ -68,6 +72,39 @@ export class AiEngineService {
   private client: OpenAI | null = null;
 
   constructor(private readonly configService: ConfigService<Env, true>) {}
+
+  /**
+   * AI job-match classification: each crawled job is judged against the CV
+   * target (occupation + seniority) using ONLY its title, sent as one array
+   * per call. The model decides whether the job is a direct match, a
+   * suggestion (related occupation or off-level), or reject. No heuristics.
+   */
+  async classifyJobMatches(input: {
+    target: {
+      targetRole: string | null;
+      seniorityLevelName: string | null;
+      keywords: string[];
+    };
+    jobs: Array<{
+      jobId: string;
+      title: string;
+    }>;
+  }): Promise<JobMatchResult[]> {
+    if (input.jobs.length === 0) {
+      return [];
+    }
+
+    const client = this.getClient();
+    const maxPerCall = 120;
+    const results: JobMatchResult[] = [];
+
+    for (let index = 0; index < input.jobs.length; index += maxPerCall) {
+      const batch = input.jobs.slice(index, index + maxPerCall);
+      results.push(...(await this.requestJobMatchBatch(client, input.target, batch)));
+    }
+
+    return results;
+  }
 
   async inferCvTarget(input: {
     resumeText: string;
@@ -1399,5 +1436,180 @@ export class AiEngineService {
         seen.add(normalized);
         return true;
       });
+  }
+
+  private async requestJobMatchBatch(
+    client: OpenAI,
+    target: Parameters<AiEngineService['classifyJobMatches']>[0]['target'],
+    batch: Parameters<AiEngineService['classifyJobMatches']>[0]['jobs'],
+  ) {
+    let content = await this.requestAuditJson(
+      client,
+      this.createJobMatchRequest(target, batch),
+    );
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const result = jobMatchBatchSchema.parse(
+          this.parseJsonContent(content),
+        );
+        this.validateJobMatchCoverage(result.matches, batch);
+        return result.matches;
+      } catch (error) {
+        lastError = error;
+
+        if (attempt === 2) {
+          break;
+        }
+
+        content = await this.requestAuditJson(
+          client,
+          this.createJobMatchRepairRequest(target, batch, content, error),
+        );
+      }
+    }
+
+    throw new BadGatewayException({
+      message:
+        'DeepSeek response did not match the job match schema after repair.',
+      cause: this.formatValidationError(lastError),
+    });
+  }
+
+  private createJobMatchRequest(
+    target: Parameters<AiEngineService['classifyJobMatches']>[0]['target'],
+    batch: Parameters<AiEngineService['classifyJobMatches']>[0]['jobs'],
+  ): ChatCompletionCreateParamsNonStreaming {
+    const model = this.configService.get('DEEPSEEK_MODEL', { infer: true });
+    const targetRole = target.targetRole?.trim() || 'not specified';
+    const targetSeniority =
+      target.seniorityLevelName?.trim() || 'not specified';
+    const keywords = target.keywords.slice(0, 30).join(', ') || 'none';
+
+    return {
+      model,
+      stream: false,
+      reasoning_effort: 'high',
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a senior recruiter matching job postings to a candidate profile. Return only valid JSON. Do not use markdown.',
+        },
+        {
+          role: 'user',
+          content: [
+            'Classify each job posting below against the candidate target.',
+            `Candidate target role: ${targetRole}`,
+            `Candidate seniority level: ${targetSeniority}`,
+            `Candidate skill keywords: ${keywords}`,
+            '',
+            'Classification rules:',
+            '- match: the job is the same occupation AND the seniority level in its title matches the candidate level EXACTLY (e.g. candidate targets Intern -> only titles with intern level evidence such as "Intern", "Internship", "Thực tập sinh"; candidate targets Senior -> titles with senior level evidence). A job at a higher or lower level than the candidate is never a match.',
+            '- suggestion: the job is clearly the same or an adjacent occupation but the level differs from the candidate level (e.g. candidate targets Intern and the job is Fresher/Junior, or the title has no level evidence at all), or the level is too high (Middle/Senior) to reject outright but still related.',
+            '- reject: the job is a different occupation, clearly irrelevant, OR the title shows a much higher level (Senior/Lead/Manager/Director) when the candidate targets Intern/Fresher — those must not appear as matches or suggestions.',
+            '- Infer the job level ONLY from its title: intern, fresher, junior, middle, senior, lead, manager, director. Titles like "Thực tập sinh", "Intern", "Internship" mean intern. Use null only when the title gives no level evidence.',
+            '- score is 0-100: how well this job fits the candidate target overall. match must score >= 60; suggestion 30-59; reject < 30. For a candidate targeting Intern/Fresher, jobs whose titles show no level evidence are suggestions (typically 40-55) and must never be matches.',
+            '- reason must be Vietnamese and explain the occupation fit and the level fit (or mismatch) in one or two sentences.',
+            '- A Vietnamese title containing "Thực tập sinh" or "Intern" that is otherwise relevant to the target occupation is a match when the candidate targets Intern, even if the title does not repeat the exact occupation words.',
+            '',
+            'Return this exact JSON shape:',
+            JSON.stringify({
+              matches: [
+                {
+                  job_id: 'job id as provided',
+                  level: 'inferred level or null',
+                  match_kind: 'match | suggestion | reject',
+                  score: 0,
+                  reason: 'Vietnamese explanation',
+                },
+              ],
+            }),
+            '',
+            'Job postings:',
+            this.formatJobsForMatch(batch),
+          ].join('\n'),
+        },
+      ],
+      thinking: { type: 'enabled' },
+    } as ChatCompletionCreateParamsNonStreaming;
+  }
+
+  private createJobMatchRepairRequest(
+    target: Parameters<AiEngineService['classifyJobMatches']>[0]['target'],
+    batch: Parameters<AiEngineService['classifyJobMatches']>[0]['jobs'],
+    invalidContent: string,
+    error: unknown,
+  ): ChatCompletionCreateParamsNonStreaming {
+    const model = this.configService.get('DEEPSEEK_MODEL', { infer: true });
+
+    return {
+      model,
+      stream: false,
+      reasoning_effort: 'high',
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You repair invalid job match JSON. Return only valid JSON. Do not add markdown.',
+        },
+        {
+          role: 'user',
+          content: [
+            'The previous job classification JSON failed validation. Fix the JSON without inventing facts.',
+            'Return only: { "matches": [...] }.',
+            'matches must contain exactly one item per job_id from the job list below, with no duplicates and no extra ids.',
+            'Each match item must have job_id from the provided list, level as one of intern/fresher/junior/middle/senior/lead/manager/director or null, match_kind as match/suggestion/reject, score as integer 0-100, and a non-empty Vietnamese reason.',
+            '',
+            'Validation error:',
+            this.formatValidationError(error),
+            '',
+            'Job postings:',
+            this.formatJobsForMatch(batch),
+            '',
+            'Invalid JSON:',
+            invalidContent,
+          ].join('\n'),
+        },
+      ],
+      thinking: { type: 'enabled' },
+    } as ChatCompletionCreateParamsNonStreaming;
+  }
+
+  private formatJobsForMatch(
+    jobs: Parameters<AiEngineService['classifyJobMatches']>[0]['jobs'],
+  ) {
+    return jobs
+      .map((job, index) => `${index + 1}. job_id=${job.jobId} | title=${job.title}`)
+      .join('\n');
+  }
+
+  private validateJobMatchCoverage(
+    matches: JobMatchResult[],
+    batch: Parameters<AiEngineService['classifyJobMatches']>[0]['jobs'],
+  ) {
+    const expectedIds = new Set(batch.map((job) => job.jobId));
+    const matchIds = matches.map((match) => match.job_id);
+    const matchSet = new Set(matchIds);
+    const missingIds = [...expectedIds].filter((id) => !matchSet.has(id));
+    const unknownIds = [...matchSet].filter((id) => !expectedIds.has(id));
+
+    if (
+      missingIds.length > 0 ||
+      unknownIds.length > 0 ||
+      matchIds.length !== matchSet.size
+    ) {
+      throw new Error(
+        [
+          'Invalid job match coverage.',
+          `missing=${missingIds.join(',') || 'none'}`,
+          `unknown=${unknownIds.join(',') || 'none'}`,
+          `duplicates=${matchIds.length !== matchSet.size}`,
+        ].join(' '),
+      );
+    }
   }
 }

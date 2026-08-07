@@ -49,13 +49,6 @@ const popovers = [
     y: '2px',
     width: 'w-32',
   },
-  {
-    position: 'left-[29%] -bottom-5',
-    delay: '-1900ms',
-    x: '0px',
-    y: '8px',
-    width: 'w-36',
-  },
 ]
 
 const popoverStyle = (popover: (typeof popovers)[number]) =>
@@ -67,8 +60,8 @@ const popoverStyle = (popover: (typeof popovers)[number]) =>
 
 export const AnimatedCvPreview = () => {
   return (
-    <div className="relative aspect-[0.78] w-full min-w-0 rounded-4xl bg-muted p-3 shadow-2xl shadow-foreground/10 sm:w-[28rem]">
-      <div className="relative h-full overflow-hidden rounded-3xl bg-background p-6 shadow-inner">
+    <div className="relative aspect-[0.78] w-full min-w-0 rounded-4xl bg-white p-3 shadow-lg sm:w-[28rem]">
+      <div className="relative h-full overflow-hidden rounded-3xl bg-background p-6">
         <div className="mx-auto mb-7 flex w-7/12 flex-col items-center gap-3">
           <div className="h-5 w-full rounded-full bg-foreground/85" />
           <div className="h-3 w-8/12 rounded-full bg-muted-foreground/35" />

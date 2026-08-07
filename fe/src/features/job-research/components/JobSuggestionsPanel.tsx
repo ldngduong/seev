@@ -1,12 +1,10 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { BriefcaseBusiness, ExternalLink, Loader2 } from 'lucide-react'
+import { BriefcaseBusiness, Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
-import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
 import type { AuditSummary } from '@/types/cv'
 
 import {
@@ -15,9 +13,10 @@ import {
   getJobResearchJobs,
 } from '../api/job-research-api'
 import type {
-  JobIntentMatchResult,
   JobSearchIntent,
 } from '../types/job-research.types'
+
+import { JobMatchCard } from './job-match-card'
 
 interface JobSuggestionsPanelProps {
   audit: AuditSummary | null
@@ -161,47 +160,6 @@ function ResearchStatusBadge({
   }
 
   return <Badge variant="secondary">{intent.status}</Badge>
-}
-
-function JobMatchCard({ match }: { match: JobIntentMatchResult }) {
-  const job = match.job
-  const sourceLabel = job.source === 'topcv' ? 'TopCV' : job.source
-
-  return (
-    <article className="space-y-3 rounded-md border bg-background p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="line-clamp-2 text-sm font-semibold">{job.title}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {[job.companyName, job.locations.join(', '), job.salaryText]
-              .filter(Boolean)
-              .join(' • ') || sourceLabel}
-          </p>
-        </div>
-        <Badge variant="outline">{match.match_score}</Badge>
-      </div>
-
-      {match.matched_terms.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-          {match.matched_terms.slice(0, 5).map((term) => (
-            <Badge key={term} variant="secondary">
-              {term}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-
-      <a
-        href={job.sourceUrl}
-        target="_blank"
-        rel="noreferrer"
-        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-      >
-        Open job
-        <ExternalLink className="size-3" />
-      </a>
-    </article>
-  )
 }
 
 function JobSkeleton() {

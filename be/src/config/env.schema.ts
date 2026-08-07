@@ -102,7 +102,7 @@ const envSchema = z.object({
     .number()
     .int()
     .positive()
-    .default(20),
+    .default(100),
   JOB_RESEARCH_SOURCE_CONCURRENCY: z.coerce
     .number()
     .int()
@@ -121,22 +121,20 @@ const envSchema = z.object({
     .int()
     .positive()
     .default(60),
-  BRIGHTDATA_API_KEY: z.string().optional(),
-  BRIGHTDATA_REQUEST_URL: z.url().default('https://api.brightdata.com/request'),
-  BRIGHTDATA_ZONE: z.string().default('web_unlocker1'),
-  BRIGHTDATA_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
-  TOPCV_ENABLED: envBoolean.default(true),
-  TOPCV_BASE_URL: z.url().default('https://www.topcv.vn'),
-  TOPCV_SEARCH_URL_TEMPLATE: z.string().min(1),
-  TOPCV_MAX_DETAIL_JOBS: z.coerce.number().int().min(0).default(12),
-  TOPCV_DETAIL_CONCURRENCY: z.coerce.number().int().positive().default(4),
-  VIETNAMWORKS_ENABLED: envBoolean.default(true),
-  VIETNAMWORKS_BASE_URL: z.url().default('https://www.vietnamworks.com'),
-  VIETNAMWORKS_SEARCH_URL: z.url(),
-  INDEED_ENABLED: envBoolean.default(true),
-  INDEED_BASE_URL: z.url().default('https://vn.indeed.com'),
-  INDEED_SEARCH_URL_TEMPLATE: z.string().min(1),
-  INDEED_MAX_DETAIL_JOBS: z.coerce.number().int().min(0).default(0),
+  CRAWLER_API_URL: z
+    .url()
+    .default('http://localhost:8000')
+    .describe('Base URL of the Python crawler service.'),
+  CRAWLER_BEARER_TOKEN: z
+    .string()
+    .optional()
+    .describe('Bearer token sent to the crawler service.'),
+  CRAWLER_API_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(180000)
+    .describe('Per-request timeout when calling the crawler service.'),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -7,7 +7,7 @@ export interface FetchTextOptions {
   method?: 'GET' | 'POST';
   headers?: Record<string, string>;
   body?: string;
-  viaBrightData?: boolean;
+  timeoutMs?: number;
 }
 
 interface FetchAttemptResult {
@@ -21,11 +21,7 @@ export class CrawlerHttpService {
   constructor(private readonly config: ConfigService<Env, true>) {}
 
   async fetchText(url: string, options: FetchTextOptions = {}) {
-    return this.withRetries(url, () =>
-      options.viaBrightData
-        ? this.fetchViaBrightData(url, options)
-        : this.fetchDirect(url, options),
-    );
+    return this.withRetries(url, () => this.fetchDirect(url, options));
   }
 
   private async fetchDirect(
@@ -42,7 +38,8 @@ export class CrawlerHttpService {
       },
       body: options.body,
       signal: AbortSignal.timeout(
-        this.config.get('JOB_RESEARCH_HTTP_TIMEOUT_MS', { infer: true }),
+        options.timeoutMs ??
+          this.config.get('JOB_RESEARCH_HTTP_TIMEOUT_MS', { infer: true }),
       ),
     });
 
@@ -54,43 +51,6 @@ export class CrawlerHttpService {
   async fetchJson<T>(url: string, options: FetchTextOptions = {}) {
     const text = await this.fetchText(url, options);
     return JSON.parse(text) as T;
-  }
-
-  private async fetchViaBrightData(
-    url: string,
-    options: FetchTextOptions,
-  ): Promise<FetchAttemptResult> {
-    const apiKey = this.config.get('BRIGHTDATA_API_KEY', { infer: true });
-
-    if (!apiKey) {
-      throw new Error('BRIGHTDATA_API_KEY is required for this source.');
-    }
-
-    const response = await fetch(
-      this.config.get('BRIGHTDATA_REQUEST_URL', { infer: true }),
-      {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${apiKey}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          zone: this.config.get('BRIGHTDATA_ZONE', { infer: true }),
-          url,
-          format: 'raw',
-          method: options.method ?? 'GET',
-          headers: options.headers,
-          body: options.body,
-        }),
-        signal: AbortSignal.timeout(
-          this.config.get('BRIGHTDATA_TIMEOUT_MS', { infer: true }),
-        ),
-      },
-    );
-
-    const text = await response.text();
-
-    return { ok: response.ok, status: response.status, text };
   }
 
   private async withRetries(

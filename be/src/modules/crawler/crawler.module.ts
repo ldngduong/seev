@@ -6,12 +6,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CvResearchSession } from '../cv/entities/cv-research-session.entity';
 import { CvAudit } from '../cv/entities/cv-audit.entity';
+import { AiModule } from '../ai/ai.module';
 import { JobFamilyCategory } from '../job-category/entities/job-family-category.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
 import { ResearchRealtimeModule } from '../research-realtime/research-realtime.module';
-import { IndeedConnector } from './connectors/indeed.connector';
-import { TopCvConnector } from './connectors/topcv.connector';
-import { VietnamWorksConnector } from './connectors/vietnamworks.connector';
 import { CrawlerController } from './crawler.controller';
 import { CrawlerHttpService } from './crawler-http.service';
 import { JobCrawlRun } from './entities/job-crawl-run.entity';
@@ -35,6 +33,7 @@ import { JOB_RESEARCH_QUEUE } from './types/job-source.type';
       JobIntentMatch,
     ]),
     ResearchRealtimeModule,
+    AiModule,
     BullModule.registerQueue({
       name: JOB_RESEARCH_QUEUE,
     }),
@@ -44,14 +43,7 @@ import { JOB_RESEARCH_QUEUE } from './types/job-source.type';
     }),
   ],
   controllers: [CrawlerController],
-  providers: [
-    CrawlerHttpService,
-    TopCvConnector,
-    VietnamWorksConnector,
-    IndeedConnector,
-    JobResearchService,
-    JobResearchProcessor,
-  ],
+  providers: [CrawlerHttpService, JobResearchService, JobResearchProcessor],
   exports: [JobResearchService],
 })
 export class CrawlerModule {}

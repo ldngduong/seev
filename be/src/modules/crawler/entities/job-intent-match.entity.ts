@@ -44,6 +44,16 @@ export class JobIntentMatch {
   })
   matchedTerms!: string[];
 
+  @Column({ name: 'match_kind', default: 'match', type: 'varchar', length: 16 })
+  matchKind!: 'match' | 'suggestion' | 'reject';
+
+  @Column({
+    name: 'match_reason',
+    default: '',
+    type: 'text',
+  })
+  matchReason!: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

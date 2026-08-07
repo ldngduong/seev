@@ -1,43 +1,38 @@
 import { BadgeCheck, BriefcaseBusiness, ScanText } from 'lucide-react'
 
 const solutions = [
-  {
-    title: 'Evidence-first scoring',
-    copy: 'Seev ties every detailed remark to the text it reviewed, so users can understand why the score changed.',
-    icon: ScanText,
-  },
-  {
-    title: 'Role and seniority fit',
-    copy: 'The review compares the CV with the selected job category and level before suggesting a direction.',
-    icon: BadgeCheck,
-  },
-  {
-    title: 'Career suggestions',
-    copy: 'The platform turns the audit into relevant keyword, role, and job title ideas for the next application.',
-    icon: BriefcaseBusiness,
-  },
+  {
+    title: 'Chấm điểm dựa trên minh chứng',
+    copy: 'Seev gắn liền mọi nhận xét với từng đoạn văn bản cụ thể trong CV, giúp bạn hiểu rõ nguyên nhân vì sao điểm số thay đổi.',
+    icon: ScanText,
+  },
+  {
+    title: 'Đánh giá độ tương thích vị trí và cấp bậc',
+    copy: 'Hệ thống đối chiếu CV với nhóm ngành và cấp bậc bạn chọn trước khi đưa ra định hướng điều chỉnh.',
+    icon: BadgeCheck,
+  },
+  {
+    title: 'Gợi ý phát triển sự nghiệp',
+    copy: 'Nền tảng chuyển đổi kết quả phân tích thành các từ khóa, vị trí và chức danh phù hợp cho đợt ứng tuyển tiếp theo.',
+    icon: BriefcaseBusiness,
+  },
 ]
 
 export const LandingSolutionSection = () => {
   return (
     <section
       id="scoring"
-      className="rounded-4xl bg-primary p-6 text-primary-foreground"
+      className="rounded-4xl bg-primary p-6 text-primary-foreground m-6 mt-0"
     >
       <div className="grid gap-6">
         <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr] lg:items-end">
           <div className="flex flex-col gap-4">
-            <div className="w-fit rounded-4xl border border-primary-foreground/25 px-3 py-1 text-xs font-medium">
-              Seev workflow
-            </div>
             <h2 className="text-3xl font-semibold leading-tight tracking-normal md:text-5xl">
-              AI review that connects scoring with career direction
+              Đánh giá CV bằng AI gắn liền với định hướng nghề nghiệp
             </h2>
           </div>
           <p className="text-sm leading-6 text-primary-foreground/70">
-            Seev reviews the document as evidence, compares it with the target,
-            and keeps the next action tied to the selected role instead of
-            generic resume advice.
+            Seev phân tích CV như một tài liệu dữ liệu, đối chiếu trực tiếp với công việc mục tiêu và đưa ra đề xuất điều chỉnh cụ thể cho từng vị trí.
           </p>
         </div>
 

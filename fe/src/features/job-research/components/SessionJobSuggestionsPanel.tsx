@@ -1,22 +1,46 @@
-import { BriefcaseBusiness, ExternalLink } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { BriefcaseBusiness, Sparkles } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
+import { getJobResearchJobs } from '../api/job-research-api'
+import type { JobIntentMatchResult } from '../types/job-research.types'
 import type { CvResearchJobSuggestion } from '@/types/cv'
+
+import { JobMatchCard } from './job-match-card'
 
 export function SessionJobSuggestionsPanel({
   jobs,
   status,
   onRetry,
   isRetrying = false,
+  intentId,
 }: {
   jobs: CvResearchJobSuggestion[]
   status?: 'queued' | 'processing' | 'completed' | 'failed'
   onRetry?: () => void
   isRetrying?: boolean
+  intentId: string | null
 }) {
+  const intentJobsQuery = useQuery({
+    queryKey: ['job-research-jobs', intentId],
+    queryFn: () => getJobResearchJobs(intentId as string),
+    enabled: Boolean(intentId),
+  })
+
+  const richMatches: JobIntentMatchResult[] | undefined = intentJobsQuery.data
+  // Live matches win when the intent actually finished saving them. But an
+  // empty/[] result must NOT override the completed research snapshot — the
+  // intent's matches table may have been wiped by a stalled re-run while the
+  // snapshot still holds the last completed results.
+  const matches =
+    richMatches && richMatches.length > 0
+      ? richMatches
+      : jobs.map(snapshotToMatch)
+
+  const directMatches = matches.filter((match) => match.match_kind !== 'suggestion')
+  const suggestions = matches.filter((match) => match.match_kind === 'suggestion')
+
   return (
     <Card className="rounded-md">
       <CardHeader>
@@ -26,14 +50,14 @@ export function SessionJobSuggestionsPanel({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {jobs.length === 0 ? (
+        {matches.length === 0 ? (
           <div className="space-y-3 rounded-md bg-muted px-3 py-2">
             <p className="text-sm text-muted-foreground">
               {status === 'queued'
                 ? 'Research is waiting for an available worker.'
                 : status === 'processing'
                   ? 'Job suggestions are being collected in the background.'
-                : 'No matching jobs were saved for this research.'}
+                  : 'No matching jobs were saved for this research.'}
             </p>
             {onRetry ? (
               <Button
@@ -48,51 +72,60 @@ export function SessionJobSuggestionsPanel({
             ) : null}
           </div>
         ) : null}
-        {jobs.map((match) => (
-          <article
-            key={`${match.job.source}-${match.job.id}`}
-            className="space-y-3 rounded-md border bg-background p-3"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="line-clamp-2 text-sm font-semibold">
-                  {match.job.title}
-                </h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {[
-                    match.job.company_name,
-                    match.job.locations.join(', '),
-                    match.job.salary_text,
-                  ]
-                    .filter(Boolean)
-                    .join(' • ') || match.job.source}
-                </p>
-              </div>
-              <Badge variant="outline">{match.match_score}</Badge>
-            </div>
-
-            {match.matched_terms.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {match.matched_terms.slice(0, 5).map((term) => (
-                  <Badge key={term} variant="secondary">
-                    {term}
-                  </Badge>
-                ))}
-              </div>
-            ) : null}
-
-            <a
-              href={match.job.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
-            >
-              Open job
-              <ExternalLink className="size-3" />
-            </a>
-          </article>
+        {directMatches.map((match) => (
+          <JobMatchCard key={match.job.id} match={match} />
         ))}
+        {suggestions.length > 0 ? (
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Sparkles className="size-4" />
+              Gợi ý thêm — ngành liên quan hoặc cấp bậc chưa khớp
+            </div>
+            {suggestions.map((match) => (
+              <JobMatchCard key={match.job.id} match={match} />
+            ))}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   )
+}
+
+function snapshotToMatch(suggestion: CvResearchJobSuggestion): JobIntentMatchResult {
+  const { job } = suggestion
+
+  return {
+    match_score: suggestion.match_score,
+    matched_terms: suggestion.matched_terms,
+    match_kind: 'match',
+    match_reason: '',
+    job: {
+      id: job.id,
+      source: job.source as JobIntentMatchResult['job']['source'],
+      sourceJobId: '',
+      sourceUrl: job.source_url,
+      title: job.title,
+      companyName: job.company_name,
+      salaryText: job.salary_text,
+      salaryMin: null,
+      salaryMax: null,
+      salaryCurrency: null,
+      jobType: null,
+      level: null,
+      experience: null,
+      logo: null,
+      locations: job.locations,
+      seniorityText: job.seniority_text,
+      jobCategoryId: null,
+      jobCategoryName: null,
+      seniorityLevelId: null,
+      seniorityLevelName: null,
+      skills: job.skills,
+      postedAt: null,
+      expiredAt: null,
+      lastSeenAt: '',
+      createdAt: '',
+      updatedAt: '',
+    },
+  }
 }

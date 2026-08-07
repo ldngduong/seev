@@ -16,5 +16,28 @@ services:
     environment:
       REDIS_ARGS: "--appendonly yes"
 
+  crawler:
+    build: ./crawl
+    container_name: seev-crawler
+    restart: unless-stopped
+
+    ports:
+      - "8000:8000"
+
+    # Camoufox (Firefox) uses /dev/shm for IPC; Docker's default 64MB shm is
+    # too small and Firefox then falls back to slower/hungrier paths.
+    shm_size: "1GB"
+
+    environment:
+      # BE calls this service over the compose network:
+      # CRAWLER_API_URL=http://crawler:8000
+      CRAWLER_BEARER_TOKEN: ${CRAWLER_BEARER_TOKEN:-}
+      CRAWLER_PLAYWRIGHT: "1"
+      CRAWLER_PROXY_FETCH: "0"
+      # Sources run in parallel up to this many at once (memory cap for small VPS).
+      CRAWLER_SOURCE_CONCURRENCY: ${CRAWLER_SOURCE_CONCURRENCY:-4}
+      # Disable sources that should not run in this environment
+      CRAWLER_DISABLE_SOURCES: ""
+
 volumes:
   redis_data:

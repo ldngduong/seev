@@ -169,6 +169,7 @@ export function ResearchSessionDetailPage() {
           <SessionJobSuggestionsPanel
             jobs={session.job_suggestions}
             status={session.status}
+            intentId={session.job_search_intent_id}
             onRetry={session.job_search_intent_id ? () => retryJobsMutation.mutate(session.id) : undefined}
             isRetrying={retryJobsMutation.isPending}
           />

@@ -1,7 +1,16 @@
+export type JobSourceName =
+  | 'topcv'
+  | 'vietnamworks'
+  | 'indeed'
+  | 'topdev'
+  | 'itviec'
+  | 'jobsgo'
+  | 'viecoi'
+
 export interface JobCrawlRun {
   id: string
   intentId: string
-  source: 'topcv' | 'vietnamworks' | 'indeed'
+  source: JobSourceName
   status: 'queued' | 'processing' | 'completed' | 'failed'
   fetchedCount: number
   savedCount: number
@@ -24,8 +33,8 @@ export interface JobSearchIntent {
   status: 'queued' | 'processing' | 'completed' | 'failed'
   keywords: string[]
   locations: string[]
-  requestedSources: Array<'topcv' | 'vietnamworks' | 'indeed'>
-  completedSources: Array<'topcv' | 'vietnamworks' | 'indeed'>
+  requestedSources: Array<JobSourceName>
+  completedSources: Array<JobSourceName>
   totalJobs: number
   maxJobsPerSource: number
   error: string | null
@@ -41,21 +50,25 @@ export interface JobResearchIntentResponse {
 
 export interface JobPost {
   id: string
-  source: 'topcv' | 'vietnamworks' | 'indeed'
+  source: JobSourceName
   sourceJobId: string
   sourceUrl: string
   title: string
   companyName: string | null
   salaryText: string | null
+  salaryMin: number | null
+  salaryMax: number | null
+  salaryCurrency: string | null
+  jobType: string | null
+  level: string | null
+  experience: string | null
+  logo: string | null
   locations: string[]
   seniorityText: string | null
   jobCategoryId: number | null
   jobCategoryName: string | null
   seniorityLevelId: string | null
   seniorityLevelName: string | null
-  description: string | null
-  requirements: string | null
-  benefits: string | null
   skills: string[]
   postedAt: string | null
   expiredAt: string | null
@@ -67,5 +80,7 @@ export interface JobPost {
 export interface JobIntentMatchResult {
   match_score: number
   matched_terms: string[]
+  match_kind: 'match' | 'suggestion' | 'reject'
+  match_reason: string
   job: JobPost
 }

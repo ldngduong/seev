@@ -32,6 +32,9 @@ const SENIORITY_DEFINITIONS: SeniorityDefinition[] = [
       'new graduate',
       'moi tot nghiep',
       'mới tốt nghiệp',
+      // NOTE: "nhân viên" (staff) is deliberately NOT a junior signal: VN
+      // boards label nearly every IC posting that way, so it would reject all
+      // entry jobs for an intern CV. Experience caps handle the filtering.
     ],
   },
   {
@@ -41,6 +44,8 @@ const SENIORITY_DEFINITIONS: SeniorityDefinition[] = [
       'mid',
       'mid level',
       'mid-level',
+      'chuyen vien',
+      'chuyên viên',
       '2 years',
       '3 years',
       '2 nam',
@@ -55,6 +60,10 @@ const SENIORITY_DEFINITIONS: SeniorityDefinition[] = [
       'senior',
       'sr',
       'experienced',
+      'cao cap',
+      'cao cấp',
+      'chuyen gia',
+      'chuyên gia',
       '4 years',
       '5 years',
       '4 nam',
@@ -77,6 +86,8 @@ const SENIORITY_DEFINITIONS: SeniorityDefinition[] = [
       'architect',
       'truong nhom',
       'trưởng nhóm',
+      'truong phong',
+      'trưởng phòng',
       'quan ly',
       'quản lý',
       'giam doc',
@@ -182,7 +193,11 @@ function isCompatibleSeniority(
   }
 
   if (targetGroup === 'intern') {
-    return candidateGroups.every((group) => group === 'intern');
+    // Interns realistically target junior ("Nhân viên"/"Junior") postings;
+    // only mid+ is clearly out of reach.
+    return candidateGroups.every((group) =>
+      ['intern', 'junior'].includes(group),
+    );
   }
 
   if (targetGroup === 'junior') {

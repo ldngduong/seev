@@ -16,11 +16,11 @@ import { CvAudit } from '../cv/entities/cv-audit.entity';
 import { JobFamilyCategory } from '../job-category/entities/job-family-category.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
 import { ResearchProgressService } from '../research-realtime/research-progress.service';
-import { IndeedConnector } from './connectors/indeed.connector';
-import { TopCvConnector } from './connectors/topcv.connector';
-import { VietnamWorksConnector } from './connectors/vietnamworks.connector';
+import { CrawlerApiConnector } from './connectors/crawler-api.connector';
+import { CrawlerHttpService } from './crawler-http.service';
 import { CreateJobResearchIntentDto } from './dto/create-job-research-intent.dto';
 import { JobCrawlRun } from './entities/job-crawl-run.entity';
+import { AiEngineService } from '../ai/ai-engine.service';
 import { JobIntentMatch } from './entities/job-intent-match.entity';
 import { JobPost } from './entities/job-post.entity';
 import { JobSearchIntent } from './entities/job-search-intent.entity';
@@ -37,16 +37,12 @@ import {
 } from './types/job-source.type';
 import { createContentHash } from './utils/content-hash';
 import {
-  buildJobMatchProfile,
-  MIN_JOB_MATCH_SCORE,
-  scoreJobMatch,
-} from './utils/job-match';
-import {
   clamp,
   normalizeSearchText,
   normalizeText,
   uniqueNonEmpty,
 } from './utils/text-normalizer';
+import { resolveSeniorityGroup } from './utils/seniority-intent';
 
 interface CreateIntentResult {
   intent: JobSearchIntent;
@@ -78,15 +74,15 @@ export class JobResearchService {
     private readonly seniorityRepository: Repository<SeniorityLevel>,
     private readonly config: ConfigService<Env, true>,
     private readonly progressService: ResearchProgressService,
-    topCvConnector: TopCvConnector,
-    vietnamWorksConnector: VietnamWorksConnector,
-    indeedConnector: IndeedConnector,
+    private readonly crawlerHttp: CrawlerHttpService,
+    private readonly aiEngine: AiEngineService,
   ) {
-    this.connectors = new Map<JobSource, JobSourceConnector>([
-      [topCvConnector.source, topCvConnector],
-      [vietnamWorksConnector.source, vietnamWorksConnector],
-      [indeedConnector.source, indeedConnector],
-    ]);
+    this.connectors = new Map<JobSource, JobSourceConnector>(
+      JOB_SOURCES.map((source) => [
+        source,
+        new CrawlerApiConnector(source, crawlerHttp, this.config),
+      ]),
+    );
   }
 
   async createIntent(
@@ -127,7 +123,8 @@ export class JobResearchService {
       JOB_RESEARCH_JOB,
       { intentId: intent.id },
       {
-        attempts: 1,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 5_000 },
         removeOnComplete: { age: 86400, count: 1000 },
         removeOnFail: { age: 86400, count: 1000 },
       },
@@ -318,7 +315,8 @@ export class JobResearchService {
       JOB_RESEARCH_JOB,
       { intentId: intent.id },
       {
-        attempts: 1,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 5_000 },
         removeOnComplete: { age: 86400, count: 1000 },
         removeOnFail: { age: 86400, count: 1000 },
       },
@@ -368,10 +366,12 @@ export class JobResearchService {
       .createQueryBuilder('match')
       .innerJoinAndSelect('match.jobPost', 'job')
       .where('match.intent_id = :intentId', { intentId })
-      .andWhere('match.match_score >= :minScore', {
-        minScore: MIN_JOB_MATCH_SCORE,
-      })
+      .andWhere("match.match_kind != 'reject'")
       .orderBy('match.match_score', 'DESC')
+      .addOrderBy(
+        "CASE match.match_kind WHEN 'match' THEN 0 ELSE 1 END",
+        'ASC',
+      )
       .addOrderBy('job.last_seen_at', 'DESC');
 
     if (limit !== undefined) {
@@ -383,6 +383,8 @@ export class JobResearchService {
     return rows.map((match) => ({
       match_score: match.matchScore,
       matched_terms: match.matchedTerms,
+      match_kind: match.matchKind,
+      match_reason: match.matchReason,
       job: match.jobPost,
     }));
   }
@@ -434,7 +436,10 @@ export class JobResearchService {
       jobCategoryName,
       targetRole,
       ...this.extractAuditKeywords(audit),
-    ]);
+    ]).filter(
+      (keyword) =>
+        !this.isRoleLikeKeyword(keyword, targetRole, dto.searchQueries ?? []),
+    );
     const searchQueries = uniqueNonEmpty(dto.searchQueries ?? []);
 
     if (!jobCategoryName && !targetRole && keywords.length === 0) {
@@ -467,6 +472,28 @@ export class JobResearchService {
     }
 
     return audit.suggestedKeywords.slice(0, 12);
+  }
+
+  /**
+   * Drop keyword entries that are actually role titles or carry seniority
+   * wording: level is tracked separately and role titles pollute skill
+   * matching. Pure data cleaning, not scoring.
+   */
+  private isRoleLikeKeyword(
+    keyword: string,
+    targetRole: string | null,
+    searchQueries: string[],
+  ) {
+    const normalized = normalizeSearchText(keyword);
+    const roleMatches =
+      !!targetRole &&
+      normalized === normalizeSearchText(targetRole);
+    const queryMatches = searchQueries.some(
+      (query) => normalized === normalizeSearchText(query),
+    );
+    const seniorityPhrases = resolveSeniorityGroup(keyword);
+
+    return roleMatches || queryMatches || seniorityPhrases !== null;
   }
 
   private resolveSources(sources: JobSource[] | undefined) {
@@ -574,17 +601,39 @@ export class JobResearchService {
     crawledJobs: CrawledJob[],
   ) {
     let savedCount = 0;
-    const profile = buildJobMatchProfile(intent);
+    const jobPosts: JobPost[] = [];
 
     for (const crawledJob of crawledJobs) {
       if (!crawledJob.sourceJobId || !crawledJob.title) {
         continue;
       }
 
-      const jobPost = await this.upsertJobPost(intent, crawledJob);
-      const match = scoreJobMatch(profile, jobPost);
+      jobPosts.push(await this.upsertJobPost(intent, crawledJob));
+    }
 
-      if (!match.accepted) {
+    if (jobPosts.length === 0) {
+      return 0;
+    }
+
+    const results = await this.aiEngine.classifyJobMatches({
+      target: {
+        targetRole: intent.targetRole,
+        seniorityLevelName: intent.seniorityLevelName,
+        keywords: intent.keywords ?? [],
+      },
+      jobs: jobPosts.map((jobPost) => ({
+        jobId: jobPost.id,
+        title: jobPost.title,
+      })),
+    });
+    const resultByJobId = new Map(
+      results.map((result) => [result.job_id, result]),
+    );
+
+    for (const jobPost of jobPosts) {
+      const result = resultByJobId.get(jobPost.id);
+
+      if (!result || result.match_kind === 'reject') {
         continue;
       }
 
@@ -592,8 +641,10 @@ export class JobResearchService {
         {
           intentId: intent.id,
           jobPostId: jobPost.id,
-          matchScore: match.score,
-          matchedTerms: match.terms,
+          matchScore: result.score,
+          matchedTerms: result.level ? [result.level] : [],
+          matchKind: result.match_kind,
+          matchReason: result.reason,
         },
         ['intentId', 'jobPostId'],
       );
@@ -611,9 +662,6 @@ export class JobResearchService {
         crawledJob.salaryText,
         crawledJob.locations.join(' '),
         crawledJob.seniorityText,
-        crawledJob.description,
-        crawledJob.requirements,
-        crawledJob.benefits,
         crawledJob.skills.join(' '),
       ].join(' '),
     );
@@ -621,9 +669,6 @@ export class JobResearchService {
       crawledJob.title,
       crawledJob.companyName,
       crawledJob.salaryText,
-      crawledJob.description,
-      crawledJob.requirements,
-      crawledJob.benefits,
       crawledJob.skills.join(','),
     ]);
     const now = new Date();
@@ -640,15 +685,21 @@ export class JobResearchService {
       title: crawledJob.title,
       companyName: crawledJob.companyName,
       salaryText: crawledJob.salaryText,
+      salaryMin: crawledJob.salaryMin,
+      salaryMax: crawledJob.salaryMax,
+      salaryCurrency: crawledJob.salaryCurrency,
+      jobType: crawledJob.jobType,
+      level: crawledJob.level,
+      experience: crawledJob.experience,
+      experienceMin: crawledJob.experienceMin,
+      experienceMax: crawledJob.experienceMax,
+      logo: crawledJob.logo,
       locations: crawledJob.locations,
       seniorityText: crawledJob.seniorityText,
       jobCategoryId: null,
       jobCategoryName: null,
       seniorityLevelId: null,
       seniorityLevelName: null,
-      description: crawledJob.description,
-      requirements: crawledJob.requirements,
-      benefits: crawledJob.benefits,
       skills: crawledJob.skills,
       searchText,
       contentHash,
@@ -672,9 +723,7 @@ export class JobResearchService {
       .createQueryBuilder('match')
       .innerJoinAndSelect('match.jobPost', 'job')
       .where('match.intent_id = :intentId', { intentId: intent.id })
-      .andWhere('match.match_score >= :minScore', {
-        minScore: MIN_JOB_MATCH_SCORE,
-      })
+      .andWhere("match.match_kind != 'reject'")
       .orderBy('match.match_score', 'DESC')
       .addOrderBy('job.last_seen_at', 'DESC')
       .getMany();

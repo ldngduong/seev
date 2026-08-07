@@ -39,6 +39,33 @@ export class JobPost {
   @Column({ name: 'salary_text', nullable: true, type: 'varchar' })
   salaryText!: string | null;
 
+  @Column({ name: 'salary_min', nullable: true, type: 'bigint' })
+  salaryMin!: number | null;
+
+  @Column({ name: 'salary_max', nullable: true, type: 'bigint' })
+  salaryMax!: number | null;
+
+  @Column({ name: 'salary_currency', nullable: true, type: 'varchar' })
+  salaryCurrency!: string | null;
+
+  @Column({ name: 'job_type', nullable: true, type: 'varchar' })
+  jobType!: string | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  level!: string | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  experience!: string | null;
+
+  @Column({ name: 'experience_min', nullable: true, type: 'double precision' })
+  experienceMin!: number | null;
+
+  @Column({ name: 'experience_max', nullable: true, type: 'double precision' })
+  experienceMax!: number | null;
+
+  @Column({ nullable: true, type: 'text' })
+  logo!: string | null;
+
   @Column({ default: () => "'[]'::jsonb", type: 'jsonb' })
   locations!: string[];
 
@@ -56,15 +83,6 @@ export class JobPost {
 
   @Column({ name: 'seniority_level_name', nullable: true, type: 'varchar' })
   seniorityLevelName!: string | null;
-
-  @Column({ nullable: true, type: 'text' })
-  description!: string | null;
-
-  @Column({ nullable: true, type: 'text' })
-  requirements!: string | null;
-
-  @Column({ nullable: true, type: 'text' })
-  benefits!: string | null;
 
   @Column({ default: () => "'[]'::jsonb", type: 'jsonb' })
   skills!: string[];
