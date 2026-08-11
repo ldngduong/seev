@@ -16,13 +16,13 @@ export function DashboardPageHeader({
   return (
     <header
       className={cn(
-        'flex flex-col gap-4 border-b pb-5 md:flex-row md:items-center md:justify-between',
+        'flex flex-col gap-3 md:flex-row md:items-center md:justify-between',
         className,
       )}
     >
       <div className="min-w-0">
         {typeof title === 'string' ? (
-          <h1 className="truncate text-3xl font-semibold tracking-normal text-zinc-700">
+          <h1 className="truncate text-2xl font-semibold tracking-tight text-zinc-800">
             {title}
           </h1>
         ) : (

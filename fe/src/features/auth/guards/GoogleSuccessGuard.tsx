@@ -34,7 +34,7 @@ export function GoogleSuccessGuard() {
     <div className="grid min-h-[60svh] place-items-center">
       <div className="space-y-3 text-center">
         <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-foreground" />
-        <p className="text-sm text-muted-foreground">Completing Google sign in</p>
+        <p className="text-sm text-muted-foreground">Đang hoàn tất đăng nhập Google</p>
       </div>
     </div>
   )

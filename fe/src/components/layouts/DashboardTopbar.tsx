@@ -50,15 +50,15 @@ export function DashboardTopbar() {
                 <p className="truncate text-sm font-semibold text-zinc-700">{user.fullName}</p>
                 <p className="truncate text-xs text-muted-foreground">{user.email}</p>
               </div>
-              <AccountLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
-              <AccountLink to="/my-cvs" icon={UserRound} label="My CVs" />
+              <AccountLink to="/dashboard" icon={LayoutDashboard} label="Tổng quan" />
+              <AccountLink to="/my-cvs" icon={UserRound} label="CV của tôi" />
               <button
                 type="button"
                 onClick={() => void handleLogout()}
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-muted"
               >
                 <LogOut className="size-4" />
-                Logout
+                Đăng xuất
               </button>
             </PopoverContent>
           </Popover>

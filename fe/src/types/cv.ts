@@ -52,7 +52,7 @@ export interface CvAuditHistoryItem {
   audit_id: string
   file_name: string
   target_role: string | null
-  job_category_id: number | null
+  job_category_id: string | null
   job_category_name: string | null
   seniority_level_id: string | null
   seniority_level_name: string | null
@@ -81,6 +81,7 @@ export interface UserCv {
 export interface CvResearchJobSuggestion {
   match_score: number
   matched_terms: string[]
+  match_reason: string | null
   job: {
     id: string
     source: string
@@ -116,7 +117,7 @@ export interface CvResearchSession {
   job_suggestions: CvResearchJobSuggestion[]
   target: {
     target_role: string | null
-    job_category_id: number | null
+    job_category_id: string | null
     job_category_name: string | null
     seniority_level_id: string | null
     seniority_level_name: string | null

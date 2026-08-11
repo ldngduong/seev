@@ -4,7 +4,7 @@ export interface JobSearchIntentPayload {
   intentId: string;
   auditId: string | null;
   targetRole: string | null;
-  jobCategoryId: number | null;
+  jobCategoryId: string | null;
   jobCategoryName: string | null;
   seniorityLevelId: string | null;
   seniorityLevelName: string | null;
@@ -13,6 +13,8 @@ export interface JobSearchIntentPayload {
   locations: string[];
   sources: JobSource[];
   maxJobsPerSource: number;
+  categoryId?: string | null;
+  sourceCategoryFilters?: Partial<Record<JobSource, Record<string, string>>>;
 }
 
 export interface CrawledJob {
@@ -26,16 +28,25 @@ export interface CrawledJob {
   salaryMax: number | null;
   salaryCurrency: string | null;
   locations: string[];
-  seniorityText: string | null;
+  sourceSeniorityKey: string | null;
+  sourceSeniorityText: string | null;
+  seniorityMatches: Array<{
+    code: string;
+    mappingMethod: string;
+    confidence: number;
+    evidence: Record<string, unknown>;
+    isPrimary: boolean;
+  }>;
   experienceMin: number | null;
   experienceMax: number | null;
   jobType: string | null;
-  level: string | null;
   experience: string | null;
   skills: string[];
   postedAt: Date | null;
   expiredAt: Date | null;
   logo: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
   raw: Record<string, unknown>;
 }
 

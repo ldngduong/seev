@@ -70,9 +70,7 @@ export class CrawlerHttpService {
           return response.text;
         }
 
-        const error = new Error(
-          `HTTP ${response.status} while fetching ${url}`,
-        );
+        const error = new Error(`HTTP ${response.status} khi tải ${url}`);
 
         if (
           !this.isRetryableStatus(response.status) ||
@@ -95,7 +93,7 @@ export class CrawlerHttpService {
 
     throw lastError instanceof Error
       ? lastError
-      : new Error(`Failed to fetch ${url}`);
+      : new Error(`Không thể tải ${url}`);
   }
 
   private isRetryableStatus(status: number) {

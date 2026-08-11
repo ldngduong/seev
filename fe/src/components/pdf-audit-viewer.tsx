@@ -7,7 +7,7 @@ import 'react-pdf/dist/Page/TextLayer.css'
 import { Badge } from '@/components/ui/badge'
 import '@/lib/pdfjs-worker'
 import { useAuditStore } from '@/stores/audit-store'
-import type { AuditFeedback } from '@/types/cv'
+import type { AuditFeedback, FeedbackSeverity } from '@/types/cv'
 
 interface PdfAuditViewerProps {
   file: File | Blob | string | null
@@ -29,6 +29,7 @@ export function PdfAuditViewer({
     useState<HTMLElement | null>(null)
   const [popoverPosition, setPopoverPosition] =
     useState<PdfFeedbackPopoverPosition | null>(null)
+  const [pageWidth, setPageWidth] = useState<number | null>(null)
   const viewerRef = useRef<HTMLDivElement | null>(null)
   const openFeedbackPopover = useAuditStore(
     (state) => state.openFeedbackPopover,
@@ -61,6 +62,27 @@ export function PdfAuditViewer({
         : rects,
     )
   }, [searchableFeedbacks])
+
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer) {
+      return undefined
+    }
+
+    const measure = () => {
+      const innerWidth = Math.min(
+        840,
+        Math.max(320, viewer.clientWidth - (bare ? 0 : 32)),
+      )
+      setPageWidth((current) => (current === innerWidth ? current : innerWidth))
+    }
+    measure()
+
+    const observer = new ResizeObserver(measure)
+    observer.observe(viewer)
+
+    return () => observer.disconnect()
+  }, [bare])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -128,7 +150,7 @@ export function PdfAuditViewer({
   if (!file) {
     return (
       <div className="grid min-h-72 flex-1 place-items-center bg-background">
-        <p className="text-sm text-muted-foreground">Loading CV...</p>
+        <p className="text-sm text-muted-foreground">Đang tải CV...</p>
       </div>
     )
   }
@@ -138,7 +160,7 @@ export function PdfAuditViewer({
       <div
         ref={viewerRef}
         className={bare
-          ? 'relative flex-1 overflow-auto bg-background'
+          ? 'relative flex-1 bg-background'
           : 'relative flex-1 overflow-auto bg-muted/30 p-4'}
         onClickCapture={(event) => {
           const target = event.target as HTMLElement
@@ -162,14 +184,14 @@ export function PdfAuditViewer({
             setHighlightRects([])
             setLoadError(error.message)
           }}
-          loading={<p className="text-sm text-muted-foreground">Loading PDF...</p>}
+          loading={<p className="text-sm text-muted-foreground">Đang tải PDF...</p>}
           error={
             <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-              Failed to load PDF file{loadError ? `: ${loadError}` : '.'}
+              Không tải được file PDF{loadError ? `: ${loadError}` : '.'}
             </div>
           }
         >
-          <div className={bare ? 'flex flex-col gap-4' : 'mx-auto flex max-w-3xl flex-col gap-4'}>
+          <div className={bare ? 'mx-auto flex w-full flex-col items-center gap-4' : 'mx-auto flex max-w-3xl flex-col gap-4'}>
             {Array.from({ length: totalPages }, (_, index) => (
               <div
                 key={index}
@@ -180,14 +202,14 @@ export function PdfAuditViewer({
               >
                 {!bare ? (
                   <div className="border-b px-3 py-2">
-                    <Badge variant="outline">Page {index + 1}</Badge>
+                    <Badge variant="outline">Trang {index + 1}</Badge>
                   </div>
                 ) : null}
                 <div className="relative">
                   <Page
                     pageNumber={index + 1}
                     renderAnnotationLayer={false}
-                    width={760}
+                    width={pageWidth ?? 760}
                     onRenderTextLayerSuccess={() => {
                       window.setTimeout(() => {
                         updateHighlights()
@@ -235,6 +257,12 @@ interface PdfFeedbackPopoverPosition {
 
 type HighlightColor = AuditFeedback['highlight_color']
 
+const SEVERITY_LABELS: Record<FeedbackSeverity, string> = {
+  critical: 'Nghiêm trọng',
+  warning: 'Cảnh báo',
+  info: 'Thông tin',
+}
+
 function getPopoverPosition(anchorElement: HTMLElement): PdfFeedbackPopoverPosition {
   const anchorRect = anchorElement.getBoundingClientRect()
   const viewportGap = 12
@@ -271,7 +299,7 @@ function PdfHighlightOverlay({
             key={highlight.id}
             type="button"
             data-feedback-id={highlight.feedbackId}
-            aria-label="Open feedback"
+            aria-label="Mở phản hồi"
             className="absolute z-10 cursor-pointer select-none appearance-none rounded-[3px] border-0 p-0 outline-none focus-visible:ring-[2px] focus-visible:ring-ring/60"
             style={{
               left: highlight.left,
@@ -321,7 +349,7 @@ function PdfFeedbackPopover({
     <div
       data-feedback-popover=""
       role="dialog"
-      aria-label="CV feedback"
+      aria-label="Phản hồi CV"
       className="fixed z-50 flex max-h-[min(420px,calc(100vh-2rem))] flex-col gap-2.5 overflow-auto rounded-lg bg-popover p-2.5 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10"
       style={{
         left: position.left,
@@ -344,11 +372,11 @@ function PdfFeedbackPopover({
                 feedback.severity === 'critical' ? 'destructive' : 'secondary'
               }
             >
-              {feedback.severity}
+              {SEVERITY_LABELS[feedback.severity]}
             </Badge>
             <button
               type="button"
-              aria-label="Close feedback"
+              aria-label="Đóng phản hồi"
               className="rounded-sm px-1 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
               onClick={onClose}
             >
@@ -364,7 +392,7 @@ function PdfFeedbackPopover({
       {feedback.suggestion ? (
         <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
           <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
-            Suggested rewrite
+            Gợi ý viết lại
           </p>
           <p className="text-sm">{feedback.suggestion}</p>
         </div>

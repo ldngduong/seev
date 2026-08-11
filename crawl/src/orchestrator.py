@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from .config import PER_SOURCE_DELAY, SOURCE_CITY_MAPS, SOURCE_TIMEOUT
-from .http import HttpFetcher
+from .firecrawl import firecrawl_available
 from .models import Job, SearchQuery, SourceStatus, SearchResponse
 from .sources import build_source, enabled_source_names
 from .utils import normalize_city
@@ -33,9 +33,11 @@ def _rank_by_level(target: Level, jobs: list[Job]) -> list[Job]:
         "junior": 2,
         "middle": 3,
         "senior": 4,
-        "lead": 5,
+        "staff": 5,
+        "principal": 6,
+        "tech_lead": 5,
         "manager": 5,
-        "director": 5,
+        "head_director": 7,
     }
     target_rank = rank_of.get(target.value, 2)
     prof_cache: dict[str, object] = {}
@@ -64,16 +66,16 @@ def _crawl(query: SearchQuery) -> tuple[list[Job], dict[str, SourceStatus], int]
     the versioned `/api/v1/*` endpoints.
     """
     start = time.monotonic()
-    fetcher = HttpFetcher()
     sources = query.sources or enabled_source_names()
     valid = [s for s in sources if s in enabled_source_names()]
 
-    # Cap parallel sources: the long poles are the heavy/stealth ones (Now both
-    # crawl via the single shared Camoufox), and HTTP sources finish in ~0.5-3s.
-    # Running all of them at once only spikes memory — quality (jobs) is
-    # identical — so CRAWLER_SOURCE_CONCURRENCY keeps peak usage low enough for
-    # a 2GB VPS. Default 4: one slot for the browser source + the fast API ones.
+    # Cap parallel sources: Firecrawl giới hạn concurrent browsers theo plan
+    # (Free = 2, Hobby = 5). Khi bật Firecrawl, concurrency thực tế =
+    # min(CRAWLER_SOURCE_CONCURRENCY, CRAWLER_FIRECRAWL_CONCURRENCY); các
+    # nguồn JSON API (vietnamworks) chạy requests thuần nên vẫn nhanh.
     concurrency = int(os.environ.get("CRAWLER_SOURCE_CONCURRENCY", "4"))
+    if firecrawl_available():
+        concurrency = min(concurrency, int(os.environ.get("CRAWLER_FIRECRAWL_CONCURRENCY", "2")))
     max_workers = max(1, min(len(valid), concurrency))
 
     results: list[Job] = []
@@ -81,7 +83,7 @@ def _crawl(query: SearchQuery) -> tuple[list[Job], dict[str, SourceStatus], int]
     lock = __import__("threading").Lock()
 
     def worker(name: str):
-        source = build_source(name, fetcher)
+        source = build_source(name)
         city = normalize_city(query.location)
         if city and name in SOURCE_CITY_MAPS and city not in SOURCE_CITY_MAPS[name]:
             return name, "skipped", 0, f"city_not_supported: {city}", 0
@@ -158,7 +160,7 @@ def _crawl(query: SearchQuery) -> tuple[list[Job], dict[str, SourceStatus], int]
     else:
         capped.sort(key=lambda j: (j.posted_at is not None, j.posted_at), reverse=True)
 
-    elapsed_ms = int(time.monotonic() - start)
+    elapsed_ms = int((time.monotonic() - start) * 1000)
     log.info(
         "[crawl] finished: %d jobs from %d/%d sources in %dms (%s)",
         len(capped),
@@ -176,20 +178,12 @@ def _crawl(query: SearchQuery) -> tuple[list[Job], dict[str, SourceStatus], int]
 def run_search(query: SearchQuery) -> SearchResponse:
     capped, statuses, elapsed_ms = _crawl(query)
 
-    saved = 0
-    if query.persist:
-        from .db import init_db, persist_jobs
-
-        init_db()
-        saved = persist_jobs(capped)
-
     return SearchResponse(
         query=query,
         results=[j.to_output() for j in capped],
         per_source=statuses,
         total=len(capped),
         elapsed_ms=elapsed_ms,
-        saved=saved,
     )
 
 

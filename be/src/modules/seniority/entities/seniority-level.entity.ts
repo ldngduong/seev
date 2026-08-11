@@ -15,6 +15,10 @@ export class SeniorityLevel {
   code!: string;
 
   @Column({ type: 'varchar' })
+  track!:
+    'entry' | 'ic' | 'senior_ic' | 'technical_leadership' | 'people_management';
+
+  @Column({ type: 'varchar' })
   name!: string;
 
   @Column({ name: 'display_name', type: 'varchar' })
@@ -25,6 +29,15 @@ export class SeniorityLevel {
 
   @Column({ name: 'display_order', type: 'int' })
   displayOrder!: number;
+
+  @Column({ name: 'rank_in_track', type: 'int' })
+  rankInTrack!: number;
+
+  @Column({ name: 'experience_min', nullable: true, type: 'double precision' })
+  experienceMin!: number | null;
+
+  @Column({ name: 'experience_max', nullable: true, type: 'double precision' })
+  experienceMax!: number | null;
 
   @Column({ default: true, name: 'is_active', type: 'boolean' })
   isActive!: boolean;

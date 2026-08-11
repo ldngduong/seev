@@ -55,37 +55,37 @@ export function CvPdfThumbnail({
     return () => URL.revokeObjectURL(nextUrl)
   }, [file])
 
-  const fallback = (
-    <div className="grid h-full place-items-center">
-      <FileText className="size-9 text-muted-foreground" />
-    </div>
-  )
-
   return (
     <div
       ref={wrapperRef}
-      className="aspect-[210/297] overflow-hidden rounded-xl border bg-muted"
+      className="relative aspect-[210/297] w-full overflow-hidden rounded-xl bg-muted/60"
     >
-      {isLoading || !documentUrl || hasError ? (
-        fallback
+      {isLoading ? (
+        <div className="absolute inset-0 animate-pulse bg-muted" />
+      ) : !documentUrl || hasError ? (
+        <div className="absolute inset-0 grid place-items-center">
+          <FileText className="size-9 text-muted-foreground" />
+        </div>
       ) : (
-        <Document
-          file={documentUrl}
-          loading={fallback}
-          error={fallback}
-          onLoadError={() => setHasError(true)}
-        >
-          {width > 0 ? (
-            <Page
-              pageNumber={1}
-              width={width}
-              renderAnnotationLayer={false}
-              renderTextLayer={false}
-              className="pointer-events-none"
-              aria-label={name}
-            />
-          ) : null}
-        </Document>
+        <div className="absolute inset-0 overflow-hidden">
+          <Document
+            file={documentUrl}
+            loading={null}
+            error={null}
+            onLoadError={() => setHasError(true)}
+          >
+            {width > 0 ? (
+              <Page
+                pageNumber={1}
+                width={width}
+                renderAnnotationLayer={false}
+                renderTextLayer={false}
+                className="pointer-events-none"
+                aria-label={name}
+              />
+            ) : null}
+          </Document>
+        </div>
       )}
     </div>
   )

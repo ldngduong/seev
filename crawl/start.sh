@@ -8,8 +8,8 @@ cd "$(dirname "$0")"
 HOST="${1:-0.0.0.0}"
 PORT="${2:-8000}"
 
-if [ ! -d ".venv" ]; then
-  echo "[start] .venv not found — run ./run.sh first to create and install it." >&2
+if [ ! -x ".venv/bin/python" ] || ! .venv/bin/python -c "import uvicorn" >/dev/null 2>&1; then
+  echo "[start] .venv is missing or invalid — run ./run.sh to rebuild it." >&2
   exit 1
 fi
 

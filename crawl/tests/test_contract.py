@@ -1,4 +1,4 @@
-"""Contract tests: every job emitted to the BE must satisfy the V1 schema."""
+"""Contract tests: every job emitted to the BE must satisfy the V2 schema."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from src.models import CONTRACT_VERSION, CrawledJobV1, Job
+from src.models import CONTRACT_VERSION, CrawledJobV1, Job, SeniorityMatch
 
 REQUIRED_KEYS = [
     "contract_version",
@@ -21,16 +21,19 @@ REQUIRED_KEYS = [
     "salary_max",
     "salary_currency",
     "locations",
-    "seniority_text",
+    "source_seniority_key",
+    "source_seniority_text",
+    "seniority_matches",
     "experience_min",
     "experience_max",
     "job_type",
-    "level",
     "experience",
     "skills",
     "posted_at",
     "expired_at",
     "logo",
+    "category_id",
+    "category_name",
     "raw",
 ]
 
@@ -49,9 +52,10 @@ def make_job(**overrides) -> Job:
         salary_currency="USD",
         salary_text="1,000 - 2,000 USD",
         job_type="full_time",
-        level="senior",
         experience="5 years",
-        seniority_text="Senior",
+        source_seniority_key="5",
+        source_seniority_text="Nhân viên",
+        seniority_matches=[SeniorityMatch(code="senior", mapping_method="title_explicit", confidence=0.99, is_primary=True)],
         skills=["python", "django"],
         posted_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
         expires_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
@@ -108,18 +112,19 @@ def test_nullable_fields_default_to_none():
         salary_max=None,
         salary_text=None,
         salary_currency=None,
-        seniority_text=None,
+        source_seniority_key=None,
+        source_seniority_text=None,
+        seniority_matches=[],
         experience_min=None,
         experience_max=None,
         job_type=None,
-        level=None,
         experience=None,
         posted_at=None,
         expires_at=None,
         logo=None,
     ).to_contract()
     for key, value in contract.items():
-        if key in {"contract_version", "source", "source_job_id", "title", "source_url", "locations", "skills", "raw"}:
+        if key in {"contract_version", "source", "source_job_id", "title", "source_url", "locations", "skills", "seniority_matches", "raw"}:
             continue
         assert value is None, f"{key} should be None, got {value!r}"
 

@@ -8,9 +8,22 @@ cd "$(dirname "$0")"
 HOST="${2:-0.0.0.0}"
 PORT="${3:-8000}"
 
-if [ ! -d ".venv" ]; then
-  echo "[run] creating venv..."
-  python3 -m venv .venv
+if [ ! -x ".venv/bin/python" ] || ! .venv/bin/python -c "import sys" >/dev/null 2>&1; then
+  if [ -d ".venv" ]; then
+    echo "[run] existing venv is invalid; rebuilding it..."
+    python3 -m venv --clear .venv
+  else
+    echo "[run] creating venv..."
+    python3 -m venv .venv
+  fi
+elif [ ! -x ".venv/bin/pip" ]; then
+  echo "[run] pip is missing; repairing venv..."
+  .venv/bin/python -m ensurepip --upgrade
+fi
+
+if [ ! -x ".venv/bin/pip" ]; then
+  echo "[run] failed to prepare .venv/bin/pip" >&2
+  exit 1
 fi
 
 echo "[run] installing dependencies..."

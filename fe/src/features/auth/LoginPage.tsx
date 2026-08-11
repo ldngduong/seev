@@ -23,7 +23,7 @@ const LoginPage = () => {
   const redirect = searchParams.get('redirect') || '/research-cv'
   const googleError =
     searchParams.get('error') === 'google_auth_failed'
-      ? 'Google sign in was not completed.'
+      ? 'Google đăng nhập chưa hoàn tất.'
       : null
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -44,11 +44,11 @@ const LoginPage = () => {
 
   return (
     <AuthShell
-      eyebrow="Welcome back"
-      title="Sign in to Seev"
-      description="Review CV fit, keep your research history, and continue matching jobs from your workspace."
-      footerText="New to Seev?"
-      footerAction="Create an account"
+      eyebrow="Chào mừng trở lại"
+      title="Đăng nhập vào Seev"
+      description="Xem mức độ phù hợp của CV, lưu lịch sử research và tiếp tục tìm việc khớp với hồ sơ của bạn."
+      footerText="Chưa có tài khoản Seev?"
+      footerAction="Tạo tài khoản"
       footerHref={`/register?redirect=${encodeURIComponent(redirect)}`}
     >
       <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
@@ -58,16 +58,16 @@ const LoginPage = () => {
           label="Email"
           type="email"
           autoComplete="email"
-          placeholder="you@example.com"
+          placeholder="ban@example.com"
           error={form.formState.errors.email?.message}
           {...form.register('email')}
         />
         <AuthField
           id="password"
-          label="Password"
+          label="Mật khẩu"
           type="password"
           autoComplete="current-password"
-          placeholder="Your password"
+          placeholder="Mật khẩu của bạn"
           error={form.formState.errors.password?.message}
           {...form.register('password')}
         />
@@ -78,12 +78,12 @@ const LoginPage = () => {
           disabled={status === 'loading' || form.formState.isSubmitting}
         >
           <LogIn />
-          Sign in
+          Đăng nhập
         </Button>
 
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="h-px flex-1 bg-border" />
-          or
+          hoặc
           <span className="h-px flex-1 bg-border" />
         </div>
 

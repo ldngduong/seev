@@ -136,7 +136,7 @@ export class UsersService {
     const emailOwner = await this.userRepository.findOneBy({ email });
 
     if (emailOwner && emailOwner.id !== currentUserId) {
-      throw new ConflictException('Email is already registered.');
+      throw new ConflictException('Email đã được đăng ký.');
     }
 
     if (!username) {
@@ -146,7 +146,7 @@ export class UsersService {
     const usernameOwner = await this.userRepository.findOneBy({ username });
 
     if (usernameOwner && usernameOwner.id !== currentUserId) {
-      throw new ConflictException('Username is already taken.');
+      throw new ConflictException('Tên đăng nhập đã được sử dụng.');
     }
   }
 }

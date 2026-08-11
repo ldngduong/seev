@@ -1,3 +1,7 @@
+jest.mock('pdfjs-dist/legacy/build/pdf.mjs', () => ({
+  getDocument: jest.fn(),
+}));
+
 import { PdfParserService } from './pdf-parser.service';
 
 describe('PdfParserService', () => {

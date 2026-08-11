@@ -1,32 +1,8 @@
 import { apiClient } from "./api-client";
-import type { CvUploadValues } from "@/schemas/cv-audit.schema";
 import type {
-  AuditSummary,
-  CvAuditHistoryItem,
   CvResearchSession,
   UserCv,
 } from "@/types/cv";
-
-export async function createCvAudit(values: CvUploadValues) {
-  const formData = new FormData();
-  formData.append("resume", values.resume);
-  formData.append("jobCategoryId", String(values.jobCategoryId));
-  formData.append("seniorityLevelId", values.seniorityLevelId);
-  if (values.targetRole) {
-    formData.append("targetRole", values.targetRole);
-  }
-
-  const { data } = await apiClient.post<AuditSummary>("/cv/audits", formData);
-  return data;
-}
-
-export async function listCvAudits(limit = 30) {
-  const { data } = await apiClient.get<CvAuditHistoryItem[]>("/cv/audits", {
-    params: { limit },
-  });
-
-  return data;
-}
 
 export async function uploadUserCv(values: { file: File; name?: string }) {
   const formData = new FormData();
@@ -86,10 +62,10 @@ export async function createQuickCvResearch(userCvId: string) {
 
 export async function createCustomCvResearch(values: {
   userCvId: string;
-  jobCategoryId?: number;
+  jobCategoryId?: string;
   seniorityLevelId?: string;
   targetRole?: string;
-  jobDescription?: string;
+  locations?: string[];
 }) {
   const { data } = await apiClient.post<CvResearchSession>(
     "/cv/research/custom",

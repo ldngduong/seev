@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .models import Job, Level, SearchQuery
+from .models import Job, Level, SeniorityMatch
 from .seniority import (
     allowed_by_level_policy,
     detect_level,
@@ -26,17 +26,17 @@ from .seniority import (
 # label almost every individual-contributor posting that way, so treating it as
 # a junior signal would drop all entry jobs. Experience caps handle filtering.
 VN_LEVEL_LABELS: dict[str, str] = {
-    "giám đốc": "director",
-    "giam doc": "director",
+    "giám đốc": "head_director",
+    "giam doc": "head_director",
     "trưởng phòng": "manager",
     "truong phong": "manager",
     "quản lý": "manager",
     "quan ly": "manager",
     "quản lý dự án": "manager",
-    "trưởng nhóm": "lead",
-    "truong nhom": "lead",
-    "team lead": "lead",
-    "tech lead": "lead",
+    "trưởng nhóm": "tech_lead",
+    "truong nhom": "tech_lead",
+    "team lead": "tech_lead",
+    "tech lead": "tech_lead",
     "chuyên gia": "senior",
     "chuyen gia": "senior",
     "cao cấp": "senior",
@@ -87,7 +87,7 @@ class SourceProfile:
     name: str
     supports_level: bool = False
     # canonical Level.value -> source-side filter values (from the site's own
-    # UI/API taxonomy, e.g. VietnamWorks jobLevelId, TopDev job_levels_ids,
+    # UI/API taxonomy, e.g. VietnamWorks jobLevelId,
     # ITViec job_level_names[], TopCV ?position=).
     level_filter_ids: dict[str, list[str]] = field(default_factory=dict)
     # raw source level label/id (lowercased) -> canonical Level.value
@@ -99,6 +99,9 @@ class SourceProfile:
     # consider the job body when detecting level (off by default: body text is
     # noisy, e.g. "hỗ trợ nhân viên" inside job).
     detect_from_body: bool = False
+    # Some boards publish a coarse/default experience value in JSON-LD. Keep
+    # that value for display/scoring, but do not let it manufacture seniority.
+    allow_experience_seniority: bool = True
 
     # ------------------------------------------------------------ level query
     def level_filter_values(self, level: Level | None) -> list[str]:
@@ -121,7 +124,7 @@ class SourceProfile:
 
     # ------------------------------------------------------------------ level
     def detect(self, job: Job) -> Optional[Level]:
-        for raw in (job.seniority_text, job.level):
+        for raw in (job.source_seniority_text, job.source_seniority_key):
             if raw:
                 key = raw.strip().lower()
                 canonical = self.raw_level_map.get(key)
@@ -129,21 +132,92 @@ class SourceProfile:
                     return Level(canonical)
         return detect_level(
             job.title,
-            seniority_text=job.seniority_text,
-            level_raw=job.level,
+            seniority_text=job.source_seniority_text,
+            level_raw=job.source_seniority_key,
             body_text=job.description if self.detect_from_body else None,
         )
 
     def normalize(self, job: Job) -> Level | None:
         """Fill canonical level, experience years and stable labels in place."""
-        job.experience_min, job.experience_max = parse_experience_years(job.experience)
+        parsed_min, parsed_max = parse_experience_years(job.experience)
+        if job.experience_min is None:
+            job.experience_min = parsed_min
+        if job.experience_max is None:
+            job.experience_max = parsed_max
         label = normalize_experience_text(job.experience)
         if label:
             job.experience = label
         detected = self.detect(job)
-        if detected:
-            job.level = detected.value
+        if not job.seniority_matches:
+            job.seniority_matches = self._map_seniority(job, detected)
         return detected
+
+    def _map_seniority(self, job: Job, detected: Level | None) -> list[SeniorityMatch]:
+        """Map one or more canonical levels without pretending broad native buckets are exact."""
+        import re
+
+        title = job.title.lower()
+        explicit_patterns = [
+            ("head_director", r"\b(director|head of|vp|cto|cio)\b|giám đốc"),
+            ("manager", r"\b(engineering manager|development manager|project manager)\b|trưởng phòng|quản lý"),
+            ("tech_lead", r"\b(tech(?:nical)? lead|team lead|lead developer|lead engineer)\b|trưởng nhóm"),
+            ("principal", r"\bprincipal\b"),
+            ("staff", r"\bstaff (?:engineer|developer)\b"),
+            ("senior", r"\b(?:senior|sr\.?)(?:\b|_)|cao cấp"),
+            ("middle", r"\b(?:middle|mid[- ]?level|mid)\b"),
+            ("junior", r"\b(?:junior|jr\.?)\b"),
+            ("fresher", r"\b(?:fresher|graduate)\b|mới tốt nghiệp"),
+            ("intern", r"\b(?:intern|internship)\b|thực tập"),
+        ]
+        explicit = [code for code, pattern in explicit_patterns if re.search(pattern, title)]
+        if explicit:
+            return [
+                SeniorityMatch(
+                    code=code,
+                    mapping_method="title_explicit",
+                    confidence=0.99,
+                    evidence={"title": job.title, "matched_codes": explicit},
+                    is_primary=index == 0,
+                )
+                for index, code in enumerate(explicit)
+            ]
+
+        # Only precise native labels may decide a level. Broad labels such as
+        # TopCV/VietnamWorks "Nhân viên" are intentionally absent from maps.
+        if detected:
+            return [SeniorityMatch(
+                code=detected.value,
+                mapping_method="native_exact",
+                confidence=0.98,
+                evidence={
+                    "source_key": job.source_seniority_key,
+                    "source_text": job.source_seniority_text,
+                },
+                is_primary=True,
+            )]
+
+        if not self.allow_experience_seniority:
+            return []
+        years = job.experience_min
+        if years is None:
+            return []
+        if years < 1:
+            candidates = ["fresher", "junior"]
+        elif years < 2:
+            candidates = ["junior"]
+        elif years < 4:
+            candidates = ["junior", "middle"]
+        elif years < 6:
+            candidates = ["middle", "senior"]
+        else:
+            candidates = ["senior"]
+        return [SeniorityMatch(
+            code=code,
+            mapping_method="experience_range",
+            confidence=0.9,
+            evidence={"experience_min": job.experience_min, "experience_max": job.experience_max},
+            is_primary=index == len(candidates) - 1,
+        ) for index, code in enumerate(candidates)]
 
     def accepts(self, target: Level, job: Job) -> bool:
         detected = self.detect(job)
@@ -181,6 +255,7 @@ def _vn_profile(
     job_type_map: dict[str, str] | None = None,
     max_years_by_target: dict[str, float] | None = None,
     detect_from_body: bool = False,
+    allow_experience_seniority: bool = True,
 ) -> SourceProfile:
     return SourceProfile(
         name=name,
@@ -190,17 +265,15 @@ def _vn_profile(
         job_type_map=job_type_map or VN_JOB_TYPES,
         max_years_by_target=max_years_by_target or {},
         detect_from_body=detect_from_body,
+        allow_experience_seniority=allow_experience_seniority,
     )
 
 
 PROFILES: dict[str, SourceProfile] = {
     # Source-side level filters, verified against each site's own UI/API:
     #   vietnamworks : jobLevelId (5=Nhân viên, every IC; 8/1/7/3 = intern/fresher/manager/director)
-    #   topdev       : job_levels_ids (ids from /td/v2/taxonomies?fields=job_levels)
     #   itviec       : job_level_names[] (no "Middle" option: mid uses "Senior")
     #   topcv        : ?position= ("Cấp bậc" filter)
-    #   jobsgo/viecoi/indeed : no usable seniority filter on the search side ->
-    #                          keyword stays clean and the post-crawl policy filters.
     "topcv": _vn_profile(
         "topcv",
         supports_level=True,
@@ -213,9 +286,11 @@ PROFILES: dict[str, SourceProfile] = {
             "junior": ["1"],
             "middle": ["1"],
             "senior": ["1"],
-            "lead": ["2"],
+            "staff": ["1"],
+            "principal": ["1"],
+            "tech_lead": ["2"],
             "manager": ["3", "10"],
-            "director": ["30", "25"],
+            "head_director": ["30", "25"],
         },
     ),
     "vietnamworks": _vn_profile(
@@ -231,9 +306,11 @@ PROFILES: dict[str, SourceProfile] = {
             "junior": ["5"],
             "middle": ["5"],
             "senior": ["5"],
-            "lead": ["5"],
+            "staff": ["5"],
+            "principal": ["5"],
+            "tech_lead": ["5"],
             "manager": ["7"],
-            "director": ["3"],
+            "head_director": ["3"],
         },
         extra_level_map={
             # jobLevelId values give direct evidence for these buckets; id 5
@@ -241,69 +318,18 @@ PROFILES: dict[str, SourceProfile] = {
             "8": "intern",
             "1": "fresher",
             "7": "manager",
-            "3": "director",
+            "3": "head_director",
             # jobLevelVI labels
             "thực tập sinh": "intern",
             "chuyên viên": "middle",
             "chuyên gia": "senior",
             "quản lý": "manager",
             "trưởng phòng": "manager",
-            "giám đốc": "director",
+            "giám đốc": "head_director",
         },
     ),
-    "topdev": _vn_profile(
-        "topdev",
-        supports_level=True,
-        # ids from GET /td/v2/taxonomies?fields=job_levels (current taxonomy):
-        # 1616=Thực tập(Intern), 12507=Mới tốt nghiệp(Fresher), 1617=Nhân viên(Junior),
-        # 12506=Chuyên viên(Middle), 8665=Chuyên viên cấp cao(Senior),
-        # 7276=Trưởng nhóm(Leader), 1620=Trưởng phòng(Manager), 11029=Giám đốc(Director)
-        level_filter_ids={
-            "intern": ["1616"],
-            "fresher": ["12507"],
-            "junior": ["1617"],
-            "middle": ["12506"],
-            "senior": ["8665"],
-            "lead": ["7276"],
-            "manager": ["1620"],
-            "director": ["11029"],
-        },
-        extra_level_map={
-            # job_levels_str labels from the live API ("Chuyên viên cấp cao"
-            # for senior) — exact-match keys, checked before the title/alias
-            # detection so senior postings don't degrade to middle.
-            "chuyên viên cấp cao": "senior",
-            "chuyên viên cao cấp": "senior",
-            "phó giám đốc": "director",
-            "phó trưởng nhóm": "lead",
-            "phó phòng": "manager",
-            "mới tốt nghiệp": "fresher",
-            "intern": "intern",
-            "internship": "intern",
-            "fresher": "fresher",
-            "junior": "junior",
-            "jr": "junior",
-            "middle": "middle",
-            "mid": "middle",
-            "senior": "senior",
-            "sr": "senior",
-            "lead": "lead",
-            "leader": "lead",
-            "manager": "manager",
-            "director": "director",
-        },
-        job_type_map={
-            "fulltime": "full_time",
-            "full time": "full_time",
-            "part-time": "part_time",
-            "part time": "part_time",
-            "freelance": "contract",
-            "contract": "contract",
-            "internship": "internship",
-            "temporary": "contract",
-        },
-    ),
-    "itviec": _vn_profile(        "itviec",
+    "itviec": _vn_profile(
+        "itviec",
         supports_level=True,
         # job_level_names[] from the site's "Job level" filter. ITViec has no
         # "Middle" option: mid-level postings are published under "Senior".
@@ -313,57 +339,15 @@ PROFILES: dict[str, SourceProfile] = {
             "junior": ["Junior"],
             "middle": ["Senior"],
             "senior": ["Senior"],
-            "lead": ["Manager"],
+            "staff": ["Senior"],
+            "principal": ["Senior"],
+            "tech_lead": ["Manager"],
             "manager": ["Manager"],
-            "director": ["Manager"],
+            "head_director": ["Manager"],
         },
-    ),
-    "jobsgo": _vn_profile(
-        "jobsgo",
-    ),
-    "viecoi": _vn_profile(
-        "viecoi",
-    ),
-    "careerviet": _vn_profile(
-        "careerviet",
-        extra_level_map={
-            "intern": "intern",
-            "internship": "intern",
-            "thực tập sinh": "intern",
-            "fresher": "fresher",
-            "mới tốt nghiệp": "fresher",
-            "junior": "junior",
-            "jr": "junior",
-            "middle": "middle",
-            "mid": "middle",
-            "senior": "senior",
-            "sr": "senior",
-            "lead": "lead",
-            "leader": "lead",
-            "manager": "manager",
-            "director": "director",
-        },
-        job_type_map=VN_JOB_TYPES,
-    ),
-    "indeed": _vn_profile(
-        "indeed",
-        extra_level_map={
-            "intern": "intern",
-            "internship": "intern",
-            "trainee": "intern",
-            "fresher": "fresher",
-            "junior": "junior",
-            "jr": "junior",
-            "middle": "middle",
-            "mid": "middle",
-            "senior": "senior",
-            "sr": "senior",
-            "lead": "lead",
-            "leader": "lead",
-            "manager": "manager",
-            "director": "director",
-        },
-        job_type_map=VN_JOB_TYPES,
+        # Live verification found unrelated postings all reporting 10 months
+        # in JSON-LD. Preserve it as source data, never as level evidence.
+        allow_experience_seniority=False,
     ),
 }
 

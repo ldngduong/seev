@@ -90,14 +90,14 @@ export class NotificationsService {
   }
 
   private titleFor(status: NotificationStatus) {
-    if (status === 'completed') return 'Research completed';
-    if (status === 'failed') return 'Research needs attention';
-    return 'Research in progress';
+    if (status === 'completed') return 'Research hoàn tất';
+    if (status === 'failed') return 'Research cần xem lại';
+    return 'Research đang chạy';
   }
 
   private defaultMessageFor(status: NotificationStatus) {
-    if (status === 'completed') return 'Your CV research is ready to review.';
-    if (status === 'failed') return 'The research stopped before completion.';
-    return 'Your CV is being reviewed.';
+    if (status === 'completed') return 'Bản research CV của bạn đã sẵn sàng để xem.';
+    if (status === 'failed') return 'Research dừng trước khi hoàn tất.';
+    return 'CV của bạn đang được phân tích.';
   }
 }

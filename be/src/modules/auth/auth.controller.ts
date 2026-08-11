@@ -79,7 +79,7 @@ export class AuthController {
     const refreshToken = this.getRefreshToken(req);
 
     if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token is missing.');
+      throw new UnauthorizedException('Thiếu refresh token.');
     }
 
     const session = await this.authService.refresh(

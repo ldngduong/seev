@@ -15,7 +15,7 @@ export function GoogleAuthButton() {
       }}
     >
       <CircleUserRound />
-      Continue with Google
+      Tiếp tục với Google
     </Button>
   )
 }

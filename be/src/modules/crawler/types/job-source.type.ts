@@ -1,12 +1,4 @@
-export const JOB_SOURCES = [
-  'topcv',
-  'vietnamworks',
-  'indeed',
-  'topdev',
-  'itviec',
-  'jobsgo',
-  'viecoi',
-] as const;
+export const JOB_SOURCES = ['topcv', 'vietnamworks', 'itviec'] as const;
 
 export type JobSource = (typeof JOB_SOURCES)[number];
 

@@ -1,14 +1,13 @@
-"""Transport chung cho các nguồn: requests thuần + BrightData bypass.
+"""Transport chung cho các nguồn: Firecrawl (HTML) + requests thuần (JSON API).
 
-Thay cho browser.py cũ (Camoufox/Playwright) và curl_cffi — đã loại toàn bộ:
-
-  Nguồn an toàn (jobsgo, viecoi, vietnamworks, topdev):
-    1. requests (UA quay vòng, retry 2 lần).
-    2. 403/429 hoặc Cloudflare challenge -> BrightData Web Unlocker API.
-  Nguồn nguy hiểm (indeed, topcv, itviec):
-    Đi thẳng BrightData (`prefer_bypass=True`) — requests thường bị chặn
-    100%, thử trước chỉ tốn thời gian và làm nặng thêm rate-limit.
-  Vẫn fail: raise RuntimeError -> source báo lỗi riêng, pipeline tiếp tục.
+  Nguồn HTML (topcv, itviec):
+    Lấy qua Firecrawl `/v2/scrape` (rawHtml đã render JS, `proxy: auto`).
+    Fail nhanh nếu chưa có key — không thử requests trước (bị chặn 100%
+    ở các nguồn này, thử chỉ tốn thời gian).
+  Nguồn JSON API (vietnamworks):
+    `json_mode=True` — requests thuần (0 credit Firecrawl), chỉ retry;
+    không có lớp bypass nữa.
+  Mọi fail đều raise RuntimeError -> source báo lỗi riêng, pipeline tiếp tục.
 """
 
 from __future__ import annotations
@@ -19,14 +18,14 @@ import time
 
 import requests
 
-from .brightdata import brightdata_available, fetch_via_brightdata, is_cloudflare_page
 from .config import HEADERS_TEMPLATE, RETRY_BACKOFF, USER_AGENTS
+from .firecrawl import firecrawl_available, scrape_via_firecrawl
 
 log = logging.getLogger("crawler")
 
 
 class _Resp:
-    """Response wrapper chung cho requests và BrightData path."""
+    """Response wrapper chung cho requests và Firecrawl path."""
 
     __slots__ = ("status_code", "text", "ok")
 
@@ -42,13 +41,13 @@ class _Resp:
 
 
 class RobustFetcher:
-    """Transport chống block.
+    """Transport: Firecrawl cho HTML, requests cho JSON API.
 
-    `prefer_bypass=True` cho nguồn luôn bị chặn (indeed, topcv, itviec):
-    gọi thẳng BrightData, không thử requests. Mặc định (nguồn an toàn):
-    requests trước; 403/429 hoặc Cloudflare interstitial -> BrightData.
-    JSON mode fallback coi rendered body như payload. Mọi fail đều raise
-    RuntimeError để source báo lỗi riêng và pipeline tiếp tục.
+    `prefer_bypass=True` (topcv, itviec): thẳng Firecrawl proxy auto.
+    Nguồn an toàn: Firecrawl với proxy auto (basic 1 credit; enhanced chỉ khi
+    cần). `json_mode=True` (vietnamworks): requests thuần, không qua
+    Firecrawl. `bypass_used` báo Firecrawl đã chạy để source giới hạn số trang
+    (mỗi trang = 1 credit) cho các nguồn đi thẳng Firecrawl.
     """
 
     def __init__(
@@ -64,49 +63,55 @@ class RobustFetcher:
         self._session = requests.Session()
         self._session.headers.update(dict(HEADERS_TEMPLATE))
 
+    @staticmethod
+    def _url_with_params(url: str, params: dict | None) -> str:
+        if not params:
+            return url
+        from urllib.parse import urlencode
+
+        sep = "&" if "?" in url else "?"
+        return f"{url}{sep}{urlencode(params)}"
+
     def _request(self, method: str, url: str, **kw) -> _Resp:
-        if not self.prefer_bypass:
-            headers = kw.pop("headers", None)
-            if headers:
-                merged = dict(self._session.headers)
-                merged.update(headers)
-                self._session.headers.update(merged)
-            kw.setdefault("timeout", 30)
+        # ---- Firecrawl path: mọi HTML page đều qua đây ----
+        if not self.json_mode:
+            if not firecrawl_available():
+                raise RuntimeError(
+                    f"{self.name} unreachable: chưa cấu hình CRAWLER_FIRECRAWL_API_KEY"
+                )
+            if method.lower() != "get":
+                raise RuntimeError(f"{self.name}: Firecrawl chỉ hỗ trợ GET")
+            full_url = self._url_with_params(url, kw.get("params"))
+            body = scrape_via_firecrawl(full_url)
+            if body:
+                self.bypass_used = True
+                return _Resp(200, body)
+            raise RuntimeError(f"{self.name} unreachable after Firecrawl (target lỗi hoặc rỗng)")
 
-            last: Exception = RuntimeError(f"{self.name} unreachable")
-            for attempt in range(2):
-                try:
-                    r = self._session.request(method, url, **kw)
-                    if r.status_code in (403, 429):
-                        last = RuntimeError(f"HTTP {r.status_code} (blocked)")
-                    elif not self.json_mode and is_cloudflare_page(r.text):
-                        last = RuntimeError("Cloudflare challenge served with HTTP 200")
-                    else:
-                        return _Resp(r.status_code, r.text)
-                except Exception as e:  # noqa: BLE001
-                    last = e
-                if attempt == 0:
-                    time.sleep(RETRY_BACKOFF + random.uniform(0, 0.5))
-        else:
-            last = RuntimeError(f"{self.name} đi thẳng BrightData")
+        # ---- JSON API path: requests thuần, retry có backoff ----
+        headers = kw.pop("headers", None)
+        if headers:
+            merged = dict(self._session.headers)
+            merged.update(headers)
+            self._session.headers.update(merged)
+        kw.setdefault("timeout", 30)
 
-        if not brightdata_available():
-            raise RuntimeError(
-                f"{self.name} unreachable (bị chặn, chưa cấu hình CRAWLER_BRIGHTDATA_KEY): {last}"
-            )
-
-        log.warning("[%s] thử BrightData unlocker cho %s", self.name, url)
-        self.bypass_used = True
-        body = fetch_via_brightdata(
-            url, method=method, json_body=kw.get("json"), params=kw.get("params")
-        )
-        if body:
-            return _Resp(200, body)
-        raise RuntimeError(f"{self.name} unreachable after BrightData: {last}")
+        last: Exception = RuntimeError(f"{self.name} unreachable")
+        for attempt in range(2):
+            try:
+                r = self._session.request(method, url, **kw)
+                if r.status_code in (403, 429, 500, 502, 503):
+                    last = RuntimeError(f"HTTP {r.status_code} (blocked)")
+                else:
+                    return _Resp(r.status_code, r.text)
+            except Exception as e:  # noqa: BLE001
+                last = e
+            if attempt == 0:
+                time.sleep(RETRY_BACKOFF + random.uniform(0, 0.5))
+        raise RuntimeError(f"{self.name} unreachable after requests: {last}")
 
     def get(self, url: str, **kw) -> _Resp:
         return self._request("get", url, **kw)
 
     def post(self, url: str, **kw) -> _Resp:
         return self._request("post", url, **kw)
-

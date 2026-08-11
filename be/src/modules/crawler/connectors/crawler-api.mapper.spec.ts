@@ -6,7 +6,7 @@ import {
 
 describe('crawler-api.mapper', () => {
   const v1Job: CrawlerJobV1 = {
-    contract_version: 1,
+    contract_version: 2,
     source: 'topcv',
     source_job_id: '42',
     title: 'Backend Developer',
@@ -17,11 +17,20 @@ describe('crawler-api.mapper', () => {
     salary_max: 2000,
     salary_currency: 'USD',
     locations: ['Ho Chi Minh'],
-    seniority_text: 'Senior',
+    source_seniority_key: '1',
+    source_seniority_text: 'Nhân viên',
+    seniority_matches: [
+      {
+        code: 'senior',
+        mapping_method: 'title_explicit',
+        confidence: 0.99,
+        evidence: { title: 'Backend Developer' },
+        is_primary: true,
+      },
+    ],
     experience_min: 4,
     experience_max: 5,
     job_type: 'full_time',
-    level: 'senior',
     experience: '5 years',
     skills: ['python', 'django'],
     posted_at: '2026-08-01T00:00:00+00:00',
@@ -43,11 +52,11 @@ describe('crawler-api.mapper', () => {
     expect(job.salaryMax).toBe(2000);
     expect(job.salaryCurrency).toBe('USD');
     expect(job.locations).toEqual(['Ho Chi Minh']);
-    expect(job.seniorityText).toBe('Senior');
+    expect(job.sourceSeniorityText).toBe('Nhân viên');
+    expect(job.seniorityMatches[0].code).toBe('senior');
     expect(job.experienceMin).toBe(4);
     expect(job.experienceMax).toBe(5);
     expect(job.jobType).toBe('full_time');
-    expect(job.level).toBe('senior');
     expect(job.experience).toBe('5 years');
     expect(job.skills).toEqual(['python', 'django']);
     expect(job.postedAt).toEqual(new Date('2026-08-01T00:00:00+00:00'));
@@ -58,13 +67,23 @@ describe('crawler-api.mapper', () => {
 
   it('defaults missing optional fields to null/[]', () => {
     const job = mapCrawledJobV1({
-      source: 'topdev',
+      contract_version: 2,
+      source: 'topcv',
       source_job_id: '7',
       title: 'Frontend',
       source_url: 'https://topdev.vn/7',
       locations: [],
       skills: [],
       raw: {},
+      seniority_matches: [
+        {
+          code: 'junior',
+          mapping_method: 'title_explicit',
+          confidence: 0.99,
+          evidence: {},
+          is_primary: true,
+        },
+      ],
       posted_at: 'not-a-date',
     });
 

@@ -1,11 +1,7 @@
 export type JobSourceName =
   | 'topcv'
   | 'vietnamworks'
-  | 'indeed'
-  | 'topdev'
   | 'itviec'
-  | 'jobsgo'
-  | 'viecoi'
 
 export interface JobCrawlRun {
   id: string
@@ -26,7 +22,7 @@ export interface JobSearchIntent {
   auditId: string | null
   userId: string | null
   targetRole: string | null
-  jobCategoryId: number | null
+  jobCategoryId: string | null
   jobCategoryName: string | null
   seniorityLevelId: string | null
   seniorityLevelName: string | null
@@ -65,7 +61,7 @@ export interface JobPost {
   logo: string | null
   locations: string[]
   seniorityText: string | null
-  jobCategoryId: number | null
+  jobCategoryId: string | null
   jobCategoryName: string | null
   seniorityLevelId: string | null
   seniorityLevelName: string | null

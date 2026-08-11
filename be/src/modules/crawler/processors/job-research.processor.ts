@@ -23,7 +23,7 @@ export class JobResearchProcessor extends WorkerHost {
 
   async process(job: Job<{ intentId: string }>) {
     if (job.name !== JOB_RESEARCH_JOB) {
-      this.logger.warn(`Ignored unsupported crawler job: ${job.name}`);
+      this.logger.warn(`Bỏ qua job crawler không được hỗ trợ: ${job.name}`);
       return;
     }
 
@@ -35,7 +35,7 @@ export class JobResearchProcessor extends WorkerHost {
     if (!job?.data.intentId) return;
 
     this.logger.error(
-      `Job research ${job.data.intentId} failed: ${error.message}`,
+      `Job research ${job.data.intentId} thất bại: ${error.message}`,
     );
     await this.jobResearchService.markWorkerFailure(
       job.data.intentId,

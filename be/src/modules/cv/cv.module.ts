@@ -6,7 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AiModule } from '../ai/ai.module';
 import { CrawlerModule } from '../crawler/crawler.module';
-import { JobFamilyCategory } from '../job-category/entities/job-family-category.entity';
+import { JobCategory } from '../job-category/entities/job-category.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
 import { ResearchRealtimeModule } from '../research-realtime/research-realtime.module';
 import { StorageModule } from '../storage/storage.module';
@@ -35,7 +35,7 @@ import { CV_RESEARCH_QUEUE } from './types/cv-research-queue.type';
       CvAudit,
       CvAuditBatch,
       CvResearchSession,
-      JobFamilyCategory,
+      JobCategory,
       SeniorityLevel,
       UserCv,
     ]),

@@ -16,27 +16,27 @@ export function DataPagination({
   if (totalPages <= 1) return null
 
   return (
-    <nav className="flex items-center justify-between gap-3 border-t pt-4" aria-label="Pagination">
-      <p className="text-sm text-muted-foreground">{total} results</p>
+    <nav className="flex items-center justify-between gap-3 border-t pt-4" aria-label="Phân trang">
+      <p className="text-sm text-muted-foreground">{total} kết quả</p>
       <div className="flex items-center gap-2">
         <Button
           type="button"
           variant="outline"
           size="icon-sm"
-          aria-label="Previous page"
+          aria-label="Trang trước"
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
         >
           <ChevronLeft />
         </Button>
         <span className="min-w-20 text-center text-sm text-zinc-600">
-          {page} of {totalPages}
+          {page} / {totalPages}
         </span>
         <Button
           type="button"
           variant="outline"
           size="icon-sm"
-          aria-label="Next page"
+          aria-label="Trang sau"
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
         >

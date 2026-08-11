@@ -11,27 +11,27 @@ import {
 } from 'class-validator';
 
 export class RegisterDto {
-  @IsString()
-  @MaxLength(160)
+  @IsString({ message: 'Vui lòng nhập tên đầy đủ.' })
+  @MaxLength(160, { message: 'Tên tối đa 160 ký tự.' })
   fullName!: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(80)
+  @MaxLength(80, { message: 'Tên đăng nhập tối đa 80 ký tự.' })
   username?: string;
 
-  @IsEmail()
+  @IsEmail({}, { message: 'Email không hợp lệ.' })
   @MaxLength(255)
   email!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(8, { message: 'Mật khẩu phải có ít nhất 8 ký tự.' })
   @MaxLength(128)
   password!: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(40)
+  @MaxLength(40, { message: 'Số điện thoại tối đa 40 ký tự.' })
   phone?: string;
 
   @IsOptional()

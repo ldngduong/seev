@@ -1,9 +1,9 @@
 """TopCV source — server-rendered search page sau Cloudflare.
 
-Nguồn nguy hiểm: requests thuần bị Cloudflare chặn 100% (403/429 hoặc
-challenge), nên `prefer_bypass=True` — đi thẳng BrightData Web Unlocker API,
-không thử requests lãng phí. Khi bypass hoạt động chỉ fetch page đầu
-(`_bypass=True` -> pages=1) để tiết kiệm phí BrightData.
+Nguồn nguy hiểm: requests thuần bị Cloudflare chặn 100%, nên
+`prefer_bypass=True` — đi thẳng Firecrawl (`proxy: auto`), không thử requests
+lãng phí. Khi chạy qua Firecrawl chỉ fetch page đầu (`_bypass=True` ->
+pages=1) để tiết kiệm credit (1 credit/page).
 """
 
 from __future__ import annotations
@@ -13,12 +13,11 @@ import re
 
 from bs4 import BeautifulSoup
 
-from ..brightdata import is_cloudflare_page
-from ..config import TOPCV_CITY_PARAMS
+from ..config import TOPCV_CITY_PARAMS, TOPCV_DETAIL_BATCH_SIZE
 from ..models import Job, SearchQuery
+from ..firecrawl import scrape_job_list_with_details
 from ..source_profiles import get_profile
-from ..transport import RobustFetcher
-from ..utils import normalize_city, parse_salary_vnd, parse_vn_date, slugify
+from ..utils import normalize_city, parse_iso, parse_salary_vnd, parse_vn_date, slugify
 from .base import BaseSource
 
 log = logging.getLogger("crawler")
@@ -32,15 +31,43 @@ class TopCVSource(BaseSource):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._robust = RobustFetcher(self.name, prefer_bypass=True)
         self._bypass = False
+        self._details: dict[str, dict] = {}
 
     # ------------------------------------------------------------------ fetch
     def _get_html(self, url: str) -> str:
-        """Fetch qua BrightData (prefer_bypass). Raise khi fail để báo lỗi nguồn."""
-        resp = self._robust.get(url)
-        self._bypass = self._robust.bypass_used
-        return resp.text
+        """Fetch qua Firecrawl (prefer_bypass). Raise khi fail để báo lỗi nguồn."""
+        html, details = scrape_job_list_with_details(
+            url,
+            link_selector='.job-item-search-result a[href*="/viec-lam/"],.job-item a[href*="/viec-lam/"]',
+            batch_size=TOPCV_DETAIL_BATCH_SIZE,
+        )
+        self._bypass = True
+        if isinstance(details, list):
+            self._details = {
+                str(item.get("url", "")).split("?")[0]: item
+                for item in details if isinstance(item, dict)
+            }
+        return html
+
+    def _apply_detail(self, job: Job) -> None:
+        detail = self._details.get(job.url.split("?")[0])
+        if not detail or detail.get("status") != 200:
+            return
+        job.posted_at = parse_iso(detail.get("datePosted")) or job.posted_at
+        job.expires_at = parse_iso(detail.get("validThrough"))
+        job.source_seniority_text = detail.get("occupationalCategory")
+        months = detail.get("monthsOfExperience")
+        if isinstance(months, (int, float)) and months >= 0:
+            years = float(months) / 12
+            job.experience_min = years
+            job.experience_max = years
+            job.experience = f"{int(months)} tháng" if months < 12 else f"{years:g} năm"
+        employment = detail.get("employmentType")
+        if isinstance(employment, str):
+            job.job_type = get_profile(self.name).map_job_type(employment.replace("_", " "))
+        job.raw["deadline_source"] = "topcv_json_ld"
+        job.raw["seniority_source"] = "topcv_json_ld"
 
     def fetch(self, query: SearchQuery) -> list[Job]:
         profile = get_profile(self.name)
@@ -53,7 +80,7 @@ class TopCVSource(BaseSource):
         kw_slug = slugify(keyword)
         jobs: list[Job] = []
         seen: set[str] = set()
-        # BrightData tốn phí mỗi request, chỉ fetch page đầu khi bypass.
+        # Firecrawl tốn 1 credit mỗi request, chỉ fetch page đầu khi bypass.
         pages = query.pages if not self._bypass else 1
         # ?position= accepts one value per request; entry targets fan out over
         # their pool (50=thực tập sinh, 1=Nhân viên) and the merged results are
@@ -61,7 +88,10 @@ class TopCVSource(BaseSource):
         position_values = profile.level_filter_values(query.level)
         for position in position_values or [None]:
             for page in range(1, pages + 1):
-                if city and city in TOPCV_CITY_PARAMS:
+                fixed_url = self.fixed_page_url(query, page)
+                if fixed_url:
+                    url = fixed_url
+                elif city and city in TOPCV_CITY_PARAMS:
                     cslug, kl, loc = TOPCV_CITY_PARAMS[city]
                     url = (
                         f"{BASE}/tim-viec-lam-{kw_slug}-tai-{cslug}-{kl}"
@@ -69,14 +99,15 @@ class TopCVSource(BaseSource):
                     )
                 else:
                     url = f"{BASE}/tim-viec-lam-{kw_slug}?type_keyword=1&sba=1"
+                native_category = query.source_category_filters.get(self.name, {}).get("category")
+                if native_category:
+                    url += f"&category={native_category}"
                 if position:
                     url += f"&position={position}"
                 if page > 1:
                     url += f"&page={page}"
                 html = self._get_html(url)
-                if is_cloudflare_page(html):
-                    log.warning("[topcv] CF block on page %d", page)
-                    break
+                self.validate_fixed_page(query, html)
                 soup = BeautifulSoup(html, "html.parser")
                 items = soup.select("div.job-item-search-result, div.job-item")
                 if not items:
@@ -112,11 +143,19 @@ class TopCVSource(BaseSource):
                     posted_text = upd_el.get_text(" ", strip=True) if upd_el else None
                     if posted_text:
                         posted_text = (posted_text.replace("Đăng", "").replace("Cập nhật", "")).strip()
-                    skills = [
+                    visible_tags = [
                         t.get_text(strip=True)
                         for t in item.select(".item-tag")
                         if t.get_text(strip=True) and "kinh nghiệm" not in t.get_text(strip=True).lower()
                     ]
+                    hidden_tags = []
+                    for tag in item.select("[data-original-title]"):
+                        hidden_tags.extend(
+                            part.strip()
+                            for part in (tag.get("data-original-title") or "").split(",")
+                            if part.strip()
+                        )
+                    skills = list(dict.fromkeys([*visible_tags, *hidden_tags]))
                     lo, hi, cur = parse_salary_vnd(salary_text)
                     job = Job(
                         source=self.name,
@@ -133,7 +172,9 @@ class TopCVSource(BaseSource):
                         posted_at=parse_vn_date(posted_text),
                         skills=[s for s in skills if s],
                         logo=logo,
+                        raw={"source_tags": hidden_tags},
                     )
+                    self._apply_detail(job)
                     jobs.append(job)
                 if self._bypass:
                     return self.finish(query, jobs, city)

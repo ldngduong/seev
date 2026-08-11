@@ -23,17 +23,17 @@ import {
 import { DashboardTopbar } from './DashboardTopbar'
 const navItems = [
   {
-    title: 'Dashboard',
+    title: 'Tổng quan',
     to: '/dashboard',
     icon: LayoutDashboard,
   },
   {
-    title: 'My CVs',
+    title: 'CV của tôi',
     to: '/my-cvs',
     icon: FileText,
   },
   {
-    title: 'Research',
+    title: 'Nghiên cứu',
     to: '/research-history',
     icon: BriefcaseBusiness,
   },
@@ -44,37 +44,37 @@ export function AuthLayout() {
 
   return (
     <SidebarProvider>
-      <Sidebar collapsible="icon" className="border-r bg-sidebar">
-        <SidebarHeader className="px-4 py-5 group-data-[collapsible=icon]:px-2">
-          <div className="flex h-11 items-center gap-3 rounded-2xl px-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-            <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl">
+      <Sidebar collapsible="icon" className="border-r border-border/60 bg-background">
+        <SidebarHeader className="px-3 py-5 group-data-[collapsible=icon]:px-2">
+          <div className="flex h-11 items-center gap-3 px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+            <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg">
               <img
                 src="/logo.png"
                 alt="Seev"
-                className="size-10 object-contain"
+                className="size-9 object-contain"
               />
             </span>
             <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-              <p className="truncate text-lg font-semibold leading-none text-zinc-700">
+              <p className="truncate text-base font-semibold leading-none tracking-tight text-zinc-800">
                 Seev
               </p>
               <p className="mt-1 truncate text-xs text-muted-foreground">
-                CV research workspace
+                Không gian nghiên cứu CV
               </p>
             </div>
           </div>
         </SidebarHeader>
         <SidebarContent className="px-3 py-2 group-data-[collapsible=icon]:px-2">
-          <SidebarGroup className="gap-3 px-0">
-            <SidebarGroupLabel className="px-3 text-sm font-medium text-zinc-500 group-data-[collapsible=icon]:sr-only">
-              Workspace
+          <SidebarGroup className="gap-2 px-0">
+            <SidebarGroupLabel className="px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-400 group-data-[collapsible=icon]:sr-only">
+              Không gian làm việc
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu className="gap-1.5">
+              <SidebarMenu className="gap-1">
                 {navItems.map((item) => (
                   <SidebarMenuItem key={item.to}>
                     <SidebarMenuButton
-                      className="h-11 gap-3 rounded-2xl px-3 text-[15px] font-medium text-zinc-700 transition-colors hover:bg-sidebar-accent hover:text-zinc-900 data-[active=true]:bg-sidebar-accent data-[active=true]:text-zinc-900 group-data-[collapsible=icon]:size-10 group-data-[collapsible=icon]:px-0 [&_svg]:size-5 [&_svg]:shrink-0"
+                      className="h-10 gap-3 rounded-lg px-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-muted hover:text-zinc-900 data-[active=true]:bg-emerald-500/10 data-[active=true]:text-emerald-700 group-data-[collapsible=icon]:size-10 group-data-[collapsible=icon]:px-0 [&_svg]:size-[18px] [&_svg]:shrink-0"
                       isActive={
                         location.pathname === item.to ||
                         location.pathname.startsWith(`${item.to}/`)

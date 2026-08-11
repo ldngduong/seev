@@ -1,12 +1,12 @@
 """VietnamWorks source — public no-auth REST API.
 
-Transport chạy qua `RobustFetcher` (requests; 403/429 -> BrightData unlocker),
-recipe chống block dùng chung cho mọi source.
+Transport chạy qua `RobustFetcher` requests thuần (`json_mode=True`), 0 credit Firecrawl.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from urllib.parse import parse_qs, urlsplit
 
 from ..config import VIETNAMWORKS_CITY_IDS
 from ..models import Job, SearchQuery
@@ -40,6 +40,18 @@ class VietnamWorksSource(BaseSource):
         jobs: list[Job] = []
         seen: set[str] = set()
         city_code = VIETNAMWORKS_CITY_IDS.get(city_key) if city_key else None
+        native_parent_id = query.source_category_filters.get(self.name, {}).get(
+            "parent_id"
+        )
+        native_child_id = None
+        if query.crawl_url:
+            params = parse_qs(urlsplit(query.crawl_url).query)
+            native_parent_id = (params.get("g") or [None])[0]
+            native_child_id = (params.get("j") or [None])[0]
+            if not native_parent_id or not native_child_id:
+                raise ValueError(
+                    f"invalid VietnamWorks fixed category URL: {query.crawl_url}"
+                )
         # jobLevelId accepts one value per request, so entry targets fan out
         # over their pool (8=thực tập sinh, 1=mới tốt nghiệp, 5=Nhân viên) and
         # results are merged; the post-crawl policy does the precise cut.
@@ -65,6 +77,7 @@ class VietnamWorksSource(BaseSource):
                         "jobRequirement", "prettySalary", "requiredCoverLetter",
                         "employerBenefits", "workingTime", "jobDescriptionNew", "jobRequirementNew",
                         "typeWorkingId", "yearsOfExperience", "salaryCurrency", "createdOn",
+                        "jobFunction",
                     ],
                 }
                 filters: list[dict] = []
@@ -73,6 +86,23 @@ class VietnamWorksSource(BaseSource):
                         {"field": "workingLocations.cityId", "value": str(city_code)},
                         {"field": "workingLocations.districtId", "value": f'[{{"cityId":{city_code},"districtId":[-1]}}]'},
                     ]
+                if native_parent_id and native_child_id:
+                    import json
+
+                    filters.append(
+                        {
+                            "field": "jobFunction",
+                            "value": json.dumps(
+                                [
+                                    {
+                                        "parentId": int(native_parent_id),
+                                        "childrenIds": [int(native_child_id)],
+                                    }
+                                ],
+                                separators=(",", ":"),
+                            ),
+                        }
+                    )
                 if lid:
                     filters.append({"field": "jobLevelId", "value": str(lid)})
                 payload["filter"] = filters
@@ -83,6 +113,16 @@ class VietnamWorksSource(BaseSource):
                 if not items:
                     break
                 for item in items:
+                    jf = item.get("jobFunction") or {}
+                    if native_parent_id and str(jf.get("parentId")) != str(
+                        native_parent_id
+                    ):
+                        continue
+                    child_ids = {
+                        str(child.get("id")) for child in (jf.get("children") or [])
+                    }
+                    if native_child_id and str(native_child_id) not in child_ids:
+                        continue
                     jid = str(item.get("jobId") or "")
                     if not jid or jid in seen:
                         continue
@@ -104,6 +144,29 @@ class VietnamWorksSource(BaseSource):
                     if isinstance(years, (int, float)) and years > 0:
                         exp = f"{int(years)} năm"
 
+                    # Native jobFunction is classification evidence only. Its
+                    # ids/names are never used as canonical Seev ids.
+                    category_id = category_name = None
+                    parent_name = jf.get("parentNameVI") or jf.get("parentName") or ""
+                    child_name = (jf.get("children") or [{}])[0].get("nameVI") or \
+                        (jf.get("children") or [{}])[0].get("name") or ""
+                    from ..category import resolve_category
+
+                    if (
+                        query.crawl_url
+                        and query.category_id
+                        and len(query.candidate_category_ids) <= 1
+                    ):
+                        from ..category import CATEGORY_NAMES
+
+                        category_id = query.category_id
+                        category_name = CATEGORY_NAMES.get(category_id)
+                    else:
+                        category_id, category_name = resolve_category(
+                            " ".join([item.get("jobTitle") or "", parent_name, child_name]),
+                            query.category_id,
+                        )
+
                     job = Job(
                         source=self.name,
                         source_job_id=jid,
@@ -117,16 +180,25 @@ class VietnamWorksSource(BaseSource):
                         salary_currency=item.get("salaryCurrency") or "VND",
                         salary_text=item.get("prettySalary"),
                         job_type=TYPE_MAP.get(item.get("typeWorkingId")),
-                        level=str(item.get("jobLevelId") or "") or None,
+                        source_seniority_key=str(item.get("jobLevelId") or "") or None,
                         experience=exp,
-                        seniority_text=item.get("jobLevelVI") or item.get("jobLevel") or None,
+                        source_seniority_text=item.get("jobLevelVI") or item.get("jobLevel") or None,
                         posted_at=parse_iso(item.get("approvedOn") or item.get("createdOn")),
                         expires_at=parse_iso(item.get("expiredOn")),
                         skills=[s.get("skillName") for s in (item.get("skills") or []) if s.get("skillName")],
                         logo=item.get("companyLogo"),
-                        raw={"companyId": item.get("companyId"), "jobLevelId": item.get("jobLevelId")},
+                        category_id=category_id,
+                        category_name=category_name,
+                        raw={
+                            "companyId": item.get("companyId"),
+                            "jobLevelId": item.get("jobLevelId"),
+                            "jobFunction": jf,
+                            "deadline_source": "vietnamworks_api",
+                            "seniority_source": "vietnamworks_api",
+                        },
                     )
                     jobs.append(job)
-                if len(items) < 10:
+                total_pages = int((data.get("meta") or {}).get("nbPages") or 0)
+                if page + 1 >= total_pages:
                     break
         return self.finish(query, jobs, city_key)

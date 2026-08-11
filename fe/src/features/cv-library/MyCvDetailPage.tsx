@@ -27,6 +27,24 @@ import {
 } from '@/services/cv-api'
 import type { CvResearchSession, UserCv } from '@/types/cv'
 
+const CV_STATUS_LABELS: Record<UserCv['status'], string> = {
+  processing: 'Đang xử lý',
+  ready: 'Sẵn sàng',
+  failed: 'Thất bại',
+}
+
+const SESSION_STATUS_LABELS: Record<CvResearchSession['status'], string> = {
+  queued: 'Đang chờ',
+  processing: 'Đang xử lý',
+  completed: 'Hoàn tất',
+  failed: 'Thất bại',
+}
+
+const SESSION_TYPE_LABELS: Record<CvResearchSession['type'], string> = {
+  quick: 'Research nhanh',
+  custom: 'Research tùy chỉnh',
+}
+
 export function MyCvDetailPage() {
   const { cvId } = useParams()
   const queryClient = useQueryClient()
@@ -114,14 +132,14 @@ export function MyCvDetailPage() {
               className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="size-4" />
-              My CVs
+              CV của tôi
             </Link>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-3xl font-semibold tracking-normal text-zinc-700">
+              <h1 className="truncate text-2xl font-semibold tracking-tight text-zinc-800">
                 {cv.name}
               </h1>
               <Badge variant={cv.status === 'ready' ? 'default' : 'secondary'}>
-                {cv.status}
+                {CV_STATUS_LABELS[cv.status]}
               </Badge>
             </div>
           </div>
@@ -138,45 +156,36 @@ export function MyCvDetailPage() {
               disabled={cvsQuery.isFetching || sessionsQuery.isFetching}
             >
               <RefreshCw className="size-4" />
-              Refresh
+              Làm mới
             </Button>
             <Link
               to={`/research/new?cvId=${cv.id}`}
               className={cn(buttonVariants())}
             >
-              New research
+              Research mới
             </Link>
           </>
         }
       />
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-        <Card className="overflow-hidden rounded-2xl shadow-none">
-          <CardHeader>
-            <CardTitle className="text-base font-semibold text-zinc-700">
-              Preview
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="min-h-[620px] overflow-hidden rounded-md border bg-muted">
-              <object
-                data={`${cv.file_url}#page=1&toolbar=0&navpanes=0`}
-                type="application/pdf"
-                className="h-[620px] w-full"
-                aria-label={cv.name}
-              >
-                <div className="grid h-[620px] place-items-center">
-                  <FileText className="size-10 text-muted-foreground" />
-                </div>
-              </object>
+        <div className="min-h-[620px] overflow-hidden rounded-2xl border border-border/60 bg-muted">
+          <object
+            data={`${cv.file_url}#page=1&toolbar=0&navpanes=0`}
+            type="application/pdf"
+            className="h-[620px] w-full"
+            aria-label={cv.name}
+          >
+            <div className="grid h-[620px] place-items-center">
+              <FileText className="size-10 text-muted-foreground" />
             </div>
-          </CardContent>
-        </Card>
+          </object>
+        </div>
 
         <Tabs defaultValue="info" className="min-w-0">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="info">Info CV</TabsTrigger>
-            <TabsTrigger value="history">Lịch sử research</TabsTrigger>
+          <TabsList variant="line" className="w-full rounded-none p-0">
+            <TabsTrigger value="info" className="h-9 rounded-none px-4 data-active:after:bg-primary">Thông tin CV</TabsTrigger>
+            <TabsTrigger value="history" className="h-9 rounded-none px-4 data-active:after:bg-primary">Lịch sử research</TabsTrigger>
           </TabsList>
           <TabsContent value="info" className="mt-4">
             <CvInfoCard cv={cv} />
@@ -249,81 +258,82 @@ function CvResearchHistoryCard({
 }) {
   if (isLoading) {
     return (
-      <Card className="rounded-2xl shadow-none">
-        <CardContent className="grid gap-3 pt-6">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <Skeleton key={index} className="h-24 rounded-md" />
-          ))}
-        </CardContent>
-      </Card>
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <Skeleton key={index} className="h-24 rounded-2xl" />
+        ))}
+      </div>
     )
   }
 
   return (
-    <Card className="rounded-2xl shadow-none">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base font-semibold text-zinc-700">
-          <History className="size-4" />
-          Lịch sử research
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        {sessions.length === 0 ? (
-          <p className="rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground">
-            CV này chưa có research nào.
-          </p>
-        ) : null}
-        {sessions.map((session) => (
-          <Link
-            key={session.id}
-            to={`/research-history/${session.id}`}
-            className="block rounded-2xl border bg-background p-4 transition-colors hover:bg-muted/40"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={getStatusVariant(session.status)}>
-                    {session.status}
-                  </Badge>
-                  <Badge variant="outline">{session.type}</Badge>
-                </div>
-                <h2 className="mt-3 truncate font-semibold text-zinc-700">
-                  {formatTarget(session)}
-                </h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {formatDateTime(session.created_at)}
-                </p>
-                {['queued', 'processing'].includes(session.status) ? (
-                  <div className="mt-3 space-y-2">
-                    <Progress value={session.progress} />
-                    <p className="text-xs text-muted-foreground">
-                      {session.progress_message}
-                    </p>
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card">
+      <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+        <History className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium text-zinc-700">Lịch sử research</span>
+      </div>
+      {sessions.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-muted-foreground">
+          CV này chưa có research nào.
+        </p>
+      ) : (
+        <div className="flex flex-col divide-y divide-border/60">
+          {sessions.map((session) => (
+            <Link
+              key={session.id}
+              to={`/research-history/${session.id}`}
+              className="block px-4 py-4 transition-colors hover:bg-muted/40"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={getStatusVariant(session.status)}>
+                      {SESSION_STATUS_LABELS[session.status]}
+                    </Badge>
+                    <Badge variant="outline">{SESSION_TYPE_LABELS[session.type]}</Badge>
                   </div>
-                ) : null}
-                {session.status === 'failed' ? (
-                  <p className="mt-3 line-clamp-2 text-xs text-destructive">
-                    {session.error}
+                  <h2 className="mt-3 truncate font-semibold text-zinc-700">
+                    {formatTarget(session)}
+                  </h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatDateTime(session.created_at)}
                   </p>
-                ) : null}
+                  {['queued', 'processing'].includes(session.status) ? (
+                    <div className="mt-3 space-y-2">
+                      <Progress value={session.progress} />
+                      <p className="text-xs text-muted-foreground">
+                        {session.progress_message}
+                      </p>
+                    </div>
+                  ) : null}
+                  {session.status === 'failed' ? (
+                    <p className="mt-3 line-clamp-2 text-xs text-destructive">
+                      {session.error}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-semibold text-zinc-700">
+                    {session.audit?.overall_score ?? '-'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">điểm</p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-2xl font-semibold text-zinc-700">
-                  {session.audit?.overall_score ?? '-'}
-                </p>
-                <p className="text-xs text-muted-foreground">score</p>
-              </div>
-            </div>
-          </Link>
-        ))}
-        <DataPagination
-          page={page}
-          totalPages={totalPages}
-          total={total}
-          onPageChange={onPageChange}
-        />
-      </CardContent>
-    </Card>
+            </Link>
+          ))}
+        </div>
+      )}
+      {totalPages > 1 ? (
+        <div className="border-t border-border/60 px-4 py-3">
+          <DataPagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            onPageChange={onPageChange}
+          />
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -347,7 +357,7 @@ function formatTarget(session: CvResearchSession) {
       session.target.job_category_name,
     ]
       .filter(Boolean)
-      .join(' ') || 'AI inferred research'
+      .join(' ') || 'Research tự suy luận từ CV'
   )
 }
 

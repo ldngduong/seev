@@ -11,7 +11,7 @@ import {
 
 import type { CvAuditResult } from '../../ai/schemas/cv-audit-result.schema';
 import { JobSearchIntent } from '../../crawler/entities/job-search-intent.entity';
-import { JobFamilyCategory } from '../../job-category/entities/job-family-category.entity';
+import { JobCategory } from '../../job-category/entities/job-category.entity';
 import { SeniorityLevel } from '../../seniority/entities/seniority-level.entity';
 import { User } from '../../users/entities/user.entity';
 import { CvAudit } from './cv-audit.entity';
@@ -92,12 +92,12 @@ export class CvResearchSession {
   @Column({ name: 'target_role', nullable: true, type: 'varchar' })
   targetRole!: string | null;
 
-  @Column({ name: 'job_category_id', nullable: true, type: 'int' })
-  jobCategoryId!: number | null;
+  @Column({ name: 'job_category_id', nullable: true, type: 'uuid' })
+  jobCategoryId!: string | null;
 
   @JoinColumn({ name: 'job_category_id' })
-  @ManyToOne(() => JobFamilyCategory, { nullable: true, onDelete: 'SET NULL' })
-  jobCategory!: JobFamilyCategory | null;
+  @ManyToOne(() => JobCategory, { nullable: true, onDelete: 'SET NULL' })
+  jobCategory!: JobCategory | null;
 
   @Column({ name: 'job_category_name', nullable: true, type: 'varchar' })
   jobCategoryName!: string | null;
@@ -114,6 +114,9 @@ export class CvResearchSession {
 
   @Column({ name: 'job_description', nullable: true, type: 'text' })
   jobDescription!: string | null;
+
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  locations!: string[];
 
   @Column({ default: 'queued', type: 'varchar' })
   status!: CvResearchStatus;

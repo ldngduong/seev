@@ -45,13 +45,13 @@ export class AuthService {
     const user = await this.usersService.findByEmail(email);
 
     if (!user?.password) {
-      throw new UnauthorizedException('Invalid email or password.');
+      throw new UnauthorizedException('Email hoặc mật khẩu không đúng.');
     }
 
     const passwordMatches = await compare(password, user.password);
 
     if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid email or password.');
+      throw new UnauthorizedException('Email hoặc mật khẩu không đúng.');
     }
 
     return user;
@@ -59,13 +59,13 @@ export class AuthService {
 
   async validateJwtPayload(payload: JwtPayload) {
     if (payload.tokenType !== 'access') {
-      throw new UnauthorizedException('Invalid authentication token.');
+      throw new UnauthorizedException('Token xác thực không hợp lệ.');
     }
 
     const user = await this.usersService.findById(payload.sub);
 
     if (!user) {
-      throw new UnauthorizedException('Invalid authentication token.');
+      throw new UnauthorizedException('Token xác thực không hợp lệ.');
     }
 
     return user;
@@ -80,7 +80,7 @@ export class AuthService {
       });
       return this.validateJwtPayload(payload);
     } catch {
-      throw new UnauthorizedException('Invalid authentication token.');
+      throw new UnauthorizedException('Token xác thực không hợp lệ.');
     }
   }
 
@@ -89,7 +89,7 @@ export class AuthService {
     const email = profile.emails?.[0]?.value;
 
     if (!googleId || !email) {
-      throw new UnauthorizedException('Google account did not provide email.');
+      throw new UnauthorizedException('Tài khoản Google không cung cấp email.');
     }
 
     const existingByGoogleId = await this.usersService.findByGoogleId(googleId);
@@ -161,7 +161,7 @@ export class AuthService {
         current.userId !== payload.sub ||
         current.familyId !== payload.familyId
       ) {
-        throw new UnauthorizedException('Invalid refresh token.');
+        throw new UnauthorizedException('Refresh token không hợp lệ.');
       }
 
       const presentedHash = this.hashToken(refreshToken);
@@ -189,7 +189,7 @@ export class AuthService {
       });
 
       if (!user) {
-        throw new UnauthorizedException('Invalid refresh token.');
+        throw new UnauthorizedException('Refresh token không hợp lệ.');
       }
 
       const replacement = this.createRefreshSession(
@@ -217,12 +217,12 @@ export class AuthService {
 
     if (result.status === 'reuse-detected') {
       throw new UnauthorizedException(
-        'Refresh token reuse detected. Please sign in again.',
+        'Phát hiện refresh token bị dùng lại. Vui lòng đăng nhập lại.',
       );
     }
 
     if (result.status === 'expired') {
-      throw new UnauthorizedException('Refresh token has expired.');
+      throw new UnauthorizedException('Refresh token đã hết hạn.');
     }
 
     return result;
@@ -283,7 +283,7 @@ export class AuthService {
 
     if (!clientId || !clientSecret) {
       throw new ServiceUnavailableException(
-        'Google OAuth is not configured on the backend.',
+        'Google OAuth chưa được cấu hình trên máy chủ.',
       );
     }
   }
@@ -354,12 +354,12 @@ export class AuthService {
         !payload.sid ||
         !payload.familyId
       ) {
-        throw new Error('Unexpected token type.');
+        throw new Error('Loại token không mong đợi.');
       }
 
       return payload;
     } catch {
-      throw new UnauthorizedException('Invalid refresh token.');
+      throw new UnauthorizedException('Refresh token không hợp lệ.');
     }
   }
 

@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { BriefcaseBusiness, Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getJobResearchJobs } from '../api/job-research-api'
 import type { JobIntentMatchResult } from '../types/job-research.types'
 import type { CvResearchJobSuggestion } from '@/types/cv'
@@ -42,52 +41,60 @@ export function SessionJobSuggestionsPanel({
   const suggestions = matches.filter((match) => match.match_kind === 'suggestion')
 
   return (
-    <Card className="rounded-md">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <BriefcaseBusiness className="size-4" />
-          Job suggestions
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {matches.length === 0 ? (
-          <div className="space-y-3 rounded-md bg-muted px-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              {status === 'queued'
-                ? 'Research is waiting for an available worker.'
-                : status === 'processing'
-                  ? 'Job suggestions are being collected in the background.'
-                  : 'No matching jobs were saved for this research.'}
-            </p>
-            {onRetry ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={isRetrying}
-                onClick={onRetry}
-              >
-                {isRetrying ? 'Retrying...' : 'Retry job suggestions'}
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-        {directMatches.map((match) => (
-          <JobMatchCard key={match.job.id} match={match} />
-        ))}
-        {suggestions.length > 0 ? (
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Sparkles className="size-4" />
-              Gợi ý thêm — ngành liên quan hoặc cấp bậc chưa khớp
-            </div>
+    <section className="flex w-full flex-col gap-4">
+      <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+        <BriefcaseBusiness className="size-4 text-muted-foreground" />
+        <h2 className="text-base font-semibold text-zinc-800">Gợi ý việc làm</h2>
+        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+          {matches.length} việc
+        </span>
+      </div>
+
+      {matches.length === 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-border/70 bg-muted/30 px-4 py-5">
+          <p className="text-sm text-muted-foreground">
+            {status === 'queued'
+              ? 'Research đang chờ worker khả dụng.'
+              : status === 'processing'
+                ? 'Các gợi ý việc làm đang được thu thập trong nền.'
+                : 'Chưa có việc làm khớp nào được lưu cho research này.'}
+          </p>
+          {onRetry ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isRetrying}
+              onClick={onRetry}
+            >
+              {isRetrying ? 'Đang thử lại...' : 'Thử lại gợi ý việc làm'}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {directMatches.length > 0 ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {directMatches.map((match) => (
+            <JobMatchCard key={match.job.id} match={match} />
+          ))}
+        </div>
+      ) : null}
+
+      {suggestions.length > 0 ? (
+        <div className="space-y-3">
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <Sparkles className="size-3.5" />
+            Gợi ý thêm — ngành liên quan hoặc cấp bậc chưa khớp
+          </p>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {suggestions.map((match) => (
               <JobMatchCard key={match.job.id} match={match} />
             ))}
           </div>
-        ) : null}
-      </CardContent>
-    </Card>
+        </div>
+      ) : null}
+    </section>
   )
 }
 
@@ -98,7 +105,7 @@ function snapshotToMatch(suggestion: CvResearchJobSuggestion): JobIntentMatchRes
     match_score: suggestion.match_score,
     matched_terms: suggestion.matched_terms,
     match_kind: 'match',
-    match_reason: '',
+    match_reason: suggestion.match_reason ?? '',
     job: {
       id: job.id,
       source: job.source as JobIntentMatchResult['job']['source'],

@@ -11,9 +11,9 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/features/auth/store/auth-store'
 
 const navigationItems = [
-  { label: 'Home', to: '/' },
-  { label: 'Pricing', to: '/#pricing' },
-  { label: 'Explore', to: '/#product' },
+  { label: 'Trang chủ', to: '/' },
+  { label: 'Bảng giá', to: '/#pricing' },
+  { label: 'Khám phá', to: '/#product' },
 ]
 
 export const LandingNavigation = () => {
@@ -108,14 +108,14 @@ export const LandingNavigation = () => {
               className="flex items-center gap-2 rounded-2xl px-3 py-2 text-sm transition-colors hover:bg-muted"
             >
               <LayoutDashboard className="size-4" />
-              Dashboard
+              Tổng quan
             </Link>
             <Link
               to="/dashboard"
               className="flex items-center gap-2 rounded-2xl px-3 py-2 text-sm transition-colors hover:bg-muted"
             >
               <User className="size-4" />
-              Profile
+              Hồ sơ
             </Link>
             <button
               type="button"
@@ -123,14 +123,14 @@ export const LandingNavigation = () => {
               className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
             >
               <LogOut className="size-4" />
-              Logout
+              Đăng xuất
             </button>
           </PopoverContent>
         </Popover>
       ) : (
         <Link to="/login" className="rounded-4xl bg-primary p-2">
           <span className="flex items-center gap-1 rounded-4xl px-3 py-1 font-bold text-background hover:bg-background hover:text-foreground">
-            Try Seev
+            Dùng thử Seev
             <ArrowUpRight />
           </span>
         </Link>

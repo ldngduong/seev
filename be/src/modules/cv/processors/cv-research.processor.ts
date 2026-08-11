@@ -26,7 +26,7 @@ export class CvResearchProcessor extends WorkerHost {
 
   async process(job: Job<CvResearchJobData>) {
     if (job.name !== CV_RESEARCH_JOB) {
-      this.logger.warn(`Ignored unsupported CV research job: ${job.name}`);
+      this.logger.warn(`Bỏ qua job research CV không được hỗ trợ: ${job.name}`);
       return;
     }
 
@@ -41,7 +41,7 @@ export class CvResearchProcessor extends WorkerHost {
     const sessionId = job?.data.sessionId;
     if (!sessionId) return;
 
-    this.logger.error(`CV research ${sessionId} failed: ${error.message}`);
+    this.logger.error(`CV research ${sessionId} thất bại: ${error.message}`);
     await this.progressService.fail(sessionId, job.data.attempt, error.message);
   }
 }

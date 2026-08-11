@@ -13,10 +13,10 @@ import type { JobSource } from '../types/job-source.type';
 @Index('UQ_job_posts_source_job_id', ['source', 'sourceJobId'], {
   unique: true,
 })
-@Index('IDX_job_posts_category_seniority', [
-  'jobCategoryId',
-  'seniorityLevelId',
-])
+@Index('UQ_job_posts_source_dedup_key', ['source', 'dedupKey'], {
+  unique: true,
+})
+@Index('IDX_job_posts_category_expiry', ['jobCategoryId', 'expiredAt'])
 export class JobPost {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -29,6 +29,9 @@ export class JobPost {
 
   @Column({ name: 'source_url', type: 'text' })
   sourceUrl!: string;
+
+  @Column({ name: 'dedup_key', type: 'varchar', length: 32 })
+  dedupKey!: string;
 
   @Column({ type: 'varchar' })
   title!: string;
@@ -52,9 +55,6 @@ export class JobPost {
   jobType!: string | null;
 
   @Column({ nullable: true, type: 'varchar' })
-  level!: string | null;
-
-  @Column({ nullable: true, type: 'varchar' })
   experience!: string | null;
 
   @Column({ name: 'experience_min', nullable: true, type: 'double precision' })
@@ -69,20 +69,32 @@ export class JobPost {
   @Column({ default: () => "'[]'::jsonb", type: 'jsonb' })
   locations!: string[];
 
-  @Column({ name: 'seniority_text', nullable: true, type: 'varchar' })
-  seniorityText!: string | null;
-
-  @Column({ name: 'job_category_id', nullable: true, type: 'int' })
-  jobCategoryId!: number | null;
+  @Column({ name: 'job_category_id', type: 'uuid' })
+  jobCategoryId!: string;
 
   @Column({ name: 'job_category_name', nullable: true, type: 'varchar' })
   jobCategoryName!: string | null;
 
-  @Column({ name: 'seniority_level_id', nullable: true, type: 'uuid' })
-  seniorityLevelId!: string | null;
+  @Column({
+    name: 'category_confidence',
+    nullable: true,
+    type: 'double precision',
+  })
+  categoryConfidence!: number | null;
 
-  @Column({ name: 'seniority_level_name', nullable: true, type: 'varchar' })
-  seniorityLevelName!: string | null;
+  @Column({
+    default: () => "'{}'::jsonb",
+    name: 'category_evidence',
+    type: 'jsonb',
+  })
+  categoryEvidence!: Record<string, unknown>;
+
+  @Column({
+    default: () => "'{}'::jsonb",
+    name: 'source_category_raw',
+    type: 'jsonb',
+  })
+  sourceCategoryRaw!: Record<string, unknown>;
 
   @Column({ default: () => "'[]'::jsonb", type: 'jsonb' })
   skills!: string[];
@@ -93,11 +105,11 @@ export class JobPost {
   @Column({ name: 'content_hash', type: 'varchar' })
   contentHash!: string;
 
-  @Column({ name: 'posted_at', nullable: true, type: 'timestamp' })
+  @Column({ name: 'posted_at', nullable: true, type: 'timestamptz' })
   postedAt!: Date | null;
 
-  @Column({ name: 'expired_at', nullable: true, type: 'timestamp' })
-  expiredAt!: Date | null;
+  @Column({ name: 'expired_at', type: 'timestamptz' })
+  expiredAt!: Date;
 
   @Column({ name: 'last_seen_at', type: 'timestamp' })
   lastSeenAt!: Date;

@@ -75,7 +75,7 @@ export class R2StorageService {
       { transformToByteArray: () => Promise<Uint8Array> } | undefined;
 
     if (!body) {
-      throw new ServiceUnavailableException('CV file could not be loaded.');
+      throw new ServiceUnavailableException('Không thể tải tệp CV.');
     }
 
     return {
@@ -110,7 +110,7 @@ export class R2StorageService {
 
     if (!accountId || !accessKeyId || !secretAccessKey || !this.getBucket()) {
       throw new ServiceUnavailableException(
-        'Cloudflare R2 is not configured. Please set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET in server/.env.',
+        'Cloudflare R2 chưa được cấu hình. Vui lòng đặt R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY và R2_BUCKET trong server/.env.',
       );
     }
 
@@ -131,7 +131,7 @@ export class R2StorageService {
 
     if (!bucket) {
       throw new ServiceUnavailableException(
-        'Cloudflare R2 bucket is missing. Please set R2_BUCKET in server/.env.',
+        'Thiếu bucket Cloudflare R2. Vui lòng đặt R2_BUCKET trong server/.env.',
       );
     }
 

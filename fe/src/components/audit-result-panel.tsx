@@ -1,174 +1,193 @@
 import { Lightbulb, MessageSquareText, Target } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import { useAuditStore } from "@/stores/audit-store";
-import type { AuditSummary } from "@/types/cv";
+import type {
+  AuditSummary,
+  FeedbackSeverity,
+  SuggestedJob,
+} from "@/types/cv";
 
 interface AuditResultPanelProps {
   audit: AuditSummary | null;
 }
 
-export function AuditResultPanel({ audit }: AuditResultPanelProps) {
-  const closeFeedbackPopover = useAuditStore(
-    (state) => state.closeFeedbackPopover,
-  );
-  const generalFeedbacks = audit?.general_feedbacks ?? [];
-  const scoreBreakdown = audit?.score_breakdown ?? [];
+const SEVERITY_LABELS: Record<FeedbackSeverity, string> = {
+  critical: "Nghiêm trọng",
+  warning: "Cảnh báo",
+  info: "Thông tin",
+};
 
+const MATCH_LEVEL_LABELS: Record<SuggestedJob["match_level"], string> = {
+  high: "Khớp cao",
+  medium: "Khớp trung bình",
+  stretch: "Cần nỗ lực",
+};
+
+export function AuditResultPanel({ audit }: AuditResultPanelProps) {
   if (!audit) {
     return (
-      <Card className="rounded-md">
-        <CardHeader>
-          <CardTitle className="text-base">AI feedback</CardTitle>
-          <CardDescription>
-            Feedback, keyword suggestions, and matching roles appear after the
-            backend returns the DeepSeek audit.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <section className="flex flex-col gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          Phản hồi AI
+        </h2>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Phản hồi, gợi ý từ khóa và vai trò khớp sẽ xuất hiện sau khi backend
+          trả kết quả audit.
+        </p>
+      </section>
     );
   }
 
+  const generalFeedbacks = audit?.general_feedbacks ?? [];
+  const scoreBreakdown = audit?.score_breakdown ?? [];
+
   return (
-    <Card className="rounded-md">
-      <CardHeader>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-base">AI score</CardTitle>
-            <CardDescription>{audit.summary}</CardDescription>
-          </div>
-          <div className="text-3xl font-semibold">{audit.overall_score}</div>
+    <section className="flex flex-col gap-6">
+      <header className="flex items-start justify-between gap-4 border-b border-border/60 pb-4">
+        <div className="min-w-0">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Điểm AI
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            {audit.summary}
+          </p>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <Progress value={audit.overall_score} />
+        <span className="shrink-0 text-4xl font-semibold tabular-nums tracking-tight text-zinc-800">
+          {audit.overall_score}
+        </span>
+      </header>
 
-        {scoreBreakdown.length > 0 ? (
-          <section className="space-y-2">
-            <div className="flex items-center justify-between gap-2 text-sm font-medium">
-              <span>Weighted score breakdown</span>
-              <Badge variant="outline">
-                {scoreBreakdown.reduce((total, item) => total + item.score, 0)}
-                /
-                {scoreBreakdown.reduce(
-                  (total, item) => total + item.max_score,
-                  0,
-                )}
-              </Badge>
-            </div>
+      <div>
+        <Progress value={audit.overall_score} className="h-1.5" />
+      </div>
+
+      {scoreBreakdown.length > 0 ? (
+        <section className="flex flex-col gap-4 border-t border-border/60 pt-5">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Chi tiết điểm theo trọng số
+            </h3>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {scoreBreakdown.reduce((total, item) => total + item.score, 0)}/
+              {scoreBreakdown.reduce(
+                (total, item) => total + item.max_score,
+                0,
+              )}
+            </span>
+          </div>
+          <div className="flex flex-col gap-4">
             {scoreBreakdown.map((item) => (
-              <div key={item.dimension} className="rounded-md border p-3 text-sm">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="font-medium">{item.dimension}</p>
-                  <Badge variant="outline">
+              <div key={item.dimension} className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <p className="font-medium text-zinc-800">{item.dimension}</p>
+                  <span className="tabular-nums text-muted-foreground">
                     {item.score}/{item.max_score}
-                  </Badge>
+                  </span>
                 </div>
-                <Progress value={(item.score / item.max_score) * 100} />
-                <p className="mt-2 text-muted-foreground">{item.rationale}</p>
+                <Progress
+                  value={(item.score / item.max_score) * 100}
+                  className="h-1.5"
+                />
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {item.rationale}
+                </p>
               </div>
             ))}
-          </section>
-        ) : null}
-
-        <section className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <MessageSquareText className="size-4" />
-            Nhận xét tổng quan
-          </div>
-          <div className="space-y-2">
-            {generalFeedbacks.length > 0 ? (
-              generalFeedbacks.map((feedback) => (
-                <div key={feedback.id} className="rounded-md border p-3 text-sm">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <Badge
-                      variant={
-                        feedback.severity === "critical"
-                          ? "destructive"
-                          : "secondary"
-                      }
-                    >
-                      {feedback.topic}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {feedback.severity}
-                    </span>
-                  </div>
-                  <p className="font-medium">{feedback.comment}</p>
-                  {feedback.recommendation ? (
-                    <p className="mt-2 rounded-md border bg-muted/40 p-2 text-muted-foreground">
-                      {feedback.recommendation}
-                    </p>
-                  ) : null}
-                </div>
-              ))
-            ) : (
-              <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                Không có nhận xét tổng quan riêng. Các nhận xét chi tiết đang
-                được gắn trực tiếp trên PDF.
-              </p>
-            )}
           </div>
         </section>
+      ) : null}
 
-        <Separator />
-
-        <section className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Lightbulb className="size-4" />
-            Keywords
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {audit.suggested_keywords.map((keyword) => (
-              <Badge key={keyword} variant="outline">
-                {keyword}
-              </Badge>
-            ))}
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Target className="size-4" />
-            Role and job fit
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {audit.suggested_roles.map((role) => (
-              <Badge key={role}>{role}</Badge>
-            ))}
-          </div>
-          <div className="space-y-2">
-            {audit.suggested_jobs.map((job) => (
-              <div key={job.title} className="rounded-md border p-3 text-sm">
+      <section className="flex flex-col gap-3 border-t border-border/60 pt-5">
+        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <MessageSquareText className="size-3.5" />
+          Nhận xét tổng quan
+        </h3>
+        {generalFeedbacks.length > 0 ? (
+          <div className="flex flex-col divide-y divide-border/60">
+            {generalFeedbacks.map((feedback) => (
+              <div key={feedback.id} className="flex flex-col gap-1.5 py-3">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium">{job.title}</p>
-                  <Badge variant="secondary">{job.match_level}</Badge>
+                  <Badge
+                    variant={
+                      feedback.severity === "critical"
+                        ? "destructive"
+                        : "secondary"
+                    }
+                  >
+                    {feedback.topic}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {SEVERITY_LABELS[feedback.severity]}
+                  </span>
                 </div>
-                <p className="mt-1 text-muted-foreground">{job.reason}</p>
+                <p className="text-sm font-medium text-zinc-800">
+                  {feedback.comment}
+                </p>
+                {feedback.recommendation ? (
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    {feedback.recommendation}
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>
-        </section>
+        ) : (
+          <p className="text-sm leading-6 text-muted-foreground">
+            Không có nhận xét tổng quan riêng. Các nhận xét chi tiết đang được
+            gắn trực tiếp trên PDF.
+          </p>
+        )}
+      </section>
 
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={() => closeFeedbackPopover()}
-        >
-          Clear highlight
-        </Button>
-      </CardContent>
-    </Card>
+      <section className="flex flex-col gap-3 border-t border-border/60 pt-5">
+        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <Lightbulb className="size-3.5" />
+          Từ khóa
+        </h3>
+        <div className="flex flex-wrap gap-1.5">
+          {audit.suggested_keywords.map((keyword) => (
+            <span
+              key={keyword}
+              className="rounded-full bg-muted px-2.5 py-1 text-xs text-zinc-600"
+            >
+              {keyword}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-border/60 pt-5">
+        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <Target className="size-3.5" />
+          Độ khớp vị trí
+        </h3>
+        <div className="flex flex-wrap gap-1.5">
+          {audit.suggested_roles.map((role) => (
+            <span
+              key={role}
+              className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+            >
+              {role}
+            </span>
+          ))}
+        </div>
+        <div className="flex flex-col divide-y divide-border/60">
+          {audit.suggested_jobs.map((job) => (
+            <div key={job.title} className="flex flex-col gap-1 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-zinc-800">{job.title}</p>
+                <span className="text-xs text-muted-foreground">
+                  {MATCH_LEVEL_LABELS[job.match_level]}
+                </span>
+              </div>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {job.reason}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </section>
   );
 }

@@ -8,7 +8,17 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-CONTRACT_VERSION = 1
+CONTRACT_VERSION = 2
+
+
+class SeniorityMatch(BaseModel):
+    """Canonical DB seniority code with auditable source evidence."""
+
+    code: str
+    mapping_method: str
+    confidence: float = Field(ge=0, le=1)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    is_primary: bool = False
 
 
 class Level(str, Enum):
@@ -17,9 +27,11 @@ class Level(str, Enum):
     JUNIOR = "junior"
     MIDDLE = "middle"
     SENIOR = "senior"
-    LEAD = "lead"
+    STAFF = "staff"
+    PRINCIPAL = "principal"
+    TECH_LEAD = "tech_lead"
     MANAGER = "manager"
-    DIRECTOR = "director"
+    HEAD_DIRECTOR = "head_director"
 
 
 class JobType(str, Enum):
@@ -46,9 +58,10 @@ class Job(BaseModel):
     salary_currency: Optional[str] = None
     salary_text: Optional[str] = None
     job_type: Optional[str] = None
-    level: Optional[str] = None
     experience: Optional[str] = None
-    seniority_text: Optional[str] = None
+    source_seniority_key: Optional[str] = None
+    source_seniority_text: Optional[str] = None
+    seniority_matches: list[SeniorityMatch] = Field(default_factory=list)
     experience_min: Optional[float] = None
     experience_max: Optional[float] = None
     posted_at: Optional[datetime] = None
@@ -56,6 +69,9 @@ class Job(BaseModel):
     skills: list[str] = Field(default_factory=list)
     logo: Optional[str] = None
     raw: dict[str, Any] = Field(default_factory=dict)
+    # Canonical Seev IT category. Native source categories remain in raw.
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
 
     def to_output(self) -> dict[str, Any]:
         return {
@@ -70,9 +86,10 @@ class Job(BaseModel):
             "salary_currency": self.salary_currency,
             "salary_text": self.salary_text,
             "job_type": self.job_type,
-            "level": self.level,
             "experience": self.experience,
-            "seniority_text": self.seniority_text,
+            "source_seniority_key": self.source_seniority_key,
+            "source_seniority_text": self.source_seniority_text,
+            "seniority_matches": [match.model_dump() for match in self.seniority_matches],
             "experience_min": self.experience_min,
             "experience_max": self.experience_max,
             "posted_at": self.posted_at.isoformat() if self.posted_at else None,
@@ -109,16 +126,19 @@ class Job(BaseModel):
             salary_max=self.salary_max,
             salary_currency=self.salary_currency,
             locations=locations,
-            seniority_text=self.seniority_text,
+            source_seniority_key=self.source_seniority_key,
+            source_seniority_text=self.source_seniority_text,
+            seniority_matches=self.seniority_matches,
             experience_min=self.experience_min,
             experience_max=self.experience_max,
             job_type=self.job_type,
-            level=self.level,
             experience=self.experience,
             skills=self.skills,
             posted_at=self.posted_at.isoformat() if self.posted_at else None,
             expired_at=self.expires_at.isoformat() if self.expires_at else None,
             logo=self.logo,
+            category_id=self.category_id,
+            category_name=self.category_name,
             raw=self.raw,
         )
         return contract.model_dump()
@@ -144,23 +164,26 @@ class CrawledJobV1(BaseModel):
     salary_max: Optional[int] = None
     salary_currency: Optional[str] = None
     locations: list[str] = Field(default_factory=list)
-    seniority_text: Optional[str] = None
+    source_seniority_key: Optional[str] = None
+    source_seniority_text: Optional[str] = None
+    seniority_matches: list[SeniorityMatch] = Field(default_factory=list)
     experience_min: Optional[float] = None
     experience_max: Optional[float] = None
     job_type: Optional[str] = None
-    level: Optional[str] = None
     experience: Optional[str] = None
     skills: list[str] = Field(default_factory=list)
     posted_at: Optional[str] = None
     expired_at: Optional[str] = None
     logo: Optional[str] = None
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
     raw: dict[str, Any] = Field(default_factory=dict)
 
 
 class SearchQuery(BaseModel):
     """User-facing search input (same shape for every source)."""
 
-    query: str = Field(..., description="Job title / keyword to search, e.g. 'python developer'")
+    query: str = Field("", description="Live-search keyword. Empty for fixed category-page crawling.")
     location: Optional[str] = Field(
         None,
         description="Location: city name or alias, e.g. 'Ho Chi Minh', 'Hanoi', 'Da Nang', 'remote'. "
@@ -169,17 +192,35 @@ class SearchQuery(BaseModel):
     level: Optional[Level] = Field(
         None, description="Required level: intern / fresher / junior / middle / senior / lead / manager"
     )
+    category_id: Optional[str] = Field(None, description="Canonical Seev IT category UUID used as classification context")
+    candidate_category_ids: list[str] = Field(
+        default_factory=list,
+        description="Allowed canonical categories for a broader native page. The title classifier must choose one.",
+    )
+    category_candidates: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="DB-provided category name/aliases keyed by canonical UUID for shared native pages.",
+    )
+    crawl_url: Optional[str] = Field(
+        None,
+        description="Verified fixed category page. When present, sources must not build a keyword/level/location search.",
+    )
+    expected_source_label: Optional[str] = Field(
+        None,
+        description="Native category label expected on the fixed page; used as a drift guard.",
+    )
+    source_category_filters: dict[str, dict[str, str]] = Field(
+        default_factory=dict,
+        description="Native filter payload keyed by source; canonical ids are never source ids.",
+    )
     keywords: list[str] = Field(default_factory=list, description="Extra keywords to match against title")
     sources: Optional[list[str]] = Field(
-        default=None, description="Sources to query (default: all enabled). e.g. ['vietnamworks','topdev']"
+        default=None, description="Sources to query (default: all enabled). e.g. ['vietnamworks','itviec']"
     )
     max_results_per_source: int = Field(25, ge=1, le=200, description="Max jobs per source")
     pages: int = Field(1, ge=1, le=10, description="How many result pages to walk per source")
     days: Optional[int] = Field(
         None, ge=1, le=365, description="Only return jobs posted within the last N days (None = all)"
-    )
-    persist: bool = Field(
-        False, description="Save crawled jobs into the PostgreSQL database (upsert)"
     )
 
 
@@ -197,7 +238,6 @@ class SearchResponse(BaseModel):
     per_source: dict[str, SourceStatus]
     total: int
     elapsed_ms: int
-    saved: int = 0
 
 
 def utcnow() -> datetime:

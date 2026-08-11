@@ -70,7 +70,7 @@ export class CvController {
     @Req() req: AuthenticatedRequest,
   ) {
     if (!file || file.mimetype !== 'application/pdf') {
-      throw new BadRequestException('Only PDF files are supported.');
+      throw new BadRequestException('Chỉ hỗ trợ tệp PDF.');
     }
 
     return this.cvService.uploadUserCv(file, dto, req.user.id);
@@ -185,7 +185,7 @@ export class CvController {
     @Req() req: AuthenticatedRequest,
   ) {
     if (!file || file.mimetype !== 'application/pdf') {
-      throw new BadRequestException('Only PDF files are supported.');
+      throw new BadRequestException('Chỉ hỗ trợ tệp PDF.');
     }
 
     return this.cvService.createAudit(file, dto, req.user.id);

@@ -67,11 +67,11 @@ export function UploadCvDialog({
               id="cvName"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Frontend CV July"
+              placeholder="CV Frontend tháng 7"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="resume">Resume PDF</Label>
+            <Label htmlFor="resume">PDF hồ sơ</Label>
             <Input
               id="resume"
               type="file"
@@ -82,7 +82,7 @@ export function UploadCvDialog({
 
           {isError ? (
             <p className="text-sm text-destructive">
-              Upload failed. Check R2 configuration and PDF file.
+              Tải lên thất bại. Kiểm tra cấu hình R2 và file PDF.
             </p>
           ) : null}
 
@@ -97,7 +97,7 @@ export function UploadCvDialog({
             </Button>
             <Button type="submit" disabled={!file || isUploading}>
               <Upload className="size-4" />
-              {isUploading ? 'Uploading...' : 'Upload to R2'}
+              {isUploading ? 'Đang tải lên...' : 'Tải lên R2'}
             </Button>
           </DialogFooter>
         </form>

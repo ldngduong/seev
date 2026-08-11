@@ -1,79 +1,37 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 
-import { JobFamilyCategoryEdge } from './entities/job-family-category-edge.entity';
-import { JobFamilyCategory } from './entities/job-family-category.entity';
-
-export interface JobCategoryTreeNode {
-  id: number;
-  name: string;
-  level: number;
-  alias: string;
-  display_order: number;
-  children: JobCategoryTreeNode[];
-}
-
-export interface JobCategorySearchResult {
-  id: number;
-  name: string;
-  level: number;
-  alias: string;
-  path: string[];
-  descendant_ids: number[];
-}
-
-type JobCategoryTreeSearchNode = JobCategoryTreeNode & { path: string[] };
+import { JobCategoryGroup } from './entities/job-category-group.entity';
+import { JobCategory } from './entities/job-category.entity';
 
 @Injectable()
 export class JobCategoryService {
   constructor(
-    @InjectRepository(JobFamilyCategory)
-    private readonly categoryRepository: Repository<JobFamilyCategory>,
-    @InjectRepository(JobFamilyCategoryEdge)
-    private readonly edgeRepository: Repository<JobFamilyCategoryEdge>,
+    @InjectRepository(JobCategoryGroup)
+    private readonly groupRepository: Repository<JobCategoryGroup>,
+    @InjectRepository(JobCategory)
+    private readonly categoryRepository: Repository<JobCategory>,
   ) {}
 
-  async findTree(): Promise<JobCategoryTreeNode[]> {
-    const [categories, edges] = await Promise.all([
-      this.categoryRepository.find({
-        order: { displayOrder: 'ASC', name: 'ASC' },
-      }),
-      this.edgeRepository.find({ order: { position: 'ASC' } }),
-    ]);
+  async findTree() {
+    const groups = await this.groupRepository.find({
+      relations: { categories: true },
+      where: { isActive: true },
+      order: {
+        displayOrder: 'ASC',
+        categories: { displayOrder: 'ASC', name: 'ASC' },
+      },
+    });
 
-    const nodes = new Map<number, JobCategoryTreeNode>();
-    const childIds = new Set<number>();
-
-    for (const category of categories) {
-      nodes.set(category.id, {
-        id: category.id,
-        name: category.name,
-        level: category.level,
-        alias: category.alias,
-        display_order: category.displayOrder,
-        children: [],
-      });
-    }
-
-    for (const edge of edges) {
-      const parent = nodes.get(edge.parentId);
-      const child = nodes.get(edge.childId);
-
-      if (!parent || !child) {
-        continue;
-      }
-
-      parent.children.push(child);
-      childIds.add(edge.childId);
-    }
-
-    const roots = categories
-      .filter((category) => !childIds.has(category.id))
-      .map((category) => nodes.get(category.id))
-      .filter((node): node is JobCategoryTreeNode => Boolean(node));
-
-    return this.sortTree(roots);
+    return groups.map((group) => ({
+      code: group.code,
+      name: group.name,
+      display_order: group.displayOrder,
+      categories: group.categories
+        .filter((category) => category.isActive)
+        .map((category) => this.toCategory(category)),
+    }));
   }
 
   async findByIds(ids: number[]) {
@@ -81,81 +39,45 @@ export class JobCategoryService {
       return [];
     }
 
-    return this.categoryRepository.find({
-      where: { id: In(ids) },
-      order: { level: 'ASC', displayOrder: 'ASC', name: 'ASC' },
-    });
+    return this.categoryRepository
+      .createQueryBuilder('category')
+      .where('category.id IN (:...ids)', { ids })
+      .andWhere('category.is_active = true')
+      .orderBy('category.display_order', 'ASC')
+      .getMany();
   }
 
-  async search(query: string): Promise<JobCategorySearchResult[]> {
-    const normalizedQuery = this.normalizeSearchText(query);
+  async search(query: string) {
+    const normalized = query.trim();
 
-    if (normalizedQuery.length < 2) {
+    if (normalized.length < 2) {
       return [];
     }
 
-    const tree = await this.findTree();
-    const flatNodes = this.flattenTree(tree);
-
-    return flatNodes
-      .filter((node) =>
-        this.normalizeSearchText(
-          [node.name, node.alias, ...node.path].join(' '),
-        ).includes(normalizedQuery),
-      )
-      .slice(0, 30)
-      .map((node) => ({
-        id: node.id,
-        name: node.name,
-        level: node.level,
-        alias: node.alias,
-        path: node.path,
-        descendant_ids: this.collectDescendantIds(node),
-      }));
-  }
-
-  private sortTree(nodes: JobCategoryTreeNode[]): JobCategoryTreeNode[] {
-    return nodes
-      .sort(
-        (left, right) =>
-          left.display_order - right.display_order ||
-          left.name.localeCompare(right.name),
-      )
-      .map((node) => ({
-        ...node,
-        children: this.sortTree(node.children),
-      }));
-  }
-
-  private flattenTree(
-    nodes: JobCategoryTreeNode[],
-    parentPath: string[] = [],
-  ): JobCategoryTreeSearchNode[] {
-    return nodes.flatMap((node) => {
-      const nodeWithPath = {
-        ...node,
-        path: [...parentPath, node.name],
-      } as JobCategoryTreeSearchNode;
-
-      return [
-        nodeWithPath,
-        ...this.flattenTree(node.children, nodeWithPath.path),
-      ];
+    const categories = await this.categoryRepository.find({
+      relations: { group: true, aliases: true },
+      where: [
+        { isActive: true, name: ILike(`%${normalized}%`) },
+        { isActive: true, code: ILike(`%${normalized}%`) },
+        { isActive: true, aliases: { alias: ILike(`%${normalized}%`) } },
+      ],
+      order: { displayOrder: 'ASC', name: 'ASC' },
+      take: 30,
     });
+
+    return categories.map((category) => ({
+      ...this.toCategory(category),
+      group: { code: category.group.code, name: category.group.name },
+    }));
   }
 
-  private collectDescendantIds(node: JobCategoryTreeNode): number[] {
-    return node.children.flatMap((child) => [
-      child.id,
-      ...this.collectDescendantIds(child),
-    ]);
-  }
-
-  private normalizeSearchText(value: string) {
-    return value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .trim();
+  private toCategory(category: JobCategory) {
+    return {
+      id: category.id,
+      code: category.code,
+      name: category.name,
+      description: category.description,
+      display_order: category.displayOrder,
+    };
   }
 }

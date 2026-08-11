@@ -44,7 +44,7 @@ function getErrorMessage(error: unknown) {
     return error.message
   }
 
-  return 'Something went wrong.'
+  return 'Đã xảy ra lỗi.'
 }
 
 export const useAuthStore = create<AuthState>((set) => ({

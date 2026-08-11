@@ -97,7 +97,7 @@ const envSchema = z.object({
   JOB_RESEARCH_DEFAULT_SOURCES: z
     .string()
     .min(1)
-    .default('topcv,vietnamworks,indeed'),
+    .default('topcv,vietnamworks,itviec'),
   JOB_RESEARCH_MAX_JOBS_PER_SOURCE: z.coerce
     .number()
     .int()
@@ -116,6 +116,35 @@ const envSchema = z.object({
     .positive()
     .default(30000),
   JOB_RESEARCH_HTTP_RETRIES: z.coerce.number().int().min(0).default(2),
+  // Scheduled crawl from verified nationwide native category pages.
+  CRAWL_CATEGORY_CRON: z
+    .string()
+    .default('0 2 * * *')
+    .describe('Cron schedule for the periodic category crawl.'),
+  CRAWL_CATEGORY_SOURCES: z
+    .string()
+    .default('topcv,vietnamworks,itviec')
+    .describe('Comma-separated sources for the periodic category crawl.'),
+  CRAWL_CATEGORY_MAX_JOBS_PER_SOURCE: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(50),
+  // Email thông báo kết quả category crawl (Resend). Bỏ trống để tắt.
+  RESEND_API_KEY: z
+    .string()
+    .default('')
+    .describe('Resend API key for crawl notifications.'),
+  MAIL_FROM: z
+    .string()
+    .default('Seev Crawler <onboarding@duongle.dev>')
+    .describe('Sender address for crawl notification emails.'),
+  CRAWL_NOTIFY_EMAIL: z
+    .string()
+    .default('')
+    .describe(
+      'Recipient email for crawl notifications; empty disables sending.',
+    ),
   CV_RESEARCH_STALE_PROCESSING_MINUTES: z.coerce
     .number()
     .int()

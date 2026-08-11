@@ -63,7 +63,7 @@ export function NotificationCenter() {
   return (
     <Popover>
       <PopoverTrigger
-        aria-label="Notifications"
+        aria-label="Thông báo"
         className="relative grid size-9 place-items-center rounded-xl text-zinc-600 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/60"
       >
         <Bell className="size-5" />
@@ -74,9 +74,9 @@ export function NotificationCenter() {
       <PopoverContent align="end" sideOffset={8} className="w-80 gap-0 overflow-hidden rounded-xl p-0">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div>
-            <p className="font-semibold text-zinc-700">Notifications</p>
+            <p className="font-semibold text-zinc-700">Thông báo</p>
             <p className="text-xs text-muted-foreground">
-              {unread ? `${unread} unread` : 'You are up to date'}
+              {unread ? `${unread} chưa đọc` : 'Bạn đã xem hết thông báo'}
             </p>
           </div>
           {unread ? (
@@ -85,7 +85,7 @@ export function NotificationCenter() {
               onClick={() => readAllMutation.mutate()}
               className="text-xs font-medium text-primary hover:underline"
             >
-              Mark all read
+              Đánh dấu đã đọc
             </button>
           ) : null}
         </div>
@@ -120,7 +120,7 @@ export function NotificationCenter() {
             ))
           ) : (
             <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-              No notifications yet.
+              Chưa có thông báo nào.
             </p>
           )}
         </div>
@@ -142,10 +142,10 @@ function NotificationIcon({ status }: { status: UserNotification['status'] }) {
 function formatRelativeTime(value: string) {
   const elapsed = Date.now() - new Date(value).getTime()
   const minutes = Math.max(0, Math.floor(elapsed / 60_000))
-  if (minutes < 1) return 'Just now'
-  if (minutes < 60) return `${minutes}m ago`
+  if (minutes < 1) return 'Vừa xong'
+  if (minutes < 60) return `${minutes} phút trước`
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
+  if (hours < 24) return `${hours} giờ trước`
   return new Intl.DateTimeFormat(undefined, {
     day: 'numeric',
     month: 'short',

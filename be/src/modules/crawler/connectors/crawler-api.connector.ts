@@ -82,13 +82,61 @@ export class CrawlerApiConnector implements JobSourceConnector {
 
     if (errors.length === queries.length) {
       throw new Error(
-        `Crawler source ${this.source} failed for every query: ${errors
+        `Nguồn crawler ${this.source} thất bại ở mọi truy vấn: ${errors
           .map((result) => `${result.query}: ${result.error}`)
           .join(' | ')}`,
       );
     }
 
     return jobs;
+  }
+
+  /** Crawl one verified native category page. This path deliberately carries
+   * no role keyword, location or seniority filter. */
+  async searchFixedCategory(target: {
+    categoryIds: string[];
+    categoryCandidates: Record<string, string[]>;
+    crawlUrl: string;
+    expectedSourceLabel: string | null;
+    maxJobs: number;
+  }): Promise<CrawledJob[]> {
+    const baseUrl = this.config
+      .get('CRAWLER_API_URL', { infer: true })
+      .replace(/\/+$/, '');
+    const token = this.config.get('CRAWLER_BEARER_TOKEN', { infer: true });
+    const payload = await this.http.fetchJson<unknown>(
+      `${baseUrl}/api/v1/sources/${this.source}/search`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          query: '',
+          category_id:
+            target.categoryIds.length === 1 ? target.categoryIds[0] : null,
+          candidate_category_ids: target.categoryIds,
+          category_candidates: target.categoryCandidates,
+          crawl_url: target.crawlUrl,
+          expected_source_label: target.expectedSourceLabel,
+          keywords: [],
+          max_results_per_source: target.maxJobs,
+          pages: 5,
+          persist: false,
+        }),
+        timeoutMs: this.config.get('CRAWLER_API_TIMEOUT_MS', { infer: true }),
+      },
+    );
+    const parsed = parseCrawlerSearchResponse(payload);
+    const status = parsed.per_source[this.source];
+    if (status && status.status !== 'ok') {
+      throw new Error(status.error ?? `Crawler status '${status.status}'`);
+    }
+    return parsed.results.map((job) => ({
+      ...mapCrawledJobV1(job),
+      source: this.source,
+    }));
   }
 
   private searchQuery(
@@ -103,7 +151,7 @@ export class CrawlerApiConnector implements JobSourceConnector {
         if (sourceStatus && sourceStatus.status !== 'ok') {
           throw new Error(
             sourceStatus.error ??
-              `Crawler source reported '${sourceStatus.status}'`,
+              `Nguồn crawler báo trạng thái '${sourceStatus.status}'`,
           );
         }
 
@@ -122,7 +170,7 @@ export class CrawlerApiConnector implements JobSourceConnector {
         const message = error instanceof Error ? error.message : String(error);
 
         this.logger.warn(
-          `[crawler-api:${this.source}] query '${query}' failed: ${message}`,
+          `[crawler-api:${this.source}] truy vấn '${query}' thất bại: ${message}`,
         );
 
         return { jobs: [], query, error: message };
@@ -142,6 +190,8 @@ export class CrawlerApiConnector implements JobSourceConnector {
       query,
       location: intent.locations[0] ?? null,
       level,
+      category_id: intent.categoryId ?? null,
+      source_category_filters: intent.sourceCategoryFilters ?? {},
       keywords: [],
       max_results_per_source: intent.maxJobsPerSource,
       pages: 5,

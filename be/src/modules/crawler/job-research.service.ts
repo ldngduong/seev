@@ -7,27 +7,26 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Queue } from 'bullmq';
-import { In, Repository } from 'typeorm';
+import { Brackets, In, Repository } from 'typeorm';
 
 import type { Env } from '../../config/env.schema';
 import { runWithConcurrency } from '../../shared/utils/run-with-concurrency';
 import { CvResearchSession } from '../cv/entities/cv-research-session.entity';
 import { CvAudit } from '../cv/entities/cv-audit.entity';
-import { JobFamilyCategory } from '../job-category/entities/job-family-category.entity';
+import { CategorySeniorityLevel } from '../job-category/entities/category-seniority-level.entity';
+import { JobCategory } from '../job-category/entities/job-category.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
 import { ResearchProgressService } from '../research-realtime/research-progress.service';
-import { CrawlerApiConnector } from './connectors/crawler-api.connector';
-import { CrawlerHttpService } from './crawler-http.service';
 import { CreateJobResearchIntentDto } from './dto/create-job-research-intent.dto';
 import { JobCrawlRun } from './entities/job-crawl-run.entity';
 import { AiEngineService } from '../ai/ai-engine.service';
 import { JobIntentMatch } from './entities/job-intent-match.entity';
 import { JobPost } from './entities/job-post.entity';
+import { JobPostSeniorityLevel } from './entities/job-post-seniority-level.entity';
 import { JobSearchIntent } from './entities/job-search-intent.entity';
 import type {
   CrawledJob,
   JobSearchIntentPayload,
-  JobSourceConnector,
 } from './types/crawled-job.type';
 import {
   JOB_RESEARCH_JOB,
@@ -51,8 +50,6 @@ interface CreateIntentResult {
 
 @Injectable()
 export class JobResearchService {
-  private readonly connectors: Map<JobSource, JobSourceConnector>;
-
   constructor(
     @InjectQueue(JOB_RESEARCH_QUEUE)
     private readonly queue: Queue<{ intentId: string }>,
@@ -62,27 +59,32 @@ export class JobResearchService {
     private readonly crawlRunRepository: Repository<JobCrawlRun>,
     @InjectRepository(JobPost)
     private readonly jobPostRepository: Repository<JobPost>,
+    @InjectRepository(JobPostSeniorityLevel)
+    private readonly jobPostSeniorityRepository: Repository<JobPostSeniorityLevel>,
     @InjectRepository(JobIntentMatch)
     private readonly matchRepository: Repository<JobIntentMatch>,
     @InjectRepository(CvResearchSession)
     private readonly researchSessionRepository: Repository<CvResearchSession>,
     @InjectRepository(CvAudit)
     private readonly auditRepository: Repository<CvAudit>,
-    @InjectRepository(JobFamilyCategory)
-    private readonly categoryRepository: Repository<JobFamilyCategory>,
+    @InjectRepository(JobCategory)
+    private readonly categoryRepository: Repository<JobCategory>,
     @InjectRepository(SeniorityLevel)
     private readonly seniorityRepository: Repository<SeniorityLevel>,
+    @InjectRepository(CategorySeniorityLevel)
+    private readonly categorySeniorityRepository: Repository<CategorySeniorityLevel>,
     private readonly config: ConfigService<Env, true>,
     private readonly progressService: ResearchProgressService,
-    private readonly crawlerHttp: CrawlerHttpService,
     private readonly aiEngine: AiEngineService,
-  ) {
-    this.connectors = new Map<JobSource, JobSourceConnector>(
-      JOB_SOURCES.map((source) => [
-        source,
-        new CrawlerApiConnector(source, crawlerHttp, this.config),
-      ]),
-    );
+  ) {}
+
+  async deleteExpiredJobs(): Promise<number> {
+    const result = await this.jobPostRepository
+      .createQueryBuilder()
+      .delete()
+      .where('expired_at <= NOW()')
+      .execute();
+    return result.affected ?? 0;
   }
 
   async createIntent(
@@ -140,7 +142,7 @@ export class JobResearchService {
     const intent = await this.intentRepository.findOneBy({ id: intentId });
 
     if (!intent) {
-      throw new NotFoundException('Job search intent does not exist.');
+      throw new NotFoundException('Intent tìm việc không tồn tại.');
     }
 
     await this.intentRepository.update(intent.id, {
@@ -156,7 +158,7 @@ export class JobResearchService {
           status: 'processing',
           phase: 'job_matching',
           progress: 76,
-          message: 'Searching for current jobs that fit your CV.',
+          message: 'Đang tìm việc làm phù hợp với CV của bạn.',
         },
         intent.researchSessionAttempt ?? undefined,
       );
@@ -164,28 +166,18 @@ export class JobResearchService {
 
     try {
       const payload = this.toPayload(intent);
+      const dbJobs = await this.findDbJobsForIntent(intent, payload.sources);
       let finishedSources = 0;
       const sourceResults = await runWithConcurrency(
         payload.sources,
         this.config.get('JOB_RESEARCH_SOURCE_CONCURRENCY', { infer: true }),
         async (source) => {
-          const connector = this.connectors.get(source);
-
-          if (!connector) {
-            return {
-              source,
-              savedCount: 0,
-              completed: false,
-              error: 'connector is not registered',
-            };
-          }
-
           const run = await this.startRun(intent, source, payload);
+          const jobsOfSource = dbJobs.filter((job) => job.source === source);
 
           try {
-            const crawledJobs = await connector.search(payload);
-            const savedCount = await this.saveCrawledJobs(intent, crawledJobs);
-            await this.completeRun(run, crawledJobs.length, savedCount);
+            const savedCount = await this.saveDbMatches(intent, jobsOfSource);
+            await this.completeRun(run, jobsOfSource.length, savedCount);
             return {
               source,
               savedCount,
@@ -212,7 +204,7 @@ export class JobResearchService {
                     76 +
                     Math.floor((finishedSources / payload.sources.length) * 19),
                   message:
-                    'Comparing available jobs with your experience and career level.',
+                    'Đang đối chiếu việc làm với kinh nghiệm và cấp bậc của bạn.',
                 },
                 intent.researchSessionAttempt ?? undefined,
               );
@@ -296,7 +288,7 @@ export class JobResearchService {
       .set({
         status: 'failed',
         completedAt: () => 'CURRENT_TIMESTAMP',
-        error: 'Superseded by a retry after the previous queue job stopped.',
+        error: 'Bị thay thế bởi lần chạy lại sau khi job queue trước dừng.',
       })
       .where('intent_id = :intentId', { intentId: intent.id })
       .andWhere('status IN (:...statuses)', {
@@ -368,10 +360,7 @@ export class JobResearchService {
       .where('match.intent_id = :intentId', { intentId })
       .andWhere("match.match_kind != 'reject'")
       .orderBy('match.match_score', 'DESC')
-      .addOrderBy(
-        "CASE match.match_kind WHEN 'match' THEN 0 ELSE 1 END",
-        'ASC',
-      )
+      .addOrderBy("CASE match.match_kind WHEN 'match' THEN 0 ELSE 1 END", 'ASC')
       .addOrderBy('job.last_seen_at', 'DESC');
 
     if (limit !== undefined) {
@@ -395,7 +384,7 @@ export class JobResearchService {
       : null;
 
     if (dto.auditId && !audit) {
-      throw new NotFoundException('CV audit does not exist.');
+      throw new NotFoundException('Bản audit CV không tồn tại.');
     }
 
     const categoryId = dto.jobCategoryId ?? audit?.jobCategoryId ?? undefined;
@@ -412,11 +401,25 @@ export class JobResearchService {
     ]);
 
     if (categoryId && !category) {
-      throw new BadRequestException('Selected job category does not exist.');
+      throw new BadRequestException('Ngành nghề đã chọn không tồn tại.');
     }
 
     if (seniorityId && !seniority) {
-      throw new BadRequestException('Selected seniority level does not exist.');
+      throw new BadRequestException('Cấp bậc đã chọn không tồn tại.');
+    }
+
+    if (category && seniority) {
+      const compatible = await this.categorySeniorityRepository.existsBy({
+        categoryId: category.id,
+        seniorityCode: seniority.code,
+        isSelectable: true,
+      });
+
+      if (!compatible) {
+        throw new BadRequestException(
+          `Cấp bậc ${seniority.displayName} không phù hợp với nhóm ${category.name}.`,
+        );
+      }
     }
 
     const targetRole = normalizeText(
@@ -444,7 +447,7 @@ export class JobResearchService {
 
     if (!jobCategoryName && !targetRole && keywords.length === 0) {
       throw new BadRequestException(
-        'Job research requires an audit, target role, job category, or keyword.',
+        'Research việc làm cần có audit, vị trí mục tiêu, ngành nghề hoặc từ khóa.',
       );
     }
 
@@ -486,8 +489,7 @@ export class JobResearchService {
   ) {
     const normalized = normalizeSearchText(keyword);
     const roleMatches =
-      !!targetRole &&
-      normalized === normalizeSearchText(targetRole);
+      !!targetRole && normalized === normalizeSearchText(targetRole);
     const queryMatches = searchQueries.some(
       (query) => normalized === normalizeSearchText(query),
     );
@@ -531,7 +533,7 @@ export class JobResearchService {
     const intent = await this.intentRepository.findOneBy({ id: intentId });
 
     if (!intent) {
-      throw new NotFoundException('Job search intent does not exist.');
+      throw new NotFoundException('Intent tìm việc không tồn tại.');
     }
 
     return intent;
@@ -544,7 +546,7 @@ export class JobResearchService {
     });
 
     if (!intent) {
-      throw new NotFoundException('Job search intent does not exist.');
+      throw new NotFoundException('Intent tìm việc không tồn tại.');
     }
 
     return intent;
@@ -596,24 +598,145 @@ export class JobResearchService {
     });
   }
 
-  private async saveCrawledJobs(
+  /**
+   * Đọc job để gợi ý trực tiếp từ job_posts (được category crawl đổ đầy),
+   * thay cho live crawl. Filter: source, category (root -> children + root,
+   * leaf -> chính nó; fallback theo tên cho data cũ thiếu id), thành phố
+   * (so khớp mềm trên jsonb locations), keyword (search_text, OR giữa các
+   * term, ưu tiên job khớp nhiều term), seniority (xếp hạng mềm: job đúng
+   * cấp lên đầu, AI classify cắt sau).
+   */
+  private async findDbJobsForIntent(
     intent: JobSearchIntent,
-    crawledJobs: CrawledJob[],
+    sources: JobSource[],
   ) {
-    let savedCount = 0;
-    const jobPosts: JobPost[] = [];
+    const qb = this.jobPostRepository
+      .createQueryBuilder('job')
+      .where('job.search_text IS NOT NULL')
+      .andWhere('job.expired_at > NOW()')
+      .andWhere('job.source IN (:...sources)', { sources });
 
-    for (const crawledJob of crawledJobs) {
-      if (!crawledJob.sourceJobId || !crawledJob.title) {
-        continue;
-      }
-
-      jobPosts.push(await this.upsertJobPost(intent, crawledJob));
+    // 1) canonical IT category: every selectable category is a concrete leaf.
+    if (intent.jobCategoryId) {
+      qb.andWhere('job.job_category_id = :categoryId', {
+        categoryId: intent.jobCategoryId,
+      });
     }
 
+    // 2) thành phố: so khớp mềm trên jsonb locations (bỏ dấu 2 chiều)
+    const city = normalizeSearchText(intent.locations[0] ?? '');
+    if (city.length >= 3) {
+      qb.andWhere(
+        `EXISTS (SELECT 1 FROM jsonb_array_elements_text(job.locations) AS loc
+           WHERE translate(lower(loc),
+             'áàảãạăắằẳẵặâấầẩẫậéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵđ',
+             'aaaaaaaaaaaaaaaaaaaaaaaaaeeeeeeeeeeeeeiiiiioooooooooooooooooooouuuuuuuuuuuuuuyyyyyyd')
+           LIKE :cityLike)`,
+        { cityLike: `%${city}%` },
+      );
+    }
+
+    // 3) keyword: targetRole + keywords, OR giữa các term, điểm = số term khớp
+    const terms = uniqueNonEmpty([
+      intent.targetRole,
+      ...(intent.keywords ?? []),
+    ])
+      .flatMap((term) => normalizeSearchText(term).split(/\s+/))
+      .filter((term) => term.length >= 3);
+
+    if (terms.length > 0) {
+      const params: Record<string, string> = {};
+      const likeClauses = terms.map((term, index) => {
+        params[`kw${index}`] = `%${term}%`;
+        return `job.search_text LIKE :kw${index}`;
+      });
+      qb.andWhere(`(${likeClauses.join(' OR ')})`, params).addSelect(
+        `(${terms
+          .map(
+            (_, index) =>
+              `CASE WHEN job.search_text LIKE :kw${index} THEN 1 ELSE 0 END`,
+          )
+          .join(' + ')})`,
+        'kw_score',
+      );
+    }
+
+    // 4) seniority: xếp hạng mềm (job đúng cấp lên đầu), AI cắt sau
+    if (intent.seniorityLevelId) {
+      qb.addSelect(
+        `CASE WHEN EXISTS (
+          SELECT 1 FROM job_post_seniority_levels jsl
+          WHERE jsl.job_post_id = job.id AND jsl.seniority_level_id = :seniorityId
+        ) THEN 0 ELSE 1 END`,
+        'sen_rank',
+      ).setParameter('seniorityId', intent.seniorityLevelId);
+    }
+
+    if (terms.length > 0) {
+      qb.addOrderBy('kw_score', 'DESC');
+    }
+    if (intent.seniorityLevelId) {
+      qb.addOrderBy('sen_rank', 'ASC');
+    }
+    qb.addOrderBy('job.posted_at', 'DESC')
+      .addOrderBy('job.last_seen_at', 'DESC')
+      .take(clamp(intent.maxJobsPerSource * sources.length, 1, 300));
+
+    return qb.getMany();
+  }
+
+  /**
+   * Match job_posts đã có trong DB với intent (không upsert lại job):
+   * AI classify + ghi JobIntentMatch, giống saveCrawledJobs.
+   */
+  private async saveDbMatches(intent: JobSearchIntent, jobPosts: JobPost[]) {
     if (jobPosts.length === 0) {
       return 0;
     }
+
+    const targetSeniority = intent.seniorityLevelId
+      ? await this.seniorityRepository.findOneBy({
+          id: intent.seniorityLevelId,
+        })
+      : null;
+    const seniorityRows: Array<{ job_post_id: string; code: string }> =
+      await this.jobPostRepository.query(
+        `SELECT jsl."job_post_id", sl."code"
+           FROM "job_post_seniority_levels" jsl
+           JOIN "seniority_levels" sl ON sl."id" = jsl."seniority_level_id"
+          WHERE jsl."job_post_id" = ANY($1::uuid[])
+          ORDER BY jsl."is_primary" DESC, jsl."confidence" DESC`,
+        [jobPosts.map((job) => job.id)],
+      );
+    const codesByJob = new Map<string, string[]>();
+    for (const row of seniorityRows) {
+      codesByJob.set(row.job_post_id, [
+        ...(codesByJob.get(row.job_post_id) ?? []),
+        row.code,
+      ]);
+    }
+    const compatibilityRows: Array<{
+      job_code: string;
+      relation: 'exact' | 'adjacent' | 'stretch' | 'incompatible';
+      score_penalty: number;
+    }> = targetSeniority
+      ? await this.seniorityRepository.query(
+          `SELECT "job_code", "relation", "score_penalty"
+             FROM "seniority_compatibility"
+            WHERE "candidate_code" = $1`,
+          [targetSeniority.code],
+        )
+      : [];
+    const compatibilityByCode = new Map(
+      compatibilityRows.map((row) => [row.job_code, row]),
+    );
+    const eligibleJobs = jobPosts.filter((job) => {
+      if (!targetSeniority) return true;
+      const codes = codesByJob.get(job.id) ?? [];
+      return codes.some(
+        (code) => compatibilityByCode.get(code)?.relation !== 'incompatible',
+      );
+    });
 
     const results = await this.aiEngine.classifyJobMatches({
       target: {
@@ -621,29 +744,57 @@ export class JobResearchService {
         seniorityLevelName: intent.seniorityLevelName,
         keywords: intent.keywords ?? [],
       },
-      jobs: jobPosts.map((jobPost) => ({
+      jobs: eligibleJobs.map((jobPost) => ({
         jobId: jobPost.id,
         title: jobPost.title,
+        categoryName: jobPost.jobCategoryName,
+        seniorityCode: (codesByJob.get(jobPost.id) ?? [])[0] ?? null,
+        skills: jobPost.skills,
       })),
     });
     const resultByJobId = new Map(
       results.map((result) => [result.job_id, result]),
     );
+    let savedCount = 0;
 
-    for (const jobPost of jobPosts) {
+    for (const jobPost of eligibleJobs) {
       const result = resultByJobId.get(jobPost.id);
 
       if (!result || result.match_kind === 'reject') {
         continue;
       }
 
+      const jobCodes = codesByJob.get(jobPost.id) ?? [];
+      const rankedCompatibilities = jobCodes
+        .map((code) => ({ code, compatibility: compatibilityByCode.get(code) }))
+        .filter((item) => item.compatibility?.relation !== 'incompatible')
+        .sort(
+          (a, b) =>
+            (a.compatibility?.score_penalty ?? 0) -
+            (b.compatibility?.score_penalty ?? 0),
+        );
+      const jobSeniorityCode = rankedCompatibilities[0]?.code ?? null;
+      const compatibility = rankedCompatibilities[0]?.compatibility ?? null;
+      const matchKind =
+        compatibility && compatibility.relation !== 'exact'
+          ? 'suggestion'
+          : result.match_kind;
+      const matchScore = Math.max(
+        0,
+        result.score - (compatibility?.score_penalty ?? 0),
+      );
+
       await this.matchRepository.upsert(
         {
           intentId: intent.id,
           jobPostId: jobPost.id,
-          matchScore: result.score,
-          matchedTerms: result.level ? [result.level] : [],
-          matchKind: result.match_kind,
+          matchScore:
+            matchKind === 'suggestion' ? Math.min(matchScore, 59) : matchScore,
+          matchedTerms: [
+            `category:${jobPost.jobCategoryId ?? 'unknown'}`,
+            ...(jobSeniorityCode ? [`seniority:${jobSeniorityCode}`] : []),
+          ],
+          matchKind,
           matchReason: result.reason,
         },
         ['intentId', 'jobPostId'],
@@ -654,14 +805,47 @@ export class JobResearchService {
     return savedCount;
   }
 
-  private async upsertJobPost(intent: JobSearchIntent, crawledJob: CrawledJob) {
+  async upsertCrawledJobs(crawledJobs: CrawledJob[]): Promise<number> {
+    let saved = 0;
+
+    for (const crawledJob of crawledJobs) {
+      const expectedDeadlineSource: Partial<Record<JobSource, string>> = {
+        topcv: 'topcv_json_ld',
+        itviec: 'itviec_json_ld',
+        vietnamworks: 'vietnamworks_api',
+      };
+      if (
+        !crawledJob.sourceJobId ||
+        !crawledJob.title ||
+        !crawledJob.categoryId ||
+        !crawledJob.expiredAt ||
+        crawledJob.expiredAt <= new Date() ||
+        crawledJob.seniorityMatches.length === 0 ||
+        crawledJob.raw.deadline_source !==
+          expectedDeadlineSource[crawledJob.source] ||
+        (crawledJob.postedAt != null &&
+          crawledJob.expiredAt <= crawledJob.postedAt)
+      ) {
+        continue;
+      }
+
+      if (await this.upsertJobPost(null, crawledJob)) saved += 1;
+    }
+
+    return saved;
+  }
+
+  private async upsertJobPost(
+    _intent: JobSearchIntent | null,
+    crawledJob: CrawledJob,
+  ) {
     const searchText = normalizeSearchText(
       [
         crawledJob.title,
         crawledJob.companyName,
         crawledJob.salaryText,
         crawledJob.locations.join(' '),
-        crawledJob.seniorityText,
+        crawledJob.sourceSeniorityText,
         crawledJob.skills.join(' '),
       ].join(' '),
     );
@@ -671,17 +855,77 @@ export class JobResearchService {
       crawledJob.salaryText,
       crawledJob.skills.join(','),
     ]);
+    const dedupKey = createContentHash([
+      crawledJob.sourceUrl,
+      crawledJob.title,
+    ]);
     const now = new Date();
-
-    const existingJobPost = await this.jobPostRepository.findOneBy({
-      source: crawledJob.source,
-      sourceJobId: crawledJob.sourceJobId,
+    if (!crawledJob.categoryId || !crawledJob.expiredAt) return null;
+    const [category, categorySeniorityRules] = await Promise.all([
+      this.categoryRepository.findOneBy({
+        id: crawledJob.categoryId,
+        isActive: true,
+      }),
+      this.categorySeniorityRepository.findBy({
+        categoryId: crawledJob.categoryId,
+        isSelectable: true,
+      }),
+    ]);
+    const allowedCodes = new Set(
+      categorySeniorityRules.map((rule) => rule.seniorityCode),
+    );
+    const validMatches = crawledJob.seniorityMatches
+      .filter((match) => allowedCodes.has(match.code))
+      .sort(
+        (a, b) =>
+          Number(b.isPrimary) - Number(a.isPrimary) ||
+          b.confidence - a.confidence,
+      )
+      .map((match, index) => ({ ...match, isPrimary: index === 0 }));
+    const seniorityLevels = await this.seniorityRepository.findBy({
+      code: In(validMatches.map((match) => match.code)),
+      isActive: true,
     });
+    if (
+      !category ||
+      validMatches.length === 0 ||
+      seniorityLevels.length !==
+        new Set(validMatches.map((match) => match.code)).size
+    ) {
+      return null;
+    }
+    const seniorityByCode = new Map(
+      seniorityLevels.map((level) => [level.code, level]),
+    );
+
+    // Chống trùng theo (source, source_job_id) hoặc (source, source_url, title):
+    // job cùng URL+title (đăng lại, cross-source) không tạo row mới.
+    const existingJobPost = await this.jobPostRepository
+      .createQueryBuilder('job')
+      .where(
+        '(job.source = :source AND job.source_job_id = :sourceJobId) OR ' +
+          '(job.source = :source AND job.dedup_key = :dedupKey)',
+        {
+          source: crawledJob.source,
+          sourceJobId: crawledJob.sourceJobId,
+          dedupKey,
+        },
+      )
+      .take(1)
+      .getOne();
+    const categoryEvidence =
+      crawledJob.raw.category_evidence &&
+      typeof crawledJob.raw.category_evidence === 'object'
+        ? (crawledJob.raw.category_evidence as Record<string, unknown>)
+        : null;
+    const sourceRaw = { ...crawledJob.raw };
+    delete sourceRaw.category_evidence;
     const jobPost = this.jobPostRepository.create({
       ...(existingJobPost ?? {}),
       source: crawledJob.source,
       sourceJobId: crawledJob.sourceJobId,
       sourceUrl: crawledJob.sourceUrl,
+      dedupKey,
       title: crawledJob.title,
       companyName: crawledJob.companyName,
       salaryText: crawledJob.salaryText,
@@ -689,27 +933,63 @@ export class JobResearchService {
       salaryMax: crawledJob.salaryMax,
       salaryCurrency: crawledJob.salaryCurrency,
       jobType: crawledJob.jobType,
-      level: crawledJob.level,
       experience: crawledJob.experience,
       experienceMin: crawledJob.experienceMin,
       experienceMax: crawledJob.experienceMax,
       logo: crawledJob.logo,
       locations: crawledJob.locations,
-      seniorityText: crawledJob.seniorityText,
-      jobCategoryId: null,
-      jobCategoryName: null,
-      seniorityLevelId: null,
-      seniorityLevelName: null,
+      jobCategoryId: crawledJob.categoryId,
+      jobCategoryName: crawledJob.categoryName ?? null,
+      categoryConfidence: crawledJob.categoryId
+        ? categoryEvidence?.kind === 'native_fixed_page'
+          ? 1
+          : 0.9
+        : null,
+      categoryEvidence: crawledJob.categoryId
+        ? categoryEvidence
+          ? categoryEvidence
+          : {
+              strategy: 'canonical-title-source-classifier',
+              title: crawledJob.title,
+            }
+        : {},
+      sourceCategoryRaw:
+        crawledJob.raw.jobFunction &&
+        typeof crawledJob.raw.jobFunction === 'object'
+          ? (crawledJob.raw.jobFunction as Record<string, unknown>)
+          : {},
       skills: crawledJob.skills,
       searchText,
       contentHash,
       postedAt: crawledJob.postedAt,
       expiredAt: crawledJob.expiredAt,
       lastSeenAt: now,
-      raw: crawledJob.raw,
+      raw: {
+        ...sourceRaw,
+        source_seniority_key: crawledJob.sourceSeniorityKey,
+        source_seniority_text: crawledJob.sourceSeniorityText,
+      },
     });
 
-    return this.jobPostRepository.save(jobPost);
+    const savedJob = await this.jobPostRepository.save(jobPost);
+    await this.jobPostSeniorityRepository.delete({ jobPostId: savedJob.id });
+    await this.jobPostSeniorityRepository.save(
+      validMatches.map((match) =>
+        this.jobPostSeniorityRepository.create({
+          jobPostId: savedJob.id,
+          seniorityLevelId: seniorityByCode.get(match.code)!.id,
+          mappingMethod: match.mappingMethod,
+          confidence: match.confidence,
+          evidence: {
+            ...match.evidence,
+            source_seniority_key: crawledJob.sourceSeniorityKey,
+            source_seniority_text: crawledJob.sourceSeniorityText,
+          },
+          isPrimary: match.isPrimary,
+        }),
+      ),
+    );
+    return savedJob;
   }
 
   private async snapshotResearchSessionJobs(intentId: string) {
@@ -738,6 +1018,7 @@ export class JobResearchService {
         jobSuggestionsSnapshot: matches.map((match) => ({
           match_score: match.matchScore,
           matched_terms: match.matchedTerms,
+          match_reason: match.matchReason,
           job: {
             id: match.jobPost.id,
             source: match.jobPost.source,
@@ -746,7 +1027,10 @@ export class JobResearchService {
             company_name: match.jobPost.companyName,
             salary_text: match.jobPost.salaryText,
             locations: match.jobPost.locations,
-            seniority_text: match.jobPost.seniorityText,
+            seniority_text:
+              typeof match.jobPost.raw.source_seniority_text === 'string'
+                ? match.jobPost.raw.source_seniority_text
+                : null,
             skills: match.jobPost.skills,
           },
         })),
@@ -761,13 +1045,13 @@ export class JobResearchService {
       await this.progressService.fail(
         intent.researchSessionId,
         intent.researchSessionAttempt,
-        intent.error || 'All configured job sources failed.',
+        intent.error || 'Tất cả nguồn việc làm đã được cấu hình đều thất bại.',
       );
     } else {
       await this.progressService.complete(
         intent.researchSessionId,
         intent.researchSessionAttempt,
-        `Research completed with ${matches.length} matching jobs.`,
+        `Research hoàn tất với ${matches.length} việc làm phù hợp.`,
       );
     }
   }

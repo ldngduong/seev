@@ -2,12 +2,26 @@
 
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
+import asyncio
+
+import httpx
 
 import src.api as api_module
 from src.models import CONTRACT_VERSION, Job
 
-client = TestClient(api_module.app)
+
+def _post(path: str, **kwargs) -> httpx.Response:
+    """Exercise the ASGI app without Starlette's deprecated TestClient shim."""
+
+    async def request() -> httpx.Response:
+        transport = httpx.ASGITransport(app=api_module.app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            return await client.post(path, **kwargs)
+
+    return asyncio.run(request())
 
 
 def _stub_pipeline(monkeypatch, jobs: list[Job]):
@@ -27,7 +41,7 @@ def test_search_contract_returns_v1_shape(monkeypatch):
         monkeypatch,
         [Job(source="topcv", source_job_id="1", title="Backend Dev", url="https://ex/job/1")],
     )
-    resp = client.post("/api/v1/search", json={"query": "backend"})
+    resp = _post("/api/v1/search", json={"query": "backend"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["total"] == 1
@@ -40,12 +54,12 @@ def test_search_contract_returns_v1_shape(monkeypatch):
 
 def test_contract_version_header(monkeypatch):
     _stub_pipeline(monkeypatch, [])
-    resp = client.post("/api/v1/search", json={"query": "backend"})
+    resp = _post("/api/v1/search", json={"query": "backend"})
     assert resp.headers.get("x-contract-version") == str(CONTRACT_VERSION)
 
 
 def test_per_source_endpoint_unknown_source():
-    resp = client.post(
+    resp = _post(
         "/api/v1/sources/not-a-source/search",
         json={"query": "backend", "sources": ["topcv"]},
     )
@@ -57,7 +71,7 @@ def test_per_source_endpoint_known_source(monkeypatch):
         monkeypatch,
         [Job(source="topcv", source_job_id="7", title="Frontend", url="https://ex/job/7")],
     )
-    resp = client.post(
+    resp = _post(
         "/api/v1/sources/topcv/search",
         json={"query": "frontend", "max_results_per_source": 10},
     )
@@ -69,9 +83,9 @@ def test_per_source_endpoint_known_source(monkeypatch):
 def test_bearer_token_is_enforced_when_configured(monkeypatch):
     _stub_pipeline(monkeypatch, [])
     monkeypatch.setattr(api_module, "_EXPECTED_TOKEN", "s3cret")
-    resp = client.post("/api/v1/search", json={"query": "backend"})
+    resp = _post("/api/v1/search", json={"query": "backend"})
     assert resp.status_code == 401
-    resp = client.post(
+    resp = _post(
         "/api/v1/search",
         json={"query": "backend"},
         headers={"authorization": "Bearer s3cret"},

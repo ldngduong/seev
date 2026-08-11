@@ -20,9 +20,9 @@ export function ResearchProcessingScreen({
           </div>
         </div>
         <div className="w-full space-y-3 sm:w-[32rem]">
-          <h2 className="text-xl font-semibold text-zinc-700">Reviewing your CV</h2>
+          <h2 className="text-xl font-semibold text-zinc-700">Đang phân tích CV của bạn</h2>
           <p className="min-h-5 text-sm text-muted-foreground">
-            {message || 'Preparing your research...'}
+            {message || 'Đang chuẩn bị research...'}
           </p>
           <Progress value={progress} />
           <p className="text-xs tabular-nums text-muted-foreground">{progress}%</p>

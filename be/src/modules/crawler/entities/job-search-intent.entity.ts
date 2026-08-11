@@ -35,8 +35,8 @@ export class JobSearchIntent {
   @Column({ name: 'target_role', nullable: true, type: 'varchar' })
   targetRole!: string | null;
 
-  @Column({ name: 'job_category_id', nullable: true, type: 'int' })
-  jobCategoryId!: number | null;
+  @Column({ name: 'job_category_id', nullable: true, type: 'uuid' })
+  jobCategoryId!: string | null;
 
   @Column({ name: 'job_category_name', nullable: true, type: 'varchar' })
   jobCategoryName!: string | null;

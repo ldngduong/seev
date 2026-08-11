@@ -22,23 +22,24 @@ _LEVEL_ORDER: dict[Level, int] = {
     Level.JUNIOR: 2,
     Level.MIDDLE: 3,
     Level.SENIOR: 4,
-    Level.LEAD: 5,
+    Level.STAFF: 5,
+    Level.PRINCIPAL: 6,
+    Level.TECH_LEAD: 5,
     Level.MANAGER: 5,
-    Level.DIRECTOR: 5,
+    Level.HEAD_DIRECTOR: 7,
 }
 
 # Most-specific first per level group (checks in this order).
 _LEVEL_ALIASES: dict[Level, tuple[str, ...]] = {
-    Level.DIRECTOR: ("giám đốc", "giam doc", "director", "vp "),
+    Level.HEAD_DIRECTOR: ("giám đốc", "giam doc", "director", "head of", "vp "),
     Level.MANAGER: (
         "trưởng phòng",
         "truong phong",
         "quản lý",
         "quan ly",
         "manager",
-        "head of",
     ),
-    Level.LEAD: (
+    Level.TECH_LEAD: (
         "tech lead",
         "team lead",
         "lead",
@@ -46,6 +47,8 @@ _LEVEL_ALIASES: dict[Level, tuple[str, ...]] = {
         "trưởng nhóm",
         "truong nhom",
     ),
+    Level.PRINCIPAL: ("principal", "principal engineer", "principal developer", "principal scientist"),
+    Level.STAFF: ("staff", "staff engineer", "staff developer", "staff scientist"),
     Level.SENIOR: (
         "senior",
         "sr.",
@@ -58,9 +61,6 @@ _LEVEL_ALIASES: dict[Level, tuple[str, ...]] = {
         "experienced",
         "chuyên gia",
         "chuyen gia",
-        "principal",
-        "architect",
-        "staff engineer",
     ),
     Level.MIDDLE: (
         "middle",
@@ -126,9 +126,11 @@ def detect_level(
 ) -> Level | None:
     """Resolve the most senior group found in the provided signals."""
     for group in (
-        Level.DIRECTOR,
+        Level.HEAD_DIRECTOR,
         Level.MANAGER,
-        Level.LEAD,
+        Level.TECH_LEAD,
+        Level.PRINCIPAL,
+        Level.STAFF,
         Level.SENIOR,
         Level.MIDDLE,
         Level.JUNIOR,
@@ -161,14 +163,20 @@ def detect_level_from_text(value: str | None) -> Level | None:
 _EXP_PATTERNS: list[re.Pattern] = [
     # "Từ 2 đến 4 năm", "2 đến 4 năm", "2 - 4 năm", "2-4 năm", "1 tới 3 năm"
     re.compile(
-        r"(?:từ|tu|toi|den|–|between)?\s*(\d{1,2})\s*(?:,|\.|\s|\-|–|den|toi|đến|tới|đến|-)*\s*(\d{1,2})\s*(?:năm|nam|years?|yrs?|yr)\b",
+        r"(?<![\d.])(?:từ|tu|between)?\s*(\d{1,2})\s*(?:-|–|to|den|toi|đến|tới)\s*(\d{1,2})(?![\d.])\s*(?:năm|nam|years?|yrs?|yr)\b",
         re.I,
     ),
     # plain "3 năm kinh nghiệm", "3 years experience"
-    re.compile(r"(\d{1,2})\s*(?:năm|nam|years?|yrs?|yr)\b", re.I),
+    re.compile(r"(?<![\d.])(\d{1,2}(?:[.,]\d+)?)(?![\d.])\s*(?:năm|nam|years?|yrs?|yr)\b", re.I),
     # "(X-Y)" ranges written like "2 - 3", "1 to 2"
-    re.compile(r"(?:(\d{1,2})\s*(?:-|–|to|đến|tới)\s*(\d{1,2}))\s*(?:năm|nam|years?|yrs?|yr)?\b", re.I),
+    re.compile(r"(?<![\d.])(?:(\d{1,2})\s*(?:-|–|to|đến|tới)\s*(\d{1,2}))(?![\d.])\s*(?:năm|nam|years?|yrs?|yr)?\b", re.I),
 ]
+
+_MONTHS = re.compile(r"(?<!\d)(\d{1,3})(?!\d)\s*(?:tháng|thang|months?|mos?)\b", re.I)
+_YEARS_AND_MONTHS = re.compile(
+    r"(?<!\d)(\d{1,2})\s*(?:năm|nam|years?|yrs?|yr)\s*(\d{1,2})\s*(?:tháng|thang|months?|mos?)\b",
+    re.I,
+)
 
 _DUOI_1 = re.compile(r"(?:dưới|duoi|less than|under)\s*(\d{1,2})\s*(?:năm|nam|years?|yrs?|yr)\b", re.I)
 _TREN_ = re.compile(r"(?:trên|tren|over|more than|\+)\s*(\d{1,2})\s*(?:năm|nam|years?|yrs?|yr)\b", re.I)
@@ -194,6 +202,16 @@ def parse_experience_years(text: str | None) -> tuple[float | None, float | None
     low = t.lower()
     if any(k in low for k in ("không yêu cầu", "khong yeu cau", "no experience", "none", "0 năm")):
         return 0.0, 0.0
+
+    combined = _YEARS_AND_MONTHS.search(low)
+    if combined:
+        years = float(combined.group(1)) + float(combined.group(2)) / 12
+        return years, years
+
+    months = _MONTHS.search(low)
+    if months:
+        years = float(months.group(1)) / 12
+        return years, years
 
     m = _DUOI_1.search(low)
     if m:
@@ -221,7 +239,7 @@ def parse_experience_years(text: str | None) -> tuple[float | None, float | None
                 return lo, hi
     m = _EXP_PATTERNS[1].search(low)
     if m:
-        v = float(m.group(1))
+        v = float(m.group(1).replace(",", "."))
         return v, v
     return None, None
 
@@ -236,6 +254,14 @@ def normalize_experience_text(text: str | None) -> str | None:
     if lo == 0:
         return f"Dưới {int(hi)} năm"
     if abs(lo - hi) < 0.01:
+        if not float(lo).is_integer():
+            total_months = round(lo * 12)
+            years, months = divmod(total_months, 12)
+            if years and months:
+                return f"{years} năm {months} tháng"
+            if months:
+                return f"{months} tháng"
+            return f"{years} năm"
         return f"{int(lo)} năm" if lo > 0 else "Không yêu cầu"
     return f"{int(lo)} - {int(hi)} năm"
 
@@ -264,9 +290,11 @@ MAX_YEARS_BY_TARGET: dict[Level, float] = {
     Level.JUNIOR: 3.0,
     Level.MIDDLE: 5.0,
     Level.SENIOR: 99.0,
-    Level.LEAD: 99.0,
+    Level.STAFF: 99.0,
+    Level.PRINCIPAL: 99.0,
+    Level.TECH_LEAD: 99.0,
     Level.MANAGER: 99.0,
-    Level.DIRECTOR: 99.0,
+    Level.HEAD_DIRECTOR: 99.0,
 }
 
 
@@ -279,10 +307,12 @@ _ALLOWED_DETECTED_RANK: dict[Level, int] = {
     Level.FRESHER: _LEVEL_ORDER[Level.JUNIOR],
     Level.JUNIOR: _LEVEL_ORDER[Level.JUNIOR],
     Level.MIDDLE: _LEVEL_ORDER[Level.MIDDLE],
-    Level.SENIOR: _LEVEL_ORDER[Level.DIRECTOR],
-    Level.LEAD: _LEVEL_ORDER[Level.DIRECTOR],
-    Level.MANAGER: _LEVEL_ORDER[Level.DIRECTOR],
-    Level.DIRECTOR: _LEVEL_ORDER[Level.DIRECTOR],
+    Level.SENIOR: _LEVEL_ORDER[Level.HEAD_DIRECTOR],
+    Level.STAFF: _LEVEL_ORDER[Level.HEAD_DIRECTOR],
+    Level.PRINCIPAL: _LEVEL_ORDER[Level.HEAD_DIRECTOR],
+    Level.TECH_LEAD: _LEVEL_ORDER[Level.HEAD_DIRECTOR],
+    Level.MANAGER: _LEVEL_ORDER[Level.HEAD_DIRECTOR],
+    Level.HEAD_DIRECTOR: _LEVEL_ORDER[Level.HEAD_DIRECTOR],
 }
 
 
@@ -302,7 +332,7 @@ def allowed_by_level_policy(
       require it to be within `max_years` (default -> MAX_YEARS_BY_TARGET).
     """
     if detected is not None:
-        allowed = _ALLOWED_DETECTED_RANK.get(target, _LEVEL_ORDER[Level.DIRECTOR])
+        allowed = _ALLOWED_DETECTED_RANK.get(target, _LEVEL_ORDER[Level.HEAD_DIRECTOR])
         if level_rank(detected) is not None and level_rank(detected) > allowed:
             return False
     if exp_min is None and exp_max is None:

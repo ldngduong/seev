@@ -83,9 +83,11 @@ def contains_city(text: str | None, city: str | None) -> bool:
 
 
 LEVEL_KEYWORDS: list[tuple[str, list[str]]] = [
-    ("director", ["giám đốc", "director"]),
+    ("head_director", ["giám đốc", "director", "head of"]),
     ("manager", ["manager", "quản lý", "trưởng phòng", "head of"]),
-    ("lead", ["tech lead", "team lead", "lead "]),
+    ("tech_lead", ["tech lead", "team lead", "lead "]),
+    ("principal", ["principal engineer", "principal developer"]),
+    ("staff", ["staff engineer", "staff developer"]),
     ("senior", ["senior", "cao cấp", "sr."]),
     ("middle", ["middle", "mid", "trung cấp"]),
     ("junior", ["junior", "nhân viên", "jun."]),

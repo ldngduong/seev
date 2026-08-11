@@ -52,7 +52,7 @@ export class PdfParserService {
 
       if (!text) {
         throw new BadRequestException(
-          'The PDF does not contain extractable text.',
+          'PDF không chứa văn bản có thể trích xuất.',
         );
       }
 

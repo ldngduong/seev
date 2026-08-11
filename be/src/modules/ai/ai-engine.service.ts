@@ -29,7 +29,7 @@ import { buildAuditUnits } from './utils/audit-unit-builder';
 interface AnalyzeCvInput {
   target: {
     targetRole: string | null;
-    jobCategoryId: number | null;
+    jobCategoryId: string | null;
     jobCategoryName: string | null;
     seniorityLevelId: string | null;
     seniorityLevelName: string | null;
@@ -75,9 +75,8 @@ export class AiEngineService {
 
   /**
    * AI job-match classification: each crawled job is judged against the CV
-   * target (occupation + seniority) using ONLY its title, sent as one array
-   * per call. The model decides whether the job is a direct match, a
-   * suggestion (related occupation or off-level), or reject. No heuristics.
+   * target using canonical category/seniority evidence plus the source title
+   * and skills. Deterministic compatibility is enforced by the caller.
    */
   async classifyJobMatches(input: {
     target: {
@@ -88,6 +87,9 @@ export class AiEngineService {
     jobs: Array<{
       jobId: string;
       title: string;
+      categoryName: string | null;
+      seniorityCode: string | null;
+      skills: string[];
     }>;
   }): Promise<JobMatchResult[]> {
     if (input.jobs.length === 0) {
@@ -100,7 +102,9 @@ export class AiEngineService {
 
     for (let index = 0; index < input.jobs.length; index += maxPerCall) {
       const batch = input.jobs.slice(index, index + maxPerCall);
-      results.push(...(await this.requestJobMatchBatch(client, input.target, batch)));
+      results.push(
+        ...(await this.requestJobMatchBatch(client, input.target, batch)),
+      );
     }
 
     return results;
@@ -109,6 +113,20 @@ export class AiEngineService {
   async inferCvTarget(input: {
     resumeText: string;
     headerLines: string[];
+    categories: Array<{
+      code: string;
+      name: string;
+      description: string | null;
+      aliases: string[];
+      allowedSeniorityCodes: string[];
+    }>;
+    seniorityLevels: Array<{
+      code: string;
+      name: string;
+      description: string | null;
+      experienceMin: number | null;
+      experienceMax: number | null;
+    }>;
   }): Promise<CvTargetInference> {
     const client = this.getClient();
     const model = this.configService.get('DEEPSEEK_MODEL', { infer: true });
@@ -132,21 +150,30 @@ export class AiEngineService {
             '2. Do not replace a specific job title with a broader degree, major, or category. Education and majors are context unless the CV has no job title or career direction.',
             '3. If no explicit job title exists, infer the strongest job direction from summary, skills, projects, and experience.',
             '4. Do not invent a target that is unsupported by the CV.',
-            '5. target_category_hint is only a broad category/domain hint; target_role must stay as the candidate-facing job title.',
-            '6. The output language for role/category can follow the CV language.',
-            '7. PDF extraction may letter-space header titles. If a top-line title is split into individual characters or unusual spacing, infer the normal phrase from that line instead of ignoring it.',
-            '8. Preserve occupation wording from evidence. Do not transform a person/job title into a broader field noun unless the CV itself uses that broader wording.',
-            '9. seniority_hint must be a concise level evidenced by the CV, such as Intern, Fresher, Junior, Middle, Senior, Lead, Manager, or empty only when the CV gives no evidence. If the header says Intern/Junior/etc., do not omit it.',
-            '10. search_queries are occupation-title aliases for job-board crawling, not skill keywords and not display text. Return concise titles that employers genuinely use for the same occupation, including common aliases in the CV language and Vietnamese/English equivalents when the evidence supports them. Keep seniority separate because each source applies its own level filter; do not add seniority merely to make a query more specific. Never return tools, technologies, generic industries, degrees, or isolated skills as search queries.',
-            '11. Do not rewrite a precise occupation title into a broader field noun, degree, major, or generic category. Preserve the explicit specialization and seniority when the CV provides them.',
+            '5. Select exactly one target_category_code from the canonical database category catalog below. Never invent, translate, shorten, or combine category codes. If the CV has no credible IT direction represented by the catalog, return "unsupported".',
+            '6. target_category_hint must be the exact name belonging to the selected target_category_code. target_role must stay as the specific candidate-facing job title.',
+            '7. The output language for target_role can follow the CV language.',
+            '8. PDF extraction may letter-space header titles. If a top-line title is split into individual characters or unusual spacing, infer the normal phrase from that line instead of ignoring it.',
+            '9. Preserve occupation wording from evidence. Do not transform a person/job title into a broader field noun unless the CV itself uses that broader wording.',
+            '10. Select seniority_code from the canonical seniority catalog when the CV provides enough evidence; otherwise return null. The code must also appear in allowedSeniorityCodes of the selected category. seniority_hint must be the exact catalog name for that code, or empty when seniority_code is null.',
+            '11. search_queries are occupation-title aliases used to match existing jobs in the database, not live-crawl queries, skill keywords, or display text. Return concise titles that employers genuinely use for the same occupation, including Vietnamese/English equivalents when supported. Keep seniority separate. Never return tools, technologies, generic industries, degrees, or isolated skills as search queries.',
+            '12. Do not rewrite a precise occupation title into a broader field noun, degree, major, or generic category. Preserve the explicit specialization and seniority when the CV provides them.',
+            '',
+            'Canonical database category catalog:',
+            JSON.stringify(input.categories, null, 2),
+            '',
+            'Canonical database seniority catalog:',
+            JSON.stringify(input.seniorityLevels, null, 2),
             '',
             'Return this exact JSON shape:',
             JSON.stringify({
               target_role: 'candidate-facing job title inferred from the CV',
+              target_category_code: 'exact.code.from.catalog',
               target_category_hint:
-                'broad domain/category inferred from the CV',
+                'exact category name belonging to target_category_code',
+              seniority_code: 'exact_code_from_catalog_or_null',
               seniority_hint:
-                'seniority or position level inferred from the CV',
+                'exact seniority name belonging to seniority_code, or empty',
               confidence: 0.8,
               reasoning:
                 'Vietnamese explanation of how the target was inferred from the evidence.',
@@ -252,7 +279,7 @@ export class AiEngineService {
 
     throw new BadGatewayException({
       message:
-        'DeepSeek response did not match the final CV audit schema after repair.',
+        'Phản hồi DeepSeek không khớp schema audit CV cuối cùng sau khi sửa.',
       cause: this.formatValidationError(lastError),
     });
   }
@@ -477,7 +504,7 @@ export class AiEngineService {
 
       throw new BadGatewayException({
         message:
-          'DeepSeek response did not match the line-level CV audit schema after repair.',
+          'Phản hồi DeepSeek không khớp schema audit CV từng dòng sau khi sửa.',
         cause: this.formatValidationError(lastError),
       });
     } catch (error) {
@@ -537,7 +564,7 @@ export class AiEngineService {
 
     throw new BadGatewayException({
       message:
-        'DeepSeek response did not match the coverage CV audit schema after repair.',
+        'Phản hồi DeepSeek không khớp schema audit CV phủ sóng sau khi sửa.',
       cause: this.formatValidationError(lastError),
     });
   }
@@ -551,7 +578,7 @@ export class AiEngineService {
 
     if (!apiKey) {
       throw new ServiceUnavailableException(
-        'DEEPSEEK_API_KEY is missing in server/.env',
+        'Thiếu DEEPSEEK_API_KEY trong server/.env',
       );
     }
 
@@ -1028,7 +1055,7 @@ export class AiEngineService {
     const content = completion.choices[0]?.message.content;
 
     if (!content) {
-      throw new BadGatewayException('DeepSeek returned an empty response.');
+      throw new BadGatewayException('DeepSeek trả về phản hồi trống.');
     }
 
     return content;
@@ -1099,7 +1126,7 @@ export class AiEngineService {
     if (invalidFeedbacks.length > 0) {
       throw new Error(
         [
-          'DeepSeek feedback anchors are invalid.',
+          'Anchor phản hồi của DeepSeek không hợp lệ.',
           ...invalidFeedbacks.slice(0, 20),
         ].join('\n'),
       );
@@ -1123,7 +1150,7 @@ export class AiEngineService {
     ) {
       throw new Error(
         [
-          'Invalid reviewed_source_line_ids coverage receipt.',
+          'Biên nhận phủ sóng reviewed_source_line_ids không hợp lệ.',
           `missing=${missingIds.join(',') || 'none'}`,
           `unknown=${unknownIds.join(',') || 'none'}`,
           `duplicates=${reviewedIds.length !== reviewedSet.size}`,
@@ -1148,22 +1175,23 @@ export class AiEngineService {
 
       if (!evidenceIds.has(feedback.source_line_id)) {
         invalidFeedbacks.push(
-          `${feedback.id || feedback.source_line_id} does not cite its source_line_id as evidence.`,
+          `${feedback.id || feedback.source_line_id} không trích dẫn source_line_id của nó làm bằng chứng.`,
         );
       }
 
       if (unknownIds.length > 0) {
         invalidFeedbacks.push(
-          `${feedback.id || feedback.source_line_id} cites unavailable evidence: ${unknownIds.join(',')}.`,
+          `${feedback.id || feedback.source_line_id} trích dẫn bằng chứng không có sẵn: ${unknownIds.join(',')}.`,
         );
       }
     }
 
     if (invalidFeedbacks.length > 0) {
       throw new Error(
-        ['DeepSeek feedback evidence is invalid.', ...invalidFeedbacks].join(
-          '\n',
-        ),
+        [
+          'Bằng chứng phản hồi của DeepSeek không hợp lệ.',
+          ...invalidFeedbacks,
+        ].join('\n'),
       );
     }
   }
@@ -1182,7 +1210,7 @@ export class AiEngineService {
 
     if (maxScore !== 100 || score !== result.overall_score) {
       throw new Error(
-        `Invalid score_breakdown totals. max_score sum=${maxScore}, score sum=${score}, overall_score=${result.overall_score}.`,
+        `Tổng score_breakdown không hợp lệ. max_score sum=${maxScore}, score sum=${score}, overall_score=${result.overall_score}.`,
       );
     }
   }
@@ -1471,8 +1499,7 @@ export class AiEngineService {
     }
 
     throw new BadGatewayException({
-      message:
-        'DeepSeek response did not match the job match schema after repair.',
+      message: 'Phản hồi DeepSeek không khớp schema khớp việc làm sau khi sửa.',
       cause: this.formatValidationError(lastError),
     });
   }
@@ -1510,7 +1537,8 @@ export class AiEngineService {
             '- match: the job is the same occupation AND the seniority level in its title matches the candidate level EXACTLY (e.g. candidate targets Intern -> only titles with intern level evidence such as "Intern", "Internship", "Thực tập sinh"; candidate targets Senior -> titles with senior level evidence). A job at a higher or lower level than the candidate is never a match.',
             '- suggestion: the job is clearly the same or an adjacent occupation but the level differs from the candidate level (e.g. candidate targets Intern and the job is Fresher/Junior, or the title has no level evidence at all), or the level is too high (Middle/Senior) to reject outright but still related.',
             '- reject: the job is a different occupation, clearly irrelevant, OR the title shows a much higher level (Senior/Lead/Manager/Director) when the candidate targets Intern/Fresher — those must not appear as matches or suggestions.',
-            '- Infer the job level ONLY from its title: intern, fresher, junior, middle, senior, lead, manager, director. Titles like "Thực tập sinh", "Intern", "Internship" mean intern. Use null only when the title gives no level evidence.',
+            '- Prefer the canonical category and seniority supplied for each job. Use the title only to verify that classification and reject obvious false positives.',
+            '- Canonical IT seniority values are intern, fresher, junior, middle, senior, staff, principal, tech_lead, manager, and head_director.',
             '- score is 0-100: how well this job fits the candidate target overall. match must score >= 60; suggestion 30-59; reject < 30. For a candidate targeting Intern/Fresher, jobs whose titles show no level evidence are suggestions (typically 40-55) and must never be matches.',
             '- reason must be Vietnamese and explain the occupation fit and the level fit (or mismatch) in one or two sentences.',
             '- A Vietnamese title containing "Thực tập sinh" or "Intern" that is otherwise relevant to the target occupation is a match when the candidate targets Intern, even if the title does not repeat the exact occupation words.',
@@ -1562,7 +1590,7 @@ export class AiEngineService {
             'The previous job classification JSON failed validation. Fix the JSON without inventing facts.',
             'Return only: { "matches": [...] }.',
             'matches must contain exactly one item per job_id from the job list below, with no duplicates and no extra ids.',
-            'Each match item must have job_id from the provided list, level as one of intern/fresher/junior/middle/senior/lead/manager/director or null, match_kind as match/suggestion/reject, score as integer 0-100, and a non-empty Vietnamese reason.',
+            'Each match item must have job_id from the provided list, level as one of intern/fresher/junior/middle/senior/staff/principal/tech_lead/manager/head_director or null, match_kind as match/suggestion/reject, score as integer 0-100, and a non-empty Vietnamese reason.',
             '',
             'Validation error:',
             this.formatValidationError(error),
@@ -1583,7 +1611,10 @@ export class AiEngineService {
     jobs: Parameters<AiEngineService['classifyJobMatches']>[0]['jobs'],
   ) {
     return jobs
-      .map((job, index) => `${index + 1}. job_id=${job.jobId} | title=${job.title}`)
+      .map(
+        (job, index) =>
+          `${index + 1}. job_id=${job.jobId} | title=${job.title} | category=${job.categoryName ?? 'unknown'} | seniority=${job.seniorityCode ?? 'unknown'} | skills=${job.skills.slice(0, 15).join(', ') || 'none'}`,
+      )
       .join('\n');
   }
 
@@ -1604,7 +1635,7 @@ export class AiEngineService {
     ) {
       throw new Error(
         [
-          'Invalid job match coverage.',
+          'Phủ sóng khớp việc làm không hợp lệ.',
           `missing=${missingIds.join(',') || 'none'}`,
           `unknown=${unknownIds.join(',') || 'none'}`,
           `duplicates=${matchIds.length !== matchSet.size}`,

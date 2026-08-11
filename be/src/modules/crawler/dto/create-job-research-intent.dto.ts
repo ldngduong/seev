@@ -30,24 +30,20 @@ function toStringArray(value: unknown) {
 
 export class CreateJobResearchIntentDto {
   @IsOptional()
-  @IsUUID()
+  @IsUUID(undefined, { message: 'ID audit không hợp lệ.' })
   auditId?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(120)
+  @MaxLength(120, { message: 'Vị trí mục tiêu tối đa 120 ký tự.' })
   targetRole?: string;
 
   @IsOptional()
-  @Transform(({ value }) =>
-    value === '' || value == null ? undefined : Number(value),
-  )
-  @IsInt()
-  @Min(1)
-  jobCategoryId?: number;
+  @IsUUID(undefined, { message: 'Ngành nghề không hợp lệ.' })
+  jobCategoryId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsUUID(undefined, { message: 'ID cấp bậc không hợp lệ.' })
   seniorityLevelId?: string;
 
   @IsOptional()
@@ -76,15 +72,18 @@ export class CreateJobResearchIntentDto {
   @IsOptional()
   @Transform(({ value }) => toStringArray(value))
   @IsArray()
-  @IsIn(JOB_SOURCES, { each: true })
+  @IsIn(JOB_SOURCES, {
+    each: true,
+    message: 'Nguồn việc làm không được hỗ trợ.',
+  })
   sources?: JobSource[];
 
   @IsOptional()
   @Transform(({ value }) =>
     value === '' || value == null ? undefined : Number(value),
   )
-  @IsInt()
-  @Min(1)
-  @Max(100)
+  @IsInt({ message: 'Số việc làm mỗi nguồn không hợp lệ.' })
+  @Min(1, { message: 'Số việc làm mỗi nguồn phải từ 1 đến 100.' })
+  @Max(100, { message: 'Số việc làm mỗi nguồn phải từ 1 đến 100.' })
   maxJobsPerSource?: number;
 }

@@ -21,7 +21,6 @@ def main() -> int:
     p.add_argument("--pages", type=int, default=1)
     p.add_argument("--max", type=int, default=25, help="Max results per source")
     p.add_argument("--days", type=int, default=None, help="Only jobs from last N days")
-    p.add_argument("--no-description", action="store_true", help="Skip fetching descriptions")
     p.add_argument("--list-sources", action="store_true", help="List available sources and exit")
     p.add_argument("-o", "--output", help="Write JSON result to file")
     args = p.parse_args()
@@ -42,7 +41,6 @@ def main() -> int:
         max_results_per_source=args.max,
         pages=args.pages,
         days=args.days,
-        include_description=not args.no_description,
     )
     resp = run_search(q)
     payload = resp.model_dump()

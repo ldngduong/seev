@@ -93,7 +93,7 @@ export class ResearchProgressService {
   complete(
     sessionId: string,
     expectedAttempt: number,
-    message = 'Research completed.',
+    message = 'Research hoàn tất.',
   ) {
     return this.update(
       sessionId,
@@ -115,7 +115,7 @@ export class ResearchProgressService {
       {
         status: 'failed',
         phase: 'failed',
-        message: 'Research failed. You can retry this session.',
+        message: 'Research thất bại. Bạn có thể chạy lại phiên này.',
         error,
         completed: true,
       },

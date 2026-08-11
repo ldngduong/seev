@@ -87,7 +87,9 @@ export type CvAuditResult = z.infer<typeof cvAuditResultSchema>;
 
 export const cvTargetInferenceSchema = z.object({
   target_role: z.string().min(1),
+  target_category_code: z.string().min(1),
   target_category_hint: z.string().optional().default(''),
+  seniority_code: z.string().nullable().default(null),
   seniority_hint: z.string().optional().default(''),
   confidence: z.number().min(0).max(1).default(0.5),
   reasoning: z.string().min(1),

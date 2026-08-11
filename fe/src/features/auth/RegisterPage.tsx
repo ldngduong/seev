@@ -50,28 +50,28 @@ const RegisterPage = () => {
 
   return (
     <AuthShell
-      eyebrow="Start your workspace"
-      title="Create your account"
-      description="Save CV audits, track credits, and prepare job research with a consistent profile."
-      footerText="Already have an account?"
-      footerAction="Sign in"
+      eyebrow="Bắt đầu không gian làm việc"
+      title="Tạo tài khoản của bạn"
+      description="Lưu lịch sử research CV, theo dõi và chuẩn bị nghiên cứu việc làm với hồ sơ nhất quán."
+      footerText="Đã có tài khoản?"
+      footerAction="Đăng nhập"
       footerHref={`/login?redirect=${encodeURIComponent(redirect)}`}
     >
       <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
         <AuthError message={storeError} />
         <AuthField
           id="fullName"
-          label="Full name"
+          label="Họ và tên"
           autoComplete="name"
-          placeholder="Le Tung Duong"
+          placeholder="Nguyễn Văn An"
           error={form.formState.errors.fullName?.message}
           {...form.register('fullName')}
         />
         <AuthField
           id="username"
-          label="Username"
+          label="Tên đăng nhập"
           autoComplete="username"
-          placeholder="duongle"
+          placeholder="nguyenvana"
           error={form.formState.errors.username?.message}
           {...form.register('username')}
         />
@@ -80,22 +80,22 @@ const RegisterPage = () => {
           label="Email"
           type="email"
           autoComplete="email"
-          placeholder="you@example.com"
+          placeholder="ban@example.com"
           error={form.formState.errors.email?.message}
           {...form.register('email')}
         />
         <AuthField
           id="password"
-          label="Password"
+          label="Mật khẩu"
           type="password"
           autoComplete="new-password"
-          placeholder="At least 8 characters"
+          placeholder="Ít nhất 8 ký tự"
           error={form.formState.errors.password?.message}
           {...form.register('password')}
         />
         <AuthField
           id="phone"
-          label="Phone"
+          label="Số điện thoại"
           autoComplete="tel"
           placeholder="+84..."
           error={form.formState.errors.phone?.message}
@@ -108,12 +108,12 @@ const RegisterPage = () => {
           disabled={status === 'loading' || form.formState.isSubmitting}
         >
           <UserPlus />
-          Create account
+          Tạo tài khoản
         </Button>
 
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="h-px flex-1 bg-border" />
-          or
+          hoặc
           <span className="h-px flex-1 bg-border" />
         </div>
 

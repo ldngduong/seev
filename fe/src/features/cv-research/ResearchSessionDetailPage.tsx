@@ -7,6 +7,7 @@ import { DashboardPageHeader } from '@/components/layouts/DashboardPageHeader'
 import { PdfAuditViewer } from '@/components/pdf-audit-viewer'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { ResearchProcessingScreen } from '@/features/cv-research/components/ResearchProcessingScreen'
 import { SessionJobSuggestionsPanel } from '@/features/job-research/components/SessionJobSuggestionsPanel'
 import { useUserCvPdfFile } from '@/hooks/use-user-cv-pdf-file'
@@ -80,10 +81,10 @@ export function ResearchSessionDetailPage() {
   }, [audit?.audit_id, audit?.detailed_feedbacks, setSelectedFeedbackId])
 
   if (sessionQuery.isLoading) {
-    return <ResearchProcessingScreen progress={0} message="Loading your research..." />
+    return <ResearchProcessingScreen progress={0} message="Đang tải research..." />
   }
   if (!session) {
-    return <main className="text-sm text-destructive">Research not found.</main>
+    return <main className="text-sm text-destructive">Không tìm thấy research.</main>
   }
 
   const researchIsActive = ['queued', 'processing'].includes(session.status)
@@ -115,7 +116,7 @@ export function ResearchSessionDetailPage() {
               disabled={!canRetryJobs || retryJobsMutation.isPending || researchIsActive}
               onClick={() => retryJobsMutation.mutate(session.id)}
             >
-              {retryJobsMutation.isPending ? 'Retrying...' : 'Retry jobs'}
+              {retryJobsMutation.isPending ? 'Đang thử lại...' : 'Thử lại gợi ý việc làm'}
             </Button>
             <HistoryLink />
           </>
@@ -134,7 +135,7 @@ export function ResearchSessionDetailPage() {
 
       {session.status === 'failed' ? (
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-          <p className="text-sm text-destructive">{session.error || 'Research failed.'}</p>
+          <p className="text-sm text-destructive">{session.error || 'Research thất bại.'}</p>
           <Button
             type="button"
             onClick={() => canRetryJobs
@@ -143,14 +144,14 @@ export function ResearchSessionDetailPage() {
             disabled={retryResearchMutation.isPending || retryJobsMutation.isPending}
           >
             {retryResearchMutation.isPending || retryJobsMutation.isPending
-              ? 'Retrying...'
-              : canRetryJobs ? 'Retry jobs' : 'Retry research'}
+              ? 'Đang thử lại...'
+              : canRetryJobs ? 'Thử lại gợi ý việc làm' : 'Thử lại research'}
           </Button>
         </section>
       ) : null}
 
-      <section className="grid min-h-[680px] gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
-        <div className="min-h-[620px] min-w-0 overflow-auto bg-background">
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] lg:items-start">
+        <ScrollArea className="min-w-0 lg:h-[calc(100vh-9rem)]">
           <PdfAuditViewer
             bare
             file={cvFileQuery.data ?? null}
@@ -159,22 +160,25 @@ export function ResearchSessionDetailPage() {
           />
           {cvFileQuery.isError ? (
             <p className="py-3 text-sm text-destructive">
-              Could not load the stored CV. Refresh the page and try again.
+              Không tải được CV đã lưu. Làm mới trang và thử lại.
             </p>
           ) : null}
-        </div>
+        </ScrollArea>
 
-        <aside className="flex flex-col gap-4">
-          <AuditResultPanel audit={audit} />
-          <SessionJobSuggestionsPanel
-            jobs={session.job_suggestions}
-            status={session.status}
-            intentId={session.job_search_intent_id}
-            onRetry={session.job_search_intent_id ? () => retryJobsMutation.mutate(session.id) : undefined}
-            isRetrying={retryJobsMutation.isPending}
-          />
-        </aside>
+        <ScrollArea className="lg:h-[calc(100vh-9rem)]">
+          <aside className="pr-1">
+            <AuditResultPanel audit={audit} />
+          </aside>
+        </ScrollArea>
       </section>
+
+      <SessionJobSuggestionsPanel
+        jobs={session.job_suggestions}
+        status={session.status}
+        intentId={session.job_search_intent_id}
+        onRetry={session.job_search_intent_id ? () => retryJobsMutation.mutate(session.id) : undefined}
+        isRetrying={retryJobsMutation.isPending}
+      />
     </main>
   )
 }
@@ -185,7 +189,7 @@ function HistoryLink() {
       to="/research-history"
       className={cn(buttonVariants({ variant: 'outline' }))}
     >
-      Back to history
+      Quay lại lịch sử
     </Link>
   )
 }

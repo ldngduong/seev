@@ -28,6 +28,9 @@ from src.seniority import (
         ("Không yêu cầu", (0.0, 0.0)),
         ("3 years", (3.0, 3.0)),
         ("2 năm kinh nghiệm", (2.0, 2.0)),
+        ("10 tháng", (10 / 12, 10 / 12)),
+        ("0.833333 năm", (0.833333, 0.833333)),
+        ("3 năm 1 tháng", (3 + 1 / 12, 3 + 1 / 12)),
         ("Không yêu cầu kinh nghiệm", (0.0, 0.0)),
         (None, (None, None)),
         ("Cạnh tranh", (None, None)),
@@ -45,6 +48,10 @@ def test_parse_experience_years(text, expected):
         ("2 năm", "2 năm"),
         ("Trên 5 năm", "Trên 5 năm"),
         ("2 - 3 năm", "2 - 3 năm"),
+        ("10 tháng", "10 tháng"),
+        ("0.833333 năm", "10 tháng"),
+        ("3.083333 năm", "3 năm 1 tháng"),
+        ("3 năm 1 tháng", "3 năm 1 tháng"),
         (None, None),
     ],
 )
@@ -60,11 +67,12 @@ def test_normalize_experience_text(text, expected):
         ("Fresher Python Developer", Level.FRESHER),
         ("Chuyên viên Java", Level.MIDDLE),
         ("Senior Backend Engineer", Level.SENIOR),
-        ("Principal Frontend Engineer", Level.SENIOR),
-        ("Software Architect", Level.SENIOR),
-        ("Tech Lead", Level.LEAD),
+        ("Staff Frontend Engineer", Level.STAFF),
+        ("Principal Frontend Engineer", Level.PRINCIPAL),
+        ("Software Architect", None),
+        ("Tech Lead", Level.TECH_LEAD),
         ("Trưởng phòng IT", Level.MANAGER),
-        ("Giám đốc Công nghệ", Level.DIRECTOR),
+        ("Giám đốc Công nghệ", Level.HEAD_DIRECTOR),
         ("Backend Developer", None),
         # "Nhân viên" is neutral: VN boards label every IC posting that way
         ("Nhân viên PHP", None),
@@ -75,14 +83,14 @@ def test_detect_level_from_title(title, expected):
 
 
 def test_detect_level_prefers_most_senior_group():
-    assert detect_level("Lead Senior Engineer") == Level.LEAD
+    assert detect_level("Lead Senior Engineer") == Level.TECH_LEAD
     assert detect_level("Senior Manager") == Level.MANAGER
 
 
 def test_detect_level_from_seniority_text():
     # "Nhân viên" is neutral (covers every IC) -> no seniority signal
     assert detect_level("Backend Developer", seniority_text="Nhân viên") is None
-    assert detect_level("Backend Developer", seniority_text="Trưởng nhóm") == Level.LEAD
+    assert detect_level("Backend Developer", seniority_text="Trưởng nhóm") == Level.TECH_LEAD
 
 
 @pytest.mark.parametrize(

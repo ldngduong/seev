@@ -1,5 +1,10 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash, randomUUID } from 'crypto';
 import type { Queue } from 'bullmq';
@@ -9,7 +14,8 @@ import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialE
 import { AiEngineService } from '../ai/ai-engine.service';
 import type { CvAuditResult } from '../ai/schemas/cv-audit-result.schema';
 import { JobResearchService } from '../crawler/job-research.service';
-import { JobFamilyCategory } from '../job-category/entities/job-family-category.entity';
+import { uniqueNonEmpty } from '../crawler/utils/text-normalizer';
+import { JobCategory } from '../job-category/entities/job-category.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
 import { ResearchProgressService } from '../research-realtime/research-progress.service';
 import type {
@@ -52,7 +58,7 @@ export interface CvAuditHistoryItem {
   audit_id: string;
   file_name: string;
   target_role: string | null;
-  job_category_id: number | null;
+  job_category_id: string | null;
   job_category_name: string | null;
   seniority_level_id: string | null;
   seniority_level_name: string | null;
@@ -94,11 +100,12 @@ export interface CvResearchSessionResponse {
   job_suggestions: CvResearchSession['jobSuggestionsSnapshot'];
   target: {
     target_role: string | null;
-    job_category_id: number | null;
+    job_category_id: string | null;
     job_category_name: string | null;
     seniority_level_id: string | null;
     seniority_level_name: string | null;
     job_description: string | null;
+    locations: string[];
   };
   created_at: Date;
   completed_at: Date | null;
@@ -120,8 +127,8 @@ export class CvService {
     private readonly userCvRepository: Repository<UserCv>,
     @InjectRepository(CvResearchSession)
     private readonly researchSessionRepository: Repository<CvResearchSession>,
-    @InjectRepository(JobFamilyCategory)
-    private readonly categoryRepository: Repository<JobFamilyCategory>,
+    @InjectRepository(JobCategory)
+    private readonly categoryRepository: Repository<JobCategory>,
     @InjectRepository(SeniorityLevel)
     private readonly seniorityRepository: Repository<SeniorityLevel>,
     private readonly pdfParserService: PdfParserService,
@@ -237,6 +244,7 @@ export class CvService {
       seniorityLevelId: null,
       seniorityLevelName: null,
       jobDescription: null,
+      locations: [],
     });
   }
 
@@ -246,7 +254,7 @@ export class CvService {
   ): Promise<CvResearchSessionResponse> {
     if (!dto.jobCategoryId && !dto.jobDescription?.trim() && !dto.targetRole) {
       throw new BadRequestException(
-        'Custom research requires a job category, target role, or job description.',
+        'Research tùy chỉnh cần có ngành nghề, vị trí mục tiêu hoặc mô tả công việc.',
       );
     }
 
@@ -259,6 +267,7 @@ export class CvService {
       targetRole: dto.targetRole,
     });
     const jobDescription = dto.jobDescription?.trim() || null;
+    const locations = uniqueNonEmpty(dto.locations ?? []);
 
     return this.createResearchSession({
       userId,
@@ -271,10 +280,14 @@ export class CvService {
       seniorityLevelId: target.seniorityLevelId,
       seniorityLevelName: target.seniorityLevelName,
       jobDescription,
+      locations,
     });
   }
 
-  async listResearchSessions(userId: string, query: ResearchSessionListQueryDto) {
+  async listResearchSessions(
+    userId: string,
+    query: ResearchSessionListQueryDto,
+  ) {
     const builder = this.researchSessionRepository
       .createQueryBuilder('session')
       .leftJoinAndSelect('session.userCv', 'cv')
@@ -323,7 +336,7 @@ export class CvService {
     });
 
     if (!session) {
-      throw new BadRequestException('CV research session does not exist.');
+      throw new BadRequestException('Phiên research CV không tồn tại.');
     }
 
     return this.toResearchResponse(session);
@@ -339,10 +352,12 @@ export class CvService {
     });
 
     if (!session) {
-      throw new BadRequestException('CV research session does not exist.');
+      throw new BadRequestException('Phiên research CV không tồn tại.');
     }
     if (session.status !== 'failed') {
-      throw new BadRequestException('Only failed research can be retried.');
+      throw new BadRequestException(
+        'Chỉ research đã thất bại mới có thể chạy lại.',
+      );
     }
 
     // A completed audit is an immutable checkpoint. A failure after this point
@@ -359,7 +374,9 @@ export class CvService {
       const repository = manager.getRepository(CvResearchSession);
       const current = await repository.findOneBy({ id: session.id, userId });
       if (!current || current.status !== 'failed') {
-        throw new BadRequestException('Only failed research can be retried.');
+        throw new BadRequestException(
+          'Chỉ research đã thất bại mới có thể chạy lại.',
+        );
       }
 
       const active = await repository.findOne({
@@ -370,9 +387,7 @@ export class CvService {
         },
       });
       if (active && active.id !== session.id) {
-        throw new BadRequestException(
-          'This CV already has an active research session.',
-        );
+        throw new BadRequestException('CV này đã có phiên research đang chạy.');
       }
 
       if (current.jobSearchIntentId) {
@@ -387,7 +402,7 @@ export class CvService {
         status: 'queued',
         phase: 'queued',
         progress: 0,
-        progressMessage: 'Research is queued.',
+        progressMessage: 'Research đang được xếp hàng.',
         attempt,
         startedAt: null,
         heartbeatAt: () => 'CURRENT_TIMESTAMP',
@@ -413,9 +428,9 @@ export class CvService {
       await this.progressService.fail(
         session.id,
         nextAttempt,
-        'The previous worker is still active. Retry again after it stops.',
+        'Worker trước vẫn đang hoạt động. Vui lòng chạy lại sau khi nó dừng.',
       );
-      throw new BadRequestException('The previous worker is still active.');
+      throw new BadRequestException('Worker trước vẫn đang hoạt động.');
     }
     if (oldJob) {
       await oldJob.remove();
@@ -436,12 +451,12 @@ export class CvService {
     });
 
     if (!session) {
-      throw new BadRequestException('CV research session does not exist.');
+      throw new BadRequestException('Phiên research CV không tồn tại.');
     }
 
     if (!session.jobSearchIntentId) {
       throw new BadRequestException(
-        'This research session does not have a job-search intent to retry.',
+        'Phiên research này không có intent tìm việc để chạy lại.',
       );
     }
 
@@ -449,7 +464,7 @@ export class CvService {
       status: 'processing',
       phase: 'job_matching',
       progress: 75,
-      progressMessage: 'Collecting and matching jobs.',
+      progressMessage: 'Đang thu thập và đối chiếu việc làm.',
       error: null,
       completedAt: null,
       jobSuggestionsSnapshot: [],
@@ -528,11 +543,12 @@ export class CvService {
     type: CvResearchType;
     targetSource: CvResearchTargetSource;
     targetRole: string | null;
-    jobCategoryId: number | null;
+    jobCategoryId: string | null;
     jobCategoryName: string | null;
     seniorityLevelId: string | null;
     seniorityLevelName: string | null;
     jobDescription: string | null;
+    locations: string[];
   }): Promise<CvResearchSessionResponse> {
     const creation = await this.dataSource.transaction(async (manager) => {
       await manager.query(
@@ -561,10 +577,11 @@ export class CvService {
           seniorityLevelId: input.seniorityLevelId,
           seniorityLevelName: input.seniorityLevelName,
           jobDescription: input.jobDescription,
+          locations: input.locations,
           status: 'queued',
           phase: 'queued',
           progress: 0,
-          progressMessage: 'Research is queued.',
+          progressMessage: 'Research đang được xếp hàng.',
           attempt: 1,
           startedAt: null,
           heartbeatAt: new Date(),
@@ -629,7 +646,9 @@ export class CvService {
 
     try {
       let targetRole = session.targetRole;
+      let jobCategoryId = session.jobCategoryId;
       let jobCategoryName = session.jobCategoryName;
+      let seniorityLevelId = session.seniorityLevelId;
       let seniorityLevelName = session.seniorityLevelName;
       let keywords: string[] = [];
       let searchQueries: string[] = [];
@@ -639,22 +658,95 @@ export class CvService {
           session.id,
           'target_inference',
           5,
-          'Reading the CV and identifying its target role.',
+          'Đang đọc CV và xác định vị trí mục tiêu.',
           expectedAttempt,
         );
+        const [categories, seniorityLevels] = await Promise.all([
+          this.categoryRepository.find({
+            where: { isActive: true },
+            relations: { aliases: true, seniorityRules: true },
+            order: { displayOrder: 'ASC' },
+          }),
+          this.seniorityRepository.find({
+            where: { isActive: true },
+            order: { displayOrder: 'ASC' },
+          }),
+        ]);
+        if (categories.length === 0) {
+          throw new ServiceUnavailableException(
+            'Taxonomy ngành nghề chưa được cấu hình.',
+          );
+        }
+
         const inferredTarget = await this.aiEngineService.inferCvTarget({
           resumeText: session.userCv.extractedText,
           headerLines: this.getHeaderLines(session.userCv),
+          categories: categories.map((category) => ({
+            code: category.code,
+            name: category.name,
+            description: category.description,
+            aliases: category.aliases.map((alias) => alias.alias),
+            allowedSeniorityCodes: category.seniorityRules
+              .filter((rule) => rule.isSelectable)
+              .map((rule) => rule.seniorityCode),
+          })),
+          seniorityLevels: seniorityLevels.map((level) => ({
+            code: level.code,
+            name: level.name,
+            description: level.description,
+            experienceMin: level.experienceMin,
+            experienceMax: level.experienceMax,
+          })),
         });
+        if (inferredTarget.target_category_code === 'unsupported') {
+          throw new BadRequestException(
+            'CV không có định hướng phù hợp với taxonomy ngành CNTT hiện tại.',
+          );
+        }
+        const inferredCategory = categories.find(
+          (category) => category.code === inferredTarget.target_category_code,
+        );
+        if (!inferredCategory) {
+          throw new BadGatewayException(
+            `AI trả về category code không tồn tại trong taxonomy: ${inferredTarget.target_category_code}`,
+          );
+        }
+        const inferredSeniority = inferredTarget.seniority_code
+          ? seniorityLevels.find(
+              (level) => level.code === inferredTarget.seniority_code,
+            )
+          : null;
+        if (inferredTarget.seniority_code && !inferredSeniority) {
+          throw new BadGatewayException(
+            `AI trả về seniority code không tồn tại trong taxonomy: ${inferredTarget.seniority_code}`,
+          );
+        }
+        if (
+          inferredSeniority &&
+          !inferredCategory.seniorityRules.some(
+            (rule) =>
+              rule.isSelectable &&
+              rule.seniorityCode === inferredSeniority.code,
+          )
+        ) {
+          throw new BadGatewayException(
+            `AI trả về cấp bậc ${inferredSeniority.code} không phù hợp với category ${inferredCategory.code}`,
+          );
+        }
+
         targetRole = inferredTarget.target_role;
-        jobCategoryName = inferredTarget.target_category_hint || null;
-        seniorityLevelName = inferredTarget.seniority_hint || null;
+        jobCategoryId = inferredCategory.id;
+        jobCategoryName = inferredCategory.name;
+        seniorityLevelId = inferredSeniority?.id ?? null;
+        seniorityLevelName = inferredSeniority?.name ?? null;
         keywords = inferredTarget.keywords;
         searchQueries = inferredTarget.search_queries;
 
         await this.updateActiveResearchAttempt(session.id, expectedAttempt, {
           targetRole,
+          jobCategoryId,
           jobCategoryName,
+          seniorityLevelId,
           seniorityLevelName,
           error: null,
         });
@@ -666,14 +758,14 @@ export class CvService {
           status: 'processing',
           phase: 'cv_audit',
           progress: 20,
-          message: 'Reviewing your CV against the selected direction.',
+          message: 'Đang đánh giá CV theo định hướng đã chọn.',
         },
         expectedAttempt,
       );
 
-      const seniority = session.seniorityLevelId
+      const seniority = seniorityLevelId
         ? await this.seniorityRepository.findOneBy({
-            id: session.seniorityLevelId,
+            id: seniorityLevelId,
             isActive: true,
           })
         : null;
@@ -685,9 +777,9 @@ export class CvService {
         type: session.type,
         target: {
           targetRole,
-          jobCategoryId: session.jobCategoryId,
+          jobCategoryId,
           jobCategoryName,
-          seniorityLevelId: session.seniorityLevelId,
+          seniorityLevelId,
           seniorityLevelName,
           seniorityDescription: seniority?.description ?? null,
           jobDescription: session.jobDescription,
@@ -705,7 +797,7 @@ export class CvService {
         {
           phase: 'job_matching',
           progress: 72,
-          message: 'Preparing a focused job search from your CV results.',
+          message: 'Đang chuẩn bị tìm kiếm việc làm từ kết quả CV.',
         },
         expectedAttempt,
       );
@@ -714,10 +806,11 @@ export class CvService {
         {
           auditId: audit.audit_id,
           targetRole: targetRole ?? undefined,
-          seniorityLevelId: session.seniorityLevelId ?? undefined,
+          seniorityLevelId: seniorityLevelId ?? undefined,
           seniorityLevelName: seniorityLevelName ?? undefined,
           keywords,
           searchQueries,
+          locations: session.locations,
         },
         session.userId,
         {
@@ -735,7 +828,7 @@ export class CvService {
         {
           phase: 'job_matching',
           progress: 75,
-          message: 'Searching for suitable jobs and checking each match.',
+          message: 'Đang tìm việc phù hợp và kiểm tra từng kết quả.',
         },
         expectedAttempt,
       );
@@ -757,7 +850,7 @@ export class CvService {
     type: CvResearchType;
     target: {
       targetRole: string | null;
-      jobCategoryId: number | null;
+      jobCategoryId: string | null;
       jobCategoryName: string | null;
       seniorityLevelId: string | null;
       seniorityLevelName: string | null;
@@ -791,7 +884,7 @@ export class CvService {
     parsedResume: ParsedResume;
     target: {
       targetRole: string | null;
-      jobCategoryId: number | null;
+      jobCategoryId: string | null;
       jobCategoryName: string | null;
       seniorityLevelId: string | null;
       seniorityLevelName: string | null;
@@ -861,7 +954,7 @@ export class CvService {
                 progress:
                   25 + Math.floor((completedBatches / totalBatches) * 30),
                 message:
-                  'Reviewing your CV and checking the evidence behind each recommendation.',
+                  'Đang rà soát CV và kiểm tra bằng chứng cho từng góp ý.',
               },
               input.researchAttempt ?? undefined,
             );
@@ -886,8 +979,8 @@ export class CvService {
               progress: 56,
               message:
                 totalBatches > 0
-                  ? 'Checking the CV again for missed or inconsistent feedback.'
-                  : 'The CV review is complete. Preparing your results.',
+                  ? 'Đang rà soát lại CV để tìm góp ý bị bỏ sót hoặc thiếu nhất quán.'
+                  : 'Đánh giá CV đã hoàn tất. Đang chuẩn bị kết quả.',
             },
             input.researchAttempt ?? undefined,
           );
@@ -901,7 +994,7 @@ export class CvService {
               phase: 'cv_audit',
               progress: 55 + Math.floor((completedBatches / totalBatches) * 10),
               message:
-                'Checking the CV again for missed or inconsistent feedback.',
+                'Đang rà soát lại CV để tìm góp ý bị bỏ sót hoặc thiếu nhất quán.',
             },
             input.researchAttempt ?? undefined,
           );
@@ -914,7 +1007,7 @@ export class CvService {
             {
               phase: 'cv_audit',
               progress: 66,
-              message: 'Preparing your score and prioritized recommendations.',
+              message: 'Đang chuẩn bị điểm số và các góp ý ưu tiên.',
             },
             input.researchAttempt ?? undefined,
           );
@@ -968,7 +1061,7 @@ export class CvService {
 
     if (result.affected !== 1) {
       throw new Error(
-        'Research attempt was superseded or is no longer active.',
+        'Lần research này đã bị thay thế hoặc không còn hoạt động.',
       );
     }
   }
@@ -985,11 +1078,11 @@ export class CvService {
       : null;
 
     if (dto.jobCategoryId && !category) {
-      throw new BadRequestException('Selected job category does not exist.');
+      throw new BadRequestException('Ngành nghề đã chọn không tồn tại.');
     }
 
     if (dto.seniorityLevelId && !seniority) {
-      throw new BadRequestException('Selected seniority level does not exist.');
+      throw new BadRequestException('Cấp bậc đã chọn không tồn tại.');
     }
 
     const categoryName = category?.name.trim() ?? null;
@@ -1014,11 +1107,11 @@ export class CvService {
     const cv = await this.userCvRepository.findOneBy({ id: cvId, userId });
 
     if (!cv) {
-      throw new BadRequestException('CV does not exist.');
+      throw new BadRequestException('CV không tồn tại.');
     }
 
     if (cv.status !== 'ready') {
-      throw new BadRequestException('CV is not ready for research.');
+      throw new BadRequestException('CV chưa sẵn sàng để research.');
     }
 
     return cv;
@@ -1030,7 +1123,9 @@ export class CvService {
     }
 
     const storedFile = await this.r2StorageService.getPdfBuffer(cv.storageKey);
-    const parsedResume = await this.pdfParserService.parseBuffer(storedFile.body);
+    const parsedResume = await this.pdfParserService.parseBuffer(
+      storedFile.body,
+    );
 
     cv.extractedText = parsedResume.text;
     cv.parsedLines = parsedResume.lines;
@@ -1094,6 +1189,7 @@ export class CvService {
         seniority_level_id: session.seniorityLevelId,
         seniority_level_name: session.seniorityLevelName,
         job_description: session.jobDescription,
+        locations: session.locations,
       },
       created_at: session.createdAt,
       completed_at: session.completedAt,

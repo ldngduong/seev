@@ -5,26 +5,18 @@ import type { JobSourceName } from '../types/job-research.types'
 export const SOURCE_LABELS: Record<string, string> = {
   topcv: 'TopCV',
   vietnamworks: 'VietnamWorks',
-  indeed: 'Indeed',
-  topdev: 'TopDev',
   itviec: 'ITViec',
-  jobsgo: 'JobsGo',
-  viecoi: 'ViecOi',
 }
 
 const SOURCE_DOT: Record<JobSourceName, string> = {
   topcv: 'bg-rose-500',
   vietnamworks: 'bg-sky-500',
-  indeed: 'bg-indigo-500',
-  topdev: 'bg-violet-500',
   itviec: 'bg-emerald-500',
-  jobsgo: 'bg-teal-500',
-  viecoi: 'bg-orange-500',
 }
 
 export function SourceBadge({ source }: { source: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-zinc-600">
       <span
         className={cn(
           'size-1.5 rounded-full',
@@ -42,6 +34,24 @@ export function ScoreBadge({ score }: { score: number }) {
       {score}%
     </span>
   )
+}
+
+export function openJobPopup(url: string) {
+  void window.open(url, '_blank', 'popup,width=960,height=720')
+}
+
+export function formatPostedAt(value: string | null) {
+  if (!value) {
+    return null
+  }
+
+  const days = Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000)
+
+  if (days <= 0) return 'Đăng hôm nay'
+  if (days === 1) return 'Đăng hôm qua'
+  if (days < 30) return `Đăng ${days} ngày trước`
+
+  return `Đăng ngày ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value))}`
 }
 
 export function CompanyLogo({

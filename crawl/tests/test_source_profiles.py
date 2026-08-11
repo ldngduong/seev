@@ -22,7 +22,7 @@ def test_vn_profile_detects_canonical_level():
         source_job_id="1",
         title="Frontend Developer",
         url="https://topcv.vn/1",
-        seniority_text="Chuyên viên",
+        source_seniority_text="Chuyên viên",
     )
     assert profile.detect(job) == Level.MIDDLE
     job2 = Job(
@@ -30,7 +30,7 @@ def test_vn_profile_detects_canonical_level():
         source_job_id="2",
         title="Frontend Developer",
         url="https://topcv.vn/2",
-        seniority_text="Thực tập sinh",
+        source_seniority_text="Thực tập sinh",
     )
     assert profile.detect(job2) == Level.INTERN
     # "Nhân viên" is neutral (covers every IC), experience caps do the cut
@@ -39,7 +39,7 @@ def test_vn_profile_detects_canonical_level():
         source_job_id="3",
         title="Frontend Developer",
         url="https://topcv.vn/3",
-        seniority_text="Nhân viên",
+        source_seniority_text="Nhân viên",
     )
     assert profile.detect(job3) is None
 
@@ -51,7 +51,7 @@ def test_vietnamworks_detects_id_and_label():
         source_job_id="5",
         title="Backend Developer",
         url="https://vietnamworks.com/job/5",
-        level="7",
+        source_seniority_key="7",
     )
     assert profile.detect(job) == Level.MANAGER
     job2 = Job(
@@ -59,7 +59,7 @@ def test_vietnamworks_detects_id_and_label():
         source_job_id="8",
         title="Backend Developer",
         url="https://vietnamworks.com/job/8",
-        seniority_text="Thực tập sinh",
+        source_seniority_text="Thực tập sinh",
     )
     assert profile.detect(job2) == Level.INTERN
     # id 5 (Nhân viên) is intentionally not level evidence
@@ -68,25 +68,25 @@ def test_vietnamworks_detects_id_and_label():
         source_job_id="5b",
         title="Backend Developer",
         url="https://vietnamworks.com/job/5b",
-        level="5",
+        source_seniority_key="5",
     )
     assert profile.detect(job3) is None
 
 
-def test_topdev_maps_level_string():
-    profile = PROFILES["topdev"]
+def test_vietnamworks_maps_level_string():
+    profile = PROFILES["vietnamworks"]
     job = Job(
-        source="topdev",
+        source="vietnamworks",
         source_job_id="9",
         title="Engineer",
-        url="https://topdev.vn/9",
-        level="Senior",
+        url="https://vietnamworks.com/job/9",
+        source_seniority_key="3",
     )
-    assert profile.detect(job) == Level.SENIOR
-    assert profile.name == "topdev"
+    assert profile.detect(job) == Level.HEAD_DIRECTOR
+    assert profile.name == "vietnamworks"
     assert profile.supports_level is True
-    assert profile.level_filter_ids["intern"] == ["1616"]
-    assert profile.level_filter_values(Level.INTERN) == ["1616", "12507", "1617"]
+    assert profile.level_filter_ids["intern"] == ["8"]
+    assert profile.level_filter_values(Level.INTERN) == ["8", "1", "5"]
 
     profile_vnw = PROFILES["vietnamworks"]
     assert profile_vnw.level_filter_values(Level.INTERN) == ["8", "1", "5"]
@@ -97,7 +97,7 @@ def test_topdev_maps_level_string():
     assert profile_it.level_filter_values(Level.MIDDLE) == ["Senior"]
 
 
-def test_normalize_sets_canonical_level_and_experience():
+def test_normalize_sets_canonical_seniority_and_experience():
     profile = PROFILES["topcv"]
     job = Job(
         source="topcv",
@@ -107,7 +107,7 @@ def test_normalize_sets_canonical_level_and_experience():
         experience="Dưới 1 năm",
     )
     profile.normalize(job)
-    assert job.level == "intern"
+    assert [match.code for match in job.seniority_matches] == ["intern"]
     assert job.experience == "Dưới 1 năm"
     assert job.experience_min == 0.0
     assert job.experience_max == 1.0
@@ -144,15 +144,27 @@ def test_profile_maps_job_type():
     assert profile.map_job_type("Không biết") is None
 
 
+def test_itviec_preserves_experience_without_inventing_seniority():
+    profile = PROFILES["itviec"]
+    job = Job(
+        source="itviec",
+        source_job_id="4603",
+        title="Backend Developer",
+        url="https://itviec.com/it-jobs/backend-developer-4603",
+        experience="10 tháng",
+        experience_min=10 / 12,
+        experience_max=10 / 12,
+    )
+    profile.normalize(job)
+    assert job.experience == "10 tháng"
+    assert job.seniority_matches == []
+
+
 def test_all_sources_registered():
     for name in (
         "topcv",
         "vietnamworks",
-        "topdev",
         "itviec",
-        "jobsgo",
-        "viecoi",
-        "indeed",
     ):
         assert name in PROFILES, f"missing profile for {name}"
         assert PROFILES[name].name == name

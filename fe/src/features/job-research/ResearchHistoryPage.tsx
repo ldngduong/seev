@@ -7,6 +7,7 @@ import { DataPagination } from '@/components/data/DataPagination'
 import { DashboardPageHeader } from '@/components/layouts/DashboardPageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { Combobox } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -104,7 +105,7 @@ export function ResearchHistoryPage() {
   return (
     <main className="flex w-full flex-col gap-5">
       <DashboardPageHeader
-        title="Research history"
+        title="Lịch sử research"
         actions={
           <>
             <Button
@@ -114,11 +115,11 @@ export function ResearchHistoryPage() {
               disabled={sessionsQuery.isFetching}
             >
               <RefreshCw />
-              Refresh
+              Làm mới
             </Button>
             <Link to="/research/new" className={cn(buttonVariants())}>
               <FileText />
-              New research
+              Research mới
             </Link>
           </>
         }
@@ -134,43 +135,51 @@ export function ResearchHistoryPage() {
                 setSearch(event.target.value)
                 setPage(1)
               }}
-              placeholder="Search by CV or target role"
+              placeholder="Tìm theo CV hoặc vị trí mục tiêu"
               className="pl-9"
             />
           </label>
-          <Select
+          <Combobox
             value={cvId}
-            onValueChange={(value) => {
-              setCvId(value ?? 'all')
+            onChange={(value) => {
+              setCvId(String(value))
               setPage(1)
             }}
-          >
-            <SelectTrigger className="w-full border-border bg-background sm:w-64" aria-label="Filter by CV">
-              <SelectValue placeholder="All CVs" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All CVs</SelectItem>
-              {(cvsQuery.data?.items ?? []).map((cv) => (
-                <SelectItem key={cv.id} value={cv.id}>{cv.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            placeholder="Lọc theo CV..."
+            searchPlaceholder="Tìm theo tên CV..."
+            emptyMessage="Không tìm thấy CV"
+            options={[
+              { value: 'all', label: 'Tất cả CV' },
+              ...(cvsQuery.data?.items ?? []).map((cv) => ({
+                value: cv.id,
+                label: cv.name,
+              })),
+            ]}
+            className="w-full sm:w-64 sm:shrink-0 sm:basis-64"
+          />
           <Select
             value={status}
             onValueChange={(value) => {
               setStatus(value ?? 'all')
               setPage(1)
             }}
+            items={[
+              { value: 'all', label: 'Tất cả trạng thái' },
+              { value: 'queued', label: 'Đang chờ' },
+              { value: 'processing', label: 'Đang xử lý' },
+              { value: 'completed', label: 'Hoàn tất' },
+              { value: 'failed', label: 'Thất bại' },
+            ]}
           >
-            <SelectTrigger className="w-full border-border bg-background sm:w-44" aria-label="Filter by status">
+            <SelectTrigger className="w-full border-border bg-background sm:w-44" aria-label="Lọc theo trạng thái">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="queued">Queued</SelectItem>
-              <SelectItem value="processing">In progress</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="all">Tất cả trạng thái</SelectItem>
+              <SelectItem value="queued">Đang chờ</SelectItem>
+              <SelectItem value="processing">Đang xử lý</SelectItem>
+              <SelectItem value="completed">Hoàn tất</SelectItem>
+              <SelectItem value="failed">Thất bại</SelectItem>
             </SelectContent>
           </Select>
           <Select
@@ -179,14 +188,19 @@ export function ResearchHistoryPage() {
               setType(value ?? 'all')
               setPage(1)
             }}
+            items={[
+              { value: 'all', label: 'Tất cả loại' },
+              { value: 'quick', label: 'Research nhanh' },
+              { value: 'custom', label: 'Research tùy chỉnh' },
+            ]}
           >
-            <SelectTrigger className="w-full border-border bg-background sm:w-52" aria-label="Filter by research type">
+            <SelectTrigger className="w-full border-border bg-background sm:w-52" aria-label="Lọc theo loại research">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All research types</SelectItem>
-              <SelectItem value="quick">Quick research</SelectItem>
-              <SelectItem value="custom">Custom research</SelectItem>
+              <SelectItem value="all">Tất cả loại</SelectItem>
+              <SelectItem value="quick">Research nhanh</SelectItem>
+              <SelectItem value="custom">Research tùy chỉnh</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -194,18 +208,22 @@ export function ResearchHistoryPage() {
         {sessionsQuery.isLoading ? <HistorySkeleton /> : null}
         {sessionsQuery.isError ? (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-            Could not load research history.
+            Không tải được lịch sử research.
           </div>
         ) : null}
         {!sessionsQuery.isLoading && !sessions.length ? <EmptyHistory /> : null}
-        {sessions.map((session) => (
-          <SessionHistoryItem
-            key={session.id}
-            session={session}
-            isRetrying={retryMutation.isPending && retryMutation.variables === session.id}
-            onRetry={() => retryMutation.mutate(session.id)}
-          />
-        ))}
+        {sessions.length > 0 ? (
+          <div className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60 bg-card">
+            {sessions.map((session) => (
+              <SessionHistoryItem
+                key={session.id}
+                session={session}
+                isRetrying={retryMutation.isPending && retryMutation.variables === session.id}
+                onRetry={() => retryMutation.mutate(session.id)}
+              />
+            ))}
+          </div>
+        ) : null}
         {meta ? (
           <DataPagination
             page={meta.page}
@@ -235,20 +253,19 @@ function SessionHistoryItem({
       .join(' ')
 
   return (
-    <article className="rounded-xl border bg-card p-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={getStatusVariant(session.status)}>{statusLabel(session.status)}</Badge>
-            <Badge variant="outline">{session.type === 'quick' ? 'Quick' : 'Custom'}</Badge>
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock3 className="size-3" />
-              {formatDateTime(session.created_at)}
-            </span>
-          </div>
+    <article className="flex flex-col gap-4 p-4 transition-colors hover:bg-muted/40 lg:flex-row lg:items-center lg:justify-between">
+      <div className="min-w-0 flex-1 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={getStatusVariant(session.status)}>{statusLabel(session.status)}</Badge>
+          <Badge variant="outline">{session.type === 'quick' ? 'Nhanh' : 'Tùy chỉnh'}</Badge>
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock3 className="size-3" />
+            {formatDateTime(session.created_at)}
+          </span>
+        </div>
           <div>
             <h2 className="truncate text-lg font-semibold text-zinc-700">
-              {target || 'Researching CV direction'}
+              {target || 'Đang nghiên cứu định hướng CV'}
             </h2>
             <p className="mt-1 truncate text-sm text-muted-foreground">{session.cv.name}</p>
           </div>
@@ -269,38 +286,37 @@ function SessionHistoryItem({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-5 text-sm lg:min-w-56 lg:justify-end">
-          <span><span className="text-muted-foreground">Score </span><strong>{session.audit?.overall_score ?? '-'}</strong></span>
-          <span><span className="text-muted-foreground">Jobs </span><strong>{session.job_suggestions.length}</strong></span>
+          <span><span className="text-muted-foreground">Điểm </span><strong>{session.audit?.overall_score ?? '-'}</strong></span>
+          <span><span className="text-muted-foreground">Việc </span><strong>{session.job_suggestions.length}</strong></span>
           <Link
             to={`/research-history/${session.id}`}
             className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
           >
-            View details
+            Xem chi tiết
           </Link>
           {session.status === 'failed' ? (
             <Button type="button" size="sm" onClick={onRetry} disabled={isRetrying}>
-              {isRetrying ? 'Retrying...' : 'Retry'}
+              {isRetrying ? 'Đang thử lại...' : 'Thử lại'}
             </Button>
           ) : null}
         </div>
-      </div>
     </article>
   )
 }
 
 function HistorySkeleton() {
-  return <>{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32 rounded-xl" />)}</>
+  return <>{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32 rounded-2xl" />)}</>
 }
 
 function EmptyHistory() {
   return (
-    <section className="grid min-h-72 place-items-center rounded-xl border bg-card p-8 text-center">
-      <div className="space-y-3">
-        <BriefcaseBusiness className="mx-auto size-8 text-muted-foreground" />
-        <h2 className="text-xl font-semibold text-zinc-700">No research yet</h2>
-        <p className="text-sm text-muted-foreground">Choose a CV and start your first research.</p>
-        <Link to="/research/new" className={cn(buttonVariants())}>New research</Link>
+    <section className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 py-16 text-center">
+      <BriefcaseBusiness className="size-8 text-muted-foreground" />
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold text-zinc-800">Chưa có research nào</h2>
+        <p className="text-sm text-muted-foreground">Chọn một CV và bắt đầu research đầu tiên.</p>
       </div>
+      <Link to="/research/new" className={cn(buttonVariants())}>Research mới</Link>
     </section>
   )
 }
@@ -312,8 +328,13 @@ function getStatusVariant(status: CvResearchSession['status']) {
 }
 
 function statusLabel(status: CvResearchSession['status']) {
-  if (status === 'processing') return 'In progress'
-  return status.charAt(0).toUpperCase() + status.slice(1)
+  const labels: Record<CvResearchSession['status'], string> = {
+    queued: 'Đang chờ',
+    processing: 'Đang xử lý',
+    completed: 'Hoàn tất',
+    failed: 'Thất bại',
+  }
+  return labels[status]
 }
 
 function formatDateTime(value: string) {

@@ -6,9 +6,11 @@ export const JOB_LEVELS = [
   'junior',
   'middle',
   'senior',
-  'lead',
+  'staff',
+  'principal',
+  'tech_lead',
   'manager',
-  'director',
+  'head_director',
 ] as const;
 
 export const MATCH_KINDS = ['match', 'suggestion', 'reject'] as const;
