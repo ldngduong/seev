@@ -68,8 +68,8 @@ export const ResearchCvPage = () => {
           />
         </section>
       ) : (
-        <section className="rounded-xl border bg-card p-5">
-          <div className="mb-5 flex items-start justify-between gap-4 border-b pb-4">
+        <section className="rounded-xl border bg-card p-4 sm:p-5">
+          <div className="mb-5 flex flex-col items-start gap-3 border-b pb-4 sm:flex-row sm:justify-between sm:gap-4">
             <div>
               <h2 className="text-xl font-semibold text-zinc-700">
                 {mode === "quick" ? "Research nhanh" : mode === 'custom' ? "Research tùy chỉnh" : 'Theo nội dung tuyển dụng'}
@@ -80,7 +80,7 @@ export const ResearchCvPage = () => {
                   : mode === 'custom' ? "Chọn CV và cung cấp ngữ cảnh vị trí bạn muốn so sánh." : 'Chọn CV rồi cung cấp JD hoặc liên kết tuyển dụng.'}
               </p>
             </div>
-            <Button type="button" variant="ghost" onClick={() => setMode(null)}>
+            <Button type="button" variant="ghost" className="self-end sm:self-auto" onClick={() => setMode(null)}>
               Đổi chế độ
             </Button>
           </div>

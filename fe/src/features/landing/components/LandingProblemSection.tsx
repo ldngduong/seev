@@ -28,9 +28,9 @@ const problems = [
 
 export const LandingProblemSection = () => {
   return (
-    <section id="product" className="relative z-10 rounded-4xl bg-card p-6">
+    <section id="product" className="relative z-10 rounded-3xl bg-card p-4 sm:rounded-4xl sm:p-6">
         <div className="flex flex-col gap-5 lg:col-span-3">
-          <h2 className="text-3xl md:text-4xl font-bold text-center">
+          <h2 className="text-center text-2xl font-bold sm:text-3xl md:text-4xl">
             Vì sao CV CNTT vẫn khó tìm đúng việc?
           </h2>
 

@@ -72,7 +72,7 @@ export function PdfAuditViewer({
     const measure = () => {
       const innerWidth = Math.min(
         840,
-        Math.max(320, viewer.clientWidth - (bare ? 0 : 32)),
+        Math.max(1, viewer.clientWidth - (bare ? 0 : 32)),
       )
       setPageWidth((current) => (current === innerWidth ? current : innerWidth))
     }
@@ -160,8 +160,8 @@ export function PdfAuditViewer({
       <div
         ref={viewerRef}
         className={bare
-          ? 'relative flex-1 bg-background'
-          : 'relative flex-1 overflow-auto bg-muted/30 p-4'}
+          ? 'relative w-full min-w-0 max-w-full flex-1 overflow-hidden bg-background [contain:inline-size]'
+          : 'relative w-full min-w-0 max-w-full flex-1 overflow-auto bg-muted/30 p-3 [contain:inline-size] sm:p-4'}
         onClickCapture={(event) => {
           const target = event.target as HTMLElement
 
@@ -191,13 +191,13 @@ export function PdfAuditViewer({
             </div>
           }
         >
-          <div className={bare ? 'mx-auto flex w-full flex-col items-center gap-4' : 'mx-auto flex max-w-3xl flex-col gap-4'}>
+          <div className={bare ? 'mx-auto flex w-full min-w-0 max-w-full flex-col items-center gap-4' : 'mx-auto flex w-full min-w-0 max-w-3xl flex-col items-center gap-4'}>
             {Array.from({ length: totalPages }, (_, index) => (
               <div
                 key={index}
                 className={bare
-                  ? 'overflow-hidden bg-background'
-                  : 'overflow-hidden rounded-md border bg-background shadow-sm'}
+                  ? 'w-full max-w-full overflow-hidden bg-background'
+                  : 'w-full max-w-full overflow-hidden rounded-md border bg-background shadow-sm'}
                 data-pdf-page-number={index + 1}
               >
                 {!bare ? (
@@ -266,12 +266,18 @@ const SEVERITY_LABELS: Record<FeedbackSeverity, string> = {
 function getPopoverPosition(anchorElement: HTMLElement): PdfFeedbackPopoverPosition {
   const anchorRect = anchorElement.getBoundingClientRect()
   const viewportGap = 12
-  const popoverWidth = 320
+  const popoverWidth = Math.min(320, window.innerWidth - viewportGap * 2)
   const availableRight = window.innerWidth - anchorRect.right - viewportGap
   const left =
     availableRight >= popoverWidth
       ? anchorRect.right + viewportGap
-      : Math.max(viewportGap, anchorRect.left - popoverWidth - viewportGap)
+      : Math.max(
+          viewportGap,
+          Math.min(
+            window.innerWidth - popoverWidth - viewportGap,
+            anchorRect.left - popoverWidth - viewportGap,
+          ),
+        )
   const top = Math.min(
     Math.max(viewportGap, anchorRect.top),
     Math.max(viewportGap, window.innerHeight - viewportGap - 420),

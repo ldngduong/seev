@@ -44,7 +44,7 @@ export function UploadCvDialog({
         <DialogHeader>
           <DialogTitle>Thêm CV mới</DialogTitle>
           <DialogDescription>
-            Upload file PDF để lưu vào thư viện CV của bạn.
+            Chọn tệp PDF để thêm vào thư viện CV của bạn.
           </DialogDescription>
         </DialogHeader>
 
@@ -90,7 +90,7 @@ export function UploadCvDialog({
             </Button>
             <Button type="submit" disabled={!file || isUploading}>
               <Upload className="size-4" />
-              {isUploading ? 'Đang tải lên...' : 'Tải lên R2'}
+              {isUploading ? 'Đang tải lên...' : 'Thêm CV'}
             </Button>
           </DialogFooter>
         </form>

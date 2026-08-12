@@ -22,10 +22,10 @@ export function PricingPage() {
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       <LandingNavigation />
-      <main className="px-6 pb-16 pt-32">
+      <main className="px-4 pb-12 pt-28 sm:px-6 sm:pb-16 sm:pt-32">
         <section className="mx-auto max-w-3xl text-center">
           <p className="text-sm font-medium text-primary">Bảng giá</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-900 md:text-6xl">Chỉ trả credit cho lần bạn sử dụng</h1>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-900 sm:text-4xl md:text-6xl">Chỉ trả credit cho lần bạn sử dụng</h1>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-muted-foreground">Không cần đăng ký gói tháng. Credit chỉ được trừ khi bạn bắt đầu sử dụng một dịch vụ.</p>
         </section>
 
@@ -40,7 +40,7 @@ export function PricingPage() {
 function PricingCard({ product }: { product: BillingProduct }) {
   const featured = product.code === 'quick_research'
   return (
-    <article className={cn('relative flex min-h-96 flex-col rounded-3xl border bg-card p-6', featured ? 'border-primary shadow-lg shadow-primary/10' : 'border-border/70')}>
+    <article className={cn('relative flex min-h-96 flex-col rounded-3xl border bg-card p-5 sm:p-6', featured ? 'border-primary shadow-lg shadow-primary/10' : 'border-border/70')}>
       <div>
         <h2 className={cn('text-xl font-semibold text-zinc-900', featured && 'pr-24')}>{product.name}</h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{product.description}</p>

@@ -22,7 +22,7 @@ export function DashboardPageHeader({
     >
       <div className="min-w-0">
         {typeof title === 'string' ? (
-          <h1 className="truncate text-2xl font-semibold tracking-tight text-zinc-800">
+          <h1 className="break-words text-xl font-semibold tracking-tight text-zinc-800 sm:text-2xl">
             {title}
           </h1>
         ) : (
@@ -30,7 +30,7 @@ export function DashboardPageHeader({
         )}
       </div>
       {actions ? (
-        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">{actions}</div>
       ) : null}
     </header>
   )

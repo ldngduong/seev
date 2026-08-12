@@ -22,32 +22,32 @@ const sections = [
 
 const popovers = [
   {
-    position: '-left-8 top-[25%]',
+    position: 'left-2 top-[25%] sm:-left-8',
     delay: '-4100ms',
     x: '-8px',
     y: '0px',
-    width: 'w-32',
+    width: 'w-24 sm:w-32',
   },
   {
-    position: '-right-10 top-[36%]',
+    position: 'right-2 top-[36%] sm:-right-10',
     delay: '-2550ms',
     x: '8px',
     y: '0px',
-    width: 'w-36',
+    width: 'w-28 sm:w-36',
   },
   {
-    position: '-left-7 top-[57%]',
+    position: 'left-2 top-[57%] sm:-left-7',
     delay: '-1200ms',
     x: '-10px',
     y: '2px',
-    width: 'w-32',
+    width: 'w-24 sm:w-32',
   },
   {
-    position: '-right-6 bottom-[18%]',
+    position: 'right-2 bottom-[18%] sm:-right-6',
     delay: '-3600ms',
     x: '10px',
     y: '2px',
-    width: 'w-32',
+    width: 'w-24 sm:w-32',
   },
 ]
 
@@ -60,15 +60,15 @@ const popoverStyle = (popover: (typeof popovers)[number]) =>
 
 export const AnimatedCvPreview = () => {
   return (
-    <div className="relative aspect-[0.78] w-full min-w-0 rounded-4xl bg-white p-3 shadow-lg sm:w-[28rem]">
-      <div className="relative h-full overflow-hidden rounded-3xl bg-background p-6">
-        <div className="mx-auto mb-7 flex w-7/12 flex-col items-center gap-3">
+    <div className="relative aspect-[0.78] w-full min-w-0 max-w-[24rem] overflow-hidden rounded-3xl bg-white p-2.5 shadow-lg sm:max-w-[28rem] sm:overflow-visible sm:rounded-4xl sm:p-3">
+      <div className="relative h-full overflow-hidden rounded-2xl bg-background p-4 sm:rounded-3xl sm:p-6">
+        <div className="mx-auto mb-5 flex w-7/12 flex-col items-center gap-2.5 sm:mb-7 sm:gap-3">
           <div className="h-5 w-full rounded-full bg-foreground/85" />
           <div className="h-3 w-8/12 rounded-full bg-muted-foreground/35" />
           <div className="h-3 w-10/12 rounded-full bg-muted-foreground/25" />
         </div>
 
-        <div className="flex flex-col gap-7">
+        <div className="flex flex-col gap-5 sm:gap-7">
           {sections.map((section, sectionIndex) => (
             <div key={section.label} className="flex flex-col gap-3">
               <div
@@ -111,7 +111,7 @@ export const AnimatedCvPreview = () => {
         <div
           key={`${popover.position}-${index}`}
           className={cn(
-            'seev-preview-popover pointer-events-none absolute z-20 rounded-2xl border bg-popover p-3 shadow-lg shadow-foreground/10',
+            'seev-preview-popover pointer-events-none absolute z-20 rounded-xl border bg-popover p-2 shadow-lg shadow-foreground/10 sm:rounded-2xl sm:p-3',
             popover.width,
             popover.position,
           )}

@@ -6,7 +6,7 @@ export function PublicJobsPage() {
   return (
     <div className="min-h-screen bg-background">
       <LandingNavigation />
-      <main className="px-6 pb-12 pt-28">
+      <main className="px-4 pb-12 pt-24 sm:px-6 sm:pt-28">
         <JobFeedPage publicMode />
       </main>
       <LandingFooter />

@@ -22,7 +22,7 @@ export const LandingNavigation = () => {
     <header
       style={{ position: 'fixed', top: 0, right: 0, left: 0 }}
       className={cn(
-        'z-[100] flex items-center justify-between px-6 py-4 transition-colors duration-300',
+        'z-[100] flex items-center justify-between px-4 py-3 transition-colors duration-300 sm:px-6 sm:py-4',
         isScrolled
           ? 'border-b bg-white/95 shadow-sm backdrop-blur'
           : 'border-b border-transparent bg-transparent',
@@ -30,7 +30,7 @@ export const LandingNavigation = () => {
     >
       <div className="flex items-center gap-2">
         <img className="h-8" src="/logo.png" alt="" />
-        <Link to="/" className="text-xl font-semibold tracking-normal">
+        <Link to="/" className="text-lg font-semibold tracking-normal sm:text-xl">
           Seev
         </Link>
       </div>
@@ -103,8 +103,8 @@ export const LandingNavigation = () => {
           </PopoverContent>
         </Popover>
       ) : (
-        <Link to="/login" className="rounded-4xl bg-primary p-2">
-          <span className="flex items-center gap-1 rounded-4xl px-3 py-1 font-bold text-background hover:bg-background hover:text-foreground">
+        <Link to="/login" className="rounded-4xl bg-primary p-1.5 sm:p-2">
+          <span className="flex items-center gap-1 whitespace-nowrap rounded-4xl px-2 py-1 text-sm font-bold text-background hover:bg-background hover:text-foreground sm:px-3 sm:text-base">
             Dùng thử Seev
             <ArrowUpRight />
           </span>

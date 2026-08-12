@@ -83,12 +83,12 @@ export function JobFeedCard({ job, publicMode = false }: { job: JobFeedItem; pub
         </div>
       </div>
 
-      <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+      <div className="mt-auto flex min-w-0 items-center justify-between gap-1.5 border-t border-border/60 pt-3">
         <SourceBadge source={job.source} />
-        <div className="flex items-center gap-2">{job.detailReady ? publicMode ? <Link to="/login?redirect=%2Fjobs" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/8"><Sparkles className="size-3" />Kiểm tra phù hợp</Link> : <button type="button" onClick={() => setFitOpen(true)} className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/8"><Sparkles className="size-3" />Kiểm tra phù hợp</button> : null}<button
+        <div className="flex min-w-0 items-center justify-end gap-1">{job.detailReady ? publicMode ? <Link to="/login?redirect=%2Fjobs" className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-1.5 text-[11px] font-medium text-primary transition hover:bg-primary/8 min-[390px]:px-2.5 min-[390px]:text-xs"><Sparkles className="size-3" />Kiểm tra phù hợp</Link> : <button type="button" onClick={() => setFitOpen(true)} className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-1.5 text-[11px] font-medium text-primary transition hover:bg-primary/8 min-[390px]:px-2.5 min-[390px]:text-xs"><Sparkles className="size-3" />Kiểm tra phù hợp</button> : null}<button
           type="button"
           onClick={() => openJobPopup(job.sourceUrl)}
-          className="inline-flex items-center gap-1 rounded-full bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-zinc-900 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-zinc-700 min-[390px]:px-3 min-[390px]:text-xs"
         >
           Xem việc làm
           <ExternalLink className="size-3" />

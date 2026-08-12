@@ -22,12 +22,12 @@ export const LandingSolutionSection = () => {
   return (
     <section
       id="scoring"
-      className="rounded-4xl bg-primary p-6 text-primary-foreground m-6 mt-0"
+      className="m-4 mt-0 rounded-3xl bg-primary p-4 text-primary-foreground sm:m-6 sm:mt-0 sm:rounded-4xl sm:p-6"
     >
       <div className="grid gap-6">
         <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr] lg:items-end">
           <div className="flex flex-col gap-4">
-            <h2 className="text-3xl font-semibold leading-tight tracking-normal md:text-5xl">
+            <h2 className="text-2xl font-semibold leading-tight tracking-normal sm:text-3xl md:text-5xl">
               Hiểu CV trước khi chọn việc để ứng tuyển
             </h2>
           </div>

@@ -21,11 +21,11 @@ export function JobFitHistoryItem({ analysis, isRetrying = false, onRetry }: { a
           {analysis.job.is_expired ? <Badge className="bg-amber-500/10 text-amber-700 hover:bg-amber-500/10">Việc làm đã hết hạn</Badge> : null}
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock3 className="size-3" />{new Date(analysis.created_at).toLocaleString('vi-VN')}</span>
         </div>
-        <div><h2 className="truncate text-lg font-semibold text-zinc-700">{analysis.job.title}</h2><p className="mt-1 truncate text-sm text-muted-foreground">{analysis.job.company_name || 'Chưa cập nhật công ty'} · {analysis.job.source}</p></div>
+        <div><h2 className="break-words text-base font-semibold text-zinc-700 sm:text-lg">{analysis.job.title}</h2><p className="mt-1 break-words text-sm text-muted-foreground">{analysis.job.company_name || 'Chưa cập nhật công ty'} · {analysis.job.source}</p></div>
         {active ? <div className="max-w-xl space-y-2"><Progress value={analysis.progress} /><p className="text-xs text-muted-foreground">{analysis.progress_message}</p></div> : null}
         {analysis.status === 'failed' ? <p className="text-sm text-destructive">Không thể hoàn tất đánh giá. Credit đã được hoàn lại.</p> : null}
       </div>
-      <div className="flex shrink-0 items-center gap-5 text-sm lg:min-w-72 lg:justify-end">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm lg:min-w-72 lg:shrink-0 lg:justify-end">
         <span><span className="text-muted-foreground">Điểm </span><strong>{analysis.score ?? '—'}</strong></span>
         {analysis.verdict ? <span className="font-medium text-primary">{verdictLabels[analysis.verdict] ?? analysis.verdict}</span> : null}
         {analysis.status === 'failed' && onRetry ? <button type="button" className={cn(buttonVariants({ size: 'sm' }))} onClick={onRetry} disabled={isRetrying || analysis.job.is_expired}>{isRetrying ? 'Đang thử lại...' : 'Thử lại'}</button> : null}

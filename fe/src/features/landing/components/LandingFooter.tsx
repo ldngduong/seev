@@ -12,8 +12,8 @@ const footerLinks = [
 
 export function LandingFooter() {
   return (
-    <footer className="mx-6 overflow-hidden rounded-t-4xl bg-primary text-primary-foreground">
-      <div className="flex flex-col gap-6 px-6 py-7 md:flex-row md:items-center md:justify-between md:px-8">
+    <footer className="mx-4 overflow-hidden rounded-t-3xl bg-primary text-primary-foreground sm:mx-6 sm:rounded-t-4xl">
+      <div className="flex flex-col gap-6 px-5 py-7 sm:px-6 md:flex-row md:items-center md:justify-between md:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-background"><img className="h-6" src="/logo.png" alt="" /></span>
           <div className="min-w-0">
@@ -31,7 +31,7 @@ export function LandingFooter() {
           <ArrowUpRight />
         </Link>
       </div>
-      <div className="flex flex-col gap-2 border-t border-primary-foreground/15 px-6 py-3 text-xs text-primary-foreground/60 sm:flex-row sm:items-center sm:justify-between md:px-8">
+      <div className="flex flex-col gap-2 border-t border-primary-foreground/15 px-5 py-3 text-xs text-primary-foreground/60 sm:flex-row sm:items-center sm:justify-between sm:px-6 md:px-8">
         <span>© {new Date().getFullYear()} Seev</span>
         <span>CV rõ hơn. Công việc đúng hơn.</span>
       </div>

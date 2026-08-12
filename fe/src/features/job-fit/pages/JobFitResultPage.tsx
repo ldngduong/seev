@@ -35,7 +35,7 @@ export function JobFitResultPage() {
       <DashboardPageHeader
         title={(
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-zinc-800">
+            <h1 className="break-words text-xl font-semibold tracking-tight text-zinc-800 sm:text-2xl">
               {analysis.job.title}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">

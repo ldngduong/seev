@@ -27,6 +27,9 @@ export function JobMatchCard({ match }: { match: JobIntentMatchResult }) {
     match_reason: matchReason,
   } = match
   const isExpired = Boolean(job.expiredAt && new Date(job.expiredAt).getTime() <= Date.now())
+  const visibleMatchedTerms = matchedTerms.filter(
+    (term) => !/^(?:category|seniority):/i.test(term),
+  )
 
   return (
     <article className="flex h-full flex-col gap-3 rounded-2xl border border-border/60 bg-card p-4 transition hover:border-primary/40 hover:shadow-sm">
@@ -63,7 +66,7 @@ export function JobMatchCard({ match }: { match: JobIntentMatchResult }) {
         ) : null}
       </div>
 
-      {matchedTerms.length > 0 || matchReason ? (
+      {visibleMatchedTerms.length > 0 || matchReason ? (
         <div className="space-y-2 border-t border-border/60 pt-3">
           <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
             <Sparkles className="size-3.5" />
@@ -74,9 +77,9 @@ export function JobMatchCard({ match }: { match: JobIntentMatchResult }) {
               {matchReason}
             </p>
           ) : null}
-          {matchedTerms.length > 0 ? (
+          {visibleMatchedTerms.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
-              {matchedTerms.map((term) => (
+              {visibleMatchedTerms.map((term) => (
                 <span
                   key={term}
                   className="rounded-full bg-muted px-2 py-0.5 text-xs text-zinc-600"

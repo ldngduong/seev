@@ -142,11 +142,27 @@
     @apply border-border outline-ring/50;
     }
   body {
-    @apply bg-background text-zinc-700 antialiased;
+    @apply min-w-0 overflow-x-clip bg-background text-zinc-700 antialiased;
     }
   html {
-    @apply font-sans;
+    @apply min-w-0 overflow-x-clip font-sans;
     }
+  #root {
+    @apply min-w-0;
+  }
+  img, video, canvas, svg {
+    max-width: 100%;
+  }
+  @media (max-width: 47.999rem) {
+    main div:has(> table) {
+      max-width: 100%;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+    }
+    main table {
+      min-width: 38rem;
+    }
+  }
   ::selection {
     @apply bg-primary/15 text-zinc-900;
     }

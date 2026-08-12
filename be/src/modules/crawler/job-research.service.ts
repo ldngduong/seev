@@ -51,6 +51,26 @@ interface CreateIntentResult {
   queueJobId: string | number | undefined;
 }
 
+function normalizeMatchedTermLabels(
+  terms: string[],
+  categoryName: string | null,
+  seniorityLabels: Map<string, string>,
+) {
+  return [
+    ...new Set(
+      terms
+        .map((term) => {
+          if (term.startsWith('category:')) return categoryName;
+          if (term.startsWith('seniority:')) {
+            return seniorityLabels.get(term.slice('seniority:'.length)) ?? null;
+          }
+          return term;
+        })
+        .filter((term): term is string => Boolean(term?.trim())),
+    ),
+  ];
+}
+
 @Injectable()
 export class JobResearchService {
   constructor(
@@ -461,9 +481,34 @@ export class JobResearchService {
 
     const rows = await query.getMany();
 
+    const seniorityCodes = [
+      ...new Set(
+        rows.flatMap((match) =>
+          match.matchedTerms
+            .filter((term) => term.startsWith('seniority:'))
+            .map((term) => term.slice('seniority:'.length)),
+        ),
+      ),
+    ];
+    const seniorityLabels = seniorityCodes.length
+      ? new Map(
+          (
+            await this.seniorityRepository
+              .createQueryBuilder('level')
+              .select(['level.code', 'level.displayName'])
+              .where('level.code IN (:...codes)', { codes: seniorityCodes })
+              .getMany()
+          ).map((level) => [level.code, level.displayName]),
+        )
+      : new Map<string, string>();
+
     return rows.map((match) => ({
       match_score: match.matchScore,
-      matched_terms: match.matchedTerms,
+      matched_terms: normalizeMatchedTermLabels(
+        match.matchedTerms,
+        match.jobPost.jobCategoryName,
+        seniorityLabels,
+      ),
       match_kind: match.matchKind,
       match_reason: match.matchReason,
       job: match.jobPost,
@@ -791,9 +836,13 @@ export class JobResearchService {
           id: intent.seniorityLevelId,
         })
       : null;
-    const seniorityRows: Array<{ job_post_id: string; code: string }> =
+    const seniorityRows: Array<{
+      job_post_id: string;
+      code: string;
+      display_name: string;
+    }> =
       await this.jobPostRepository.query(
-        `SELECT jsl."job_post_id", sl."code"
+        `SELECT jsl."job_post_id", sl."code", sl."display_name"
            FROM "job_post_seniority_levels" jsl
            JOIN "seniority_levels" sl ON sl."id" = jsl."seniority_level_id"
           WHERE jsl."job_post_id" = ANY($1::uuid[])
@@ -801,11 +850,13 @@ export class JobResearchService {
         [jobPosts.map((job) => job.id)],
       );
     const codesByJob = new Map<string, string[]>();
+    const seniorityLabelByCode = new Map<string, string>();
     for (const row of seniorityRows) {
       codesByJob.set(row.job_post_id, [
         ...(codesByJob.get(row.job_post_id) ?? []),
         row.code,
       ]);
+      seniorityLabelByCode.set(row.code, row.display_name);
     }
     const compatibilityRows: Array<{
       job_code: string;
@@ -883,9 +934,11 @@ export class JobResearchService {
           matchScore:
             matchKind === 'suggestion' ? Math.min(matchScore, 59) : matchScore,
           matchedTerms: [
-            `category:${jobPost.jobCategoryId ?? 'unknown'}`,
-            ...(jobSeniorityCode ? [`seniority:${jobSeniorityCode}`] : []),
-          ],
+            jobPost.jobCategoryName,
+            jobSeniorityCode
+              ? seniorityLabelByCode.get(jobSeniorityCode)
+              : null,
+          ].filter((term): term is string => Boolean(term)),
           matchKind,
           matchReason: result.reason,
         },

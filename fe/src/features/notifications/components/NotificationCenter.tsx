@@ -24,7 +24,7 @@ export function NotificationCenter() {
           <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-destructive ring-2 ring-background" />
         ) : null}
       </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={8} className="w-80 gap-0 overflow-hidden rounded-xl p-0">
+      <PopoverContent align="end" sideOffset={8} className="w-[min(20rem,calc(100vw-1rem))] gap-0 overflow-hidden rounded-xl p-0">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div>
             <p className="font-semibold text-zinc-700">Thông báo</p>

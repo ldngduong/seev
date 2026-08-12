@@ -23,10 +23,10 @@ export function DashboardTopbar() {
   }
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background px-[var(--content-pad)] [--content-pad:1rem] sm:[--content-pad:1.25rem] lg:[--content-pad:1.5rem]">
+    <header className="flex h-14 min-w-0 shrink-0 items-center justify-between border-b bg-background px-[var(--content-pad)] [--content-pad:0.75rem] sm:[--content-pad:1.25rem] lg:[--content-pad:1.5rem]">
       <SidebarTrigger className="size-9 rounded-xl text-zinc-700" />
-      <div className="flex items-center gap-1">
-        {billing.balance !== null ? <span className="mr-1 rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary">{billing.balance} credits</span> : null}
+      <div className="flex min-w-0 items-center gap-1">
+        {billing.balance !== null ? <span className="mr-0.5 shrink-0 rounded-lg bg-primary/10 px-2 py-1.5 text-[11px] font-semibold text-primary sm:mr-1 sm:px-2.5 sm:text-xs">{billing.balance} credits</span> : null}
         <NotificationCenter />
         {user ? (
           <Popover>

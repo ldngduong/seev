@@ -47,9 +47,9 @@ export function AdminLayout() {
       <SidebarFooter className="px-3 pb-4 group-data-[collapsible=icon]:px-2"><SidebarMenu><SidebarMenuItem><SidebarMenuButton className="h-10 gap-3 rounded-lg px-3 text-zinc-600 hover:bg-muted hover:text-zinc-900" tooltip="Về ứng dụng" render={<NavLink to="/dashboard"><ArrowLeft /><span>Về ứng dụng</span></NavLink>} /></SidebarMenuItem></SidebarMenu></SidebarFooter>
       <SidebarRail />
     </Sidebar>
-    <SidebarInset>
+    <SidebarInset className="min-w-0 overflow-x-clip">
       <DashboardTopbar />
-      <div className="flex flex-1 flex-col gap-6 px-[var(--content-pad)] py-[var(--content-pad)] [--content-pad:1rem] sm:[--content-pad:1.25rem] lg:[--content-pad:1.5rem]"><Outlet /></div>
+      <div className="flex min-w-0 flex-1 flex-col gap-5 px-[var(--content-pad)] py-[var(--content-pad)] [--content-pad:0.75rem] sm:gap-6 sm:[--content-pad:1.25rem] lg:[--content-pad:1.5rem]"><Outlet /></div>
     </SidebarInset>
   </SidebarProvider>
 }

@@ -26,11 +26,11 @@ export function ResearchHistoryPage() {
     <DashboardPageHeader title="Lịch sử research" actions={<><Button type="button" variant="outline" onClick={history.refresh} disabled={history.isRefreshing}><RefreshCw />Làm mới</Button><Link to="/research/new" className={cn(buttonVariants())}><FileText />Research mới</Link></>} />
     <section className="grid gap-3">
       <Tabs value={history.type} onValueChange={(value) => history.setType(value as 'quick' | 'custom' | 'job_fit' | 'external')}>
-        <TabsList className="grid w-full grid-cols-4 rounded-xl p-1 group-data-horizontal/tabs:h-10" variant="default">
-          <TabsTrigger value="quick" className="h-full min-h-0 px-3 py-0">Nhanh</TabsTrigger>
-          <TabsTrigger value="custom" className="h-full min-h-0 px-3 py-0">Tùy chỉnh</TabsTrigger>
-          <TabsTrigger value="job_fit" className="h-full min-h-0 px-3 py-0">Độ phù hợp việc làm</TabsTrigger>
-          <TabsTrigger value="external" className="h-full min-h-0 px-3 py-0">Theo nội dung tuyển dụng</TabsTrigger>
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-xl p-1 sm:grid-cols-4 sm:gap-0 sm:group-data-horizontal/tabs:h-10" variant="default">
+          <TabsTrigger value="quick" className="min-h-10 whitespace-normal px-2 py-2 leading-tight sm:h-full sm:min-h-0 sm:px-3 sm:py-0">Nhanh</TabsTrigger>
+          <TabsTrigger value="custom" className="min-h-10 whitespace-normal px-2 py-2 leading-tight sm:h-full sm:min-h-0 sm:px-3 sm:py-0">Tùy chỉnh</TabsTrigger>
+          <TabsTrigger value="job_fit" className="min-h-10 whitespace-normal px-2 py-2 leading-tight sm:h-full sm:min-h-0 sm:px-3 sm:py-0">Độ phù hợp việc làm</TabsTrigger>
+          <TabsTrigger value="external" className="min-h-10 whitespace-normal px-2 py-2 leading-tight sm:h-full sm:min-h-0 sm:px-3 sm:py-0">Theo nội dung tuyển dụng</TabsTrigger>
         </TabsList>
       </Tabs>
       <div className="flex flex-col gap-3 sm:flex-row">

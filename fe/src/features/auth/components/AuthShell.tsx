@@ -24,8 +24,8 @@ export function AuthShell({
   return (
     <>
       <LandingNavigation />
-      <main className="grid min-h-screen place-items-center bg-[#f8fafc] p-6 pt-24">
-        <section className="w-full max-w-[440px] rounded-[2rem] border border-border/60 bg-card p-6 shadow-sm sm:p-8">
+      <main className="grid min-h-svh place-items-center bg-[#f8fafc] px-4 pb-6 pt-24 sm:p-6 sm:pt-24">
+        <section className="w-full max-w-[440px] rounded-3xl border border-border/60 bg-card p-5 shadow-sm sm:rounded-[2rem] sm:p-8">
           <div className="mb-7 space-y-3">
             <Link
               to="/"
