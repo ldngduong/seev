@@ -96,12 +96,9 @@ Các cổng local:
 
 - Frontend: `http://localhost:5555`
 - Backend: `http://localhost:3000`
-- PostgreSQL: `localhost:5432`
-- Redis: `localhost:6379`
-
 Dữ liệu PostgreSQL và Redis nằm trong named volumes, nên được giữ lại khi
-container được tạo lại. Hai cổng database chỉ bind vào `127.0.0.1`, không mở
-PostgreSQL hoặc Redis trực tiếp ra mạng ngoài.
+container được tạo lại. PostgreSQL và Redis không publish cổng ra host; backend
+kết nối trực tiếp trong Docker network qua `postgres:5432` và `redis:6379`.
 
 Crawler không publish cổng ra host và không cần domain. Backend gọi crawler
 trực tiếp trong Docker network qua `http://crawler:8000`.
