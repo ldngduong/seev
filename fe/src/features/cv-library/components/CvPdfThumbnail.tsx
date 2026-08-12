@@ -2,7 +2,7 @@ import { FileText } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Document, Page } from 'react-pdf'
 
-import '@/lib/pdfjs-worker'
+import '@/features/cv-research/lib/pdfjs-worker'
 
 type CvPdfThumbnailProps = {
   file: Blob | string | null

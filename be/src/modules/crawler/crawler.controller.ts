@@ -10,10 +10,12 @@ import {
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../auth/guards/admin.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.type';
 import { CategoryCrawlService } from './category-crawl.service';
 import { CreateJobResearchIntentDto } from './dto/create-job-research-intent.dto';
 import { JobResearchQueryDto } from './dto/job-research-query.dto';
+import { JobFeedQueryDto } from './dto/job-feed-query.dto';
 import { RunCategoryCrawlDto } from './dto/run-category-crawl.dto';
 import { JobResearchService } from './job-research.service';
 
@@ -36,6 +38,12 @@ export class CrawlerController {
       intent: result.intent,
       queue_job_id: result.queueJobId,
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('feed')
+  getJobFeed(@Query() query: JobFeedQueryDto) {
+    return this.jobResearchService.listJobFeed(query);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -63,8 +71,9 @@ export class CrawlerController {
     return this.jobResearchService.getIntentJobs(id, req.user.id, query.limit);
   }
 
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('category-crawl/run')
-  async runCategoryCrawl(@Body() dto: RunCategoryCrawlDto) {
-    return this.categoryCrawlService.trigger(dto?.forceRetry ?? false);
+  async runCategoryCrawl(@Body() dto: RunCategoryCrawlDto, @Req() req: AuthenticatedRequest) {
+    return this.categoryCrawlService.trigger(dto?.forceRetry ?? false, req.user.id);
   }
 }

@@ -8,6 +8,7 @@ export interface FetchTextOptions {
   headers?: Record<string, string>;
   body?: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 interface FetchAttemptResult {
@@ -21,7 +22,7 @@ export class CrawlerHttpService {
   constructor(private readonly config: ConfigService<Env, true>) {}
 
   async fetchText(url: string, options: FetchTextOptions = {}) {
-    return this.withRetries(url, () => this.fetchDirect(url, options));
+    return this.withRetries(url, () => this.fetchDirect(url, options), options.signal);
   }
 
   private async fetchDirect(
@@ -37,10 +38,10 @@ export class CrawlerHttpService {
         ...options.headers,
       },
       body: options.body,
-      signal: AbortSignal.timeout(
-        options.timeoutMs ??
-          this.config.get('JOB_RESEARCH_HTTP_TIMEOUT_MS', { infer: true }),
-      ),
+      signal: AbortSignal.any([
+        AbortSignal.timeout(options.timeoutMs ?? this.config.get('JOB_RESEARCH_HTTP_TIMEOUT_MS', { infer: true })),
+        ...(options.signal ? [options.signal] : []),
+      ]),
     });
 
     const text = await response.text();
@@ -56,6 +57,7 @@ export class CrawlerHttpService {
   private async withRetries(
     url: string,
     attempt: () => Promise<FetchAttemptResult>,
+    signal?: AbortSignal,
   ) {
     const maxRetries = this.config.get('JOB_RESEARCH_HTTP_RETRIES', {
       infer: true,
@@ -82,6 +84,8 @@ export class CrawlerHttpService {
         lastError = error;
       } catch (error) {
         lastError = error;
+
+        if (signal?.aborted) throw error;
 
         if (!this.isRetryableError(error) || attemptIndex >= maxRetries) {
           throw error;

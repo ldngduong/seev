@@ -176,7 +176,7 @@ export class AiEngineService {
                 'exact seniority name belonging to seniority_code, or empty',
               confidence: 0.8,
               reasoning:
-                'Vietnamese explanation of how the target was inferred from the evidence.',
+                'Giải thích bằng tiếng Việt dựa trên bằng chứng trong CV.',
               keywords: [
                 'relevant keyword 1',
                 'relevant keyword 2',
@@ -256,6 +256,7 @@ export class AiEngineService {
           this.parseJsonContent(content),
         );
         this.validateScoreBreakdown(result);
+        this.validateFinalAuditLanguage(result);
         return result;
       } catch (error) {
         lastError = error;
@@ -648,7 +649,7 @@ export class AiEngineService {
             '- Use different max_score values only as rubric weights. Higher max_score means that dimension matters more for the selected target.',
             '- Infer section names dynamically from the CV content. Do not assume every CV has the same sections.',
             '- Suggest keywords, role names, and job titles that fit this CV.',
-            '- Keep summary, general_feedbacks, job reasons, and general commentary in Vietnamese.',
+            '- Write every AI-authored display field in Vietnamese: summary, score dimension, rationale, general feedback topic/comment/recommendation, detailed issue/section/suggestion, and job reason. Technical terms, product names, and canonical job titles may remain in their standard form.',
             '- Do not criticize missing spaces, extra spaces, letter spacing, kerning, font rendering, or characters separated by spaces. PDF extraction may split or join stylized text; treat that as a parser/font artifact, not a CV issue. Never mention spacing as an issue unless the semantic content itself is invalid.',
             '- Treat isolated URL/link lines as valid evidence links unless the URL itself is broken or mislabeled. If the linked work belongs to another domain, discuss that as a high-level positioning issue instead of highlighting the URL line.',
             '- Prefer feedback about content quality, quantified impact, role alignment, project clarity, consistency, truthful title alignment, and ATS keywords.',
@@ -661,39 +662,38 @@ export class AiEngineService {
             'Return this exact JSON shape:',
             JSON.stringify({
               overall_score: 75,
-              summary: 'Short Vietnamese summary.',
+              summary: 'Tóm tắt ngắn gọn bằng tiếng Việt.',
               score_breakdown: [
                 {
-                  dimension: 'Target alignment',
+                  dimension: 'Mức độ phù hợp mục tiêu',
                   score: 20,
                   max_score: 35,
                   rationale:
-                    'Vietnamese explanation based on CV evidence and findings.',
+                    'Giải thích bằng tiếng Việt dựa trên bằng chứng trong CV.',
                 },
                 {
-                  dimension: 'Evidence quality',
+                  dimension: 'Chất lượng bằng chứng',
                   score: 12,
                   max_score: 20,
                   rationale:
-                    'Vietnamese explanation based on projects, bullets, or experience evidence.',
+                    'Giải thích bằng tiếng Việt dựa trên dự án và kinh nghiệm.',
                 },
                 {
-                  dimension: 'ATS keyword coverage',
+                  dimension: 'Độ phủ từ khóa ATS',
                   score: 8,
                   max_score: 15,
                   rationale:
-                    'Vietnamese explanation based on target-specific keyword coverage.',
+                    'Giải thích bằng tiếng Việt về độ phủ từ khóa mục tiêu.',
                 },
               ],
               general_feedbacks: [
                 {
                   id: 'gf_01',
-                  topic: 'Overall positioning',
+                  topic: 'Định vị tổng thể',
                   severity: 'warning',
-                  comment:
-                    'Vietnamese high-level comment that has no exact PDF line to highlight.',
+                  comment: 'Nhận xét tổng quan bằng tiếng Việt.',
                   recommendation:
-                    'Vietnamese recommendation for the overall CV direction.',
+                    'Khuyến nghị bằng tiếng Việt cho định hướng CV.',
                 },
               ],
               suggested_keywords: [
@@ -705,18 +705,20 @@ export class AiEngineService {
               suggested_jobs: [
                 {
                   title: 'Target Job A',
-                  reason: 'Vietnamese explanation of why this job fits.',
+                  reason:
+                    'Giải thích bằng tiếng Việt vì sao công việc phù hợp.',
                   match_level: 'high',
                 },
                 {
                   title: 'Target Job B',
-                  reason: 'Vietnamese explanation of why this job fits.',
+                  reason:
+                    'Giải thích bằng tiếng Việt vì sao công việc phù hợp.',
                   match_level: 'medium',
                 },
                 {
                   title: 'Adjacent Target Job',
                   reason:
-                    'Vietnamese explanation of why this job is a stretch.',
+                    'Giải thích bằng tiếng Việt vì sao đây là lựa chọn thử sức.',
                   match_level: 'stretch',
                 },
               ],
@@ -772,6 +774,7 @@ export class AiEngineService {
             'score_breakdown max_score values must sum to exactly 100, and overall_score must equal the sum of score_breakdown score values.',
             'Never repair by complaining about missing spaces, extra spaces, letter spacing, or PDF extraction artifacts.',
             'Do not change the business judgment unless needed to obey the selected target role.',
+            'Keep every AI-authored display field in Vietnamese: summary, score dimension/rationale, general feedback topic/comment/recommendation, and suggested job reason. Preserve standard technical terms and job titles where appropriate.',
             '',
             'Validation error:',
             this.formatValidationError(error),
@@ -846,10 +849,8 @@ export class AiEngineService {
             '- original_text must be copied from the same source line. Use the full reviewable span. If the line has a label plus content after ":" or "-", include the content, not only the label; usually use the whole line.',
             '- highlight_text is optional. If provided, it must be the smallest exact text span inside original_text that should be visually marked. Use the whole original_text only when the whole span needs review.',
             '- Do not use structural/navigation/factual metadata text as original_text unless that wording itself is the exact problem.',
-            '- Every detailed_feedback item must include a non-empty suggestion. The suggestion must be a polished replacement in the same language as original_text.',
-            '- Keep issue in Vietnamese. Keep suggestion in the dominant language of original_text.',
-            '- If original_text is English, suggestion must be English only. Do not put Vietnamese explanations, Vietnamese parentheticals, or translated notes inside suggestion.',
-            '- If original_text is Vietnamese, suggestion must be Vietnamese.',
+            '- Every detailed_feedback item must include a non-empty suggestion written in Vietnamese, even when original_text is English. Preserve technical terms and proper nouns where appropriate.',
+            '- Write section, issue, and suggestion in natural Vietnamese. Do not return English commentary.',
             '- Suggestions must be truth-preserving. Do not invent years of experience, seniority, tools, certifications, metrics, leadership scope, or testing activities that are not supported by original_text or nearby context.',
             '- If the selected target requires evidence missing from the line, suggest a truthful rewrite using transferable evidence, or explicitly mark target-specific evidence as something to add only if true.',
             '- Set suggestion_mode to direct_rewrite only when every factual claim in suggestion is supported by the cited CV lines. Otherwise use conditional_recommendation and phrase the suggestion conditionally, never as an achievement the candidate already completed.',
@@ -867,12 +868,11 @@ export class AiEngineService {
                 {
                   id: 'fb_01',
                   source_line_id: batch[0]?.id || 'hl_001',
-                  section: 'Dynamically inferred section name',
+                  section: 'Tên mục được suy luận bằng tiếng Việt',
                   original_text: batch[0]?.text || 'Exact CV text span',
                   severity: 'warning',
-                  issue: 'Vietnamese explanation of the issue.',
-                  suggestion:
-                    'Polished replacement text in the same language as original_text.',
+                  issue: 'Giải thích vấn đề bằng tiếng Việt.',
+                  suggestion: 'Gợi ý chỉnh sửa rõ ràng bằng tiếng Việt.',
                   suggestion_mode: 'direct_rewrite',
                   evidence_source_line_ids: [batch[0]?.id || 'hl_001'],
                   highlight_color: 'yellow',
@@ -942,10 +942,8 @@ export class AiEngineService {
             '- If the line is merely a neutral separator, label, or metadata and does not need direct rewriting, omit it.',
             '- If a label and content appear in the same line, original_text must include both label and content. If the label appears alone, do not return feedback for that label-only line.',
             '- If the line contains multiple comma-separated skills, tools, or responsibilities, evaluate the whole line as one evidence unit.',
-            '- Every detailed_feedback item must include a non-empty suggestion in the same language as original_text.',
-            '- Keep issue in Vietnamese. Keep suggestion in the dominant language of original_text.',
-            '- If original_text is English, suggestion must be English only. Do not put Vietnamese explanations, Vietnamese parentheticals, or translated notes inside suggestion.',
-            '- If original_text is Vietnamese, suggestion must be Vietnamese.',
+            '- Every detailed_feedback item must include a non-empty suggestion written in Vietnamese, even when original_text is English. Preserve technical terms and proper nouns where appropriate.',
+            '- Write section, issue, and suggestion in natural Vietnamese. Do not return English commentary.',
             '- Suggestions must be truth-preserving and must not invent experience, tools, metrics, seniority, or testing work.',
             '- Set suggestion_mode to direct_rewrite only when every factual claim in suggestion is supported by the cited CV lines. Otherwise use conditional_recommendation and make the suggestion explicitly conditional.',
             '- evidence_source_line_ids must include source_line_id plus every coverage-batch or surrounding-context line used as factual support. Cite only lines that actually contain that evidence.',
@@ -961,12 +959,11 @@ export class AiEngineService {
                 {
                   id: 'fb_coverage_01',
                   source_line_id: batch[0]?.id || 'hl_001',
-                  section: 'Dynamically inferred section name',
+                  section: 'Tên mục được suy luận bằng tiếng Việt',
                   original_text: batch[0]?.text || 'Exact CV text span',
                   severity: 'warning',
-                  issue: 'Vietnamese explanation of the missed issue.',
-                  suggestion:
-                    'Polished replacement text in the same language as original_text.',
+                  issue: 'Giải thích vấn đề bị bỏ sót bằng tiếng Việt.',
+                  suggestion: 'Gợi ý chỉnh sửa rõ ràng bằng tiếng Việt.',
                   suggestion_mode: 'direct_rewrite',
                   evidence_source_line_ids: [batch[0]?.id || 'hl_001'],
                   highlight_color: 'yellow',
@@ -1023,9 +1020,7 @@ export class AiEngineService {
             'Each detailed_feedback item must have suggestion_mode as direct_rewrite or conditional_recommendation and a non-empty evidence_source_line_ids array that includes source_line_id.',
             'Only use direct_rewrite when every factual claim in suggestion is supported by the cited batch lines. Otherwise use conditional_recommendation and phrase it conditionally rather than inventing experience.',
             'If a source line has label plus content, original_text must include the content, not only the label.',
-            'Keep issue in Vietnamese. Keep suggestion in the dominant language of original_text.',
-            'If original_text is English, suggestion must be English only. Do not put Vietnamese explanations, Vietnamese parentheticals, or translated notes inside suggestion.',
-            'If original_text is Vietnamese, suggestion must be Vietnamese.',
+            'Write section, issue, and suggestion in natural Vietnamese, even when original_text is English. Preserve technical terms and proper nouns where appropriate.',
             'If a source line explicitly states role, positioning, professional identity, or career objective and conflicts with the target, keep a detailed_feedback item for that line.',
             'Remove feedback anchored only to structural/navigation text unless that exact wording is the text that should be changed.',
             'If highlight_text is present, it must be an exact span inside original_text. Prefer the smallest useful span, not unrelated surrounding text.',
@@ -1296,18 +1291,49 @@ export class AiEngineService {
       typeof rawCvAuditResultSchema.parse
     >['detailed_feedbacks'][number],
   ) {
-    const originalLanguage = this.detectDominantLanguage(
-      feedback.original_text,
-    );
-
-    if (
-      originalLanguage === 'english' &&
-      this.containsVietnameseText(feedback.suggestion)
-    ) {
-      return 'suggestion mixes Vietnamese into an English CV line.';
+    if (!this.containsVietnameseText(feedback.section)) {
+      return 'section phải được viết bằng tiếng Việt.';
+    }
+    if (!this.containsVietnameseText(feedback.issue)) {
+      return 'issue phải được viết bằng tiếng Việt.';
+    }
+    if (!this.containsVietnameseText(feedback.suggestion)) {
+      return 'suggestion phải được viết bằng tiếng Việt.';
     }
 
     return null;
+  }
+
+  private validateFinalAuditLanguage(
+    result: ReturnType<typeof generalCvAuditResultSchema.parse>,
+  ) {
+    const fields = [
+      ['summary', result.summary],
+      ...result.score_breakdown.flatMap((item, index) => [
+        [`score_breakdown[${index}].dimension`, item.dimension],
+        [`score_breakdown[${index}].rationale`, item.rationale],
+      ]),
+      ...result.general_feedbacks.flatMap((item, index) => [
+        [`general_feedbacks[${index}].topic`, item.topic],
+        [`general_feedbacks[${index}].comment`, item.comment],
+        [`general_feedbacks[${index}].recommendation`, item.recommendation],
+      ]),
+      ...result.suggested_jobs.map((item, index) => [
+        `suggested_jobs[${index}].reason`,
+        item.reason,
+      ]),
+    ] as Array<[string, string]>;
+
+    const invalid = fields
+      .filter(
+        ([, value]) => value.trim() && !this.containsVietnameseText(value),
+      )
+      .map(([name]) => name);
+    if (invalid.length > 0) {
+      throw new Error(
+        `Các trường nhận xét phải dùng tiếng Việt: ${invalid.join(', ')}`,
+      );
+    }
   }
 
   private detectDominantLanguage(value: string) {
@@ -1483,6 +1509,15 @@ export class AiEngineService {
           this.parseJsonContent(content),
         );
         this.validateJobMatchCoverage(result.matches, batch);
+        if (
+          result.matches.some(
+            (match) => !this.containsVietnameseText(match.reason),
+          )
+        ) {
+          throw new Error(
+            'Mọi lý do khớp việc làm phải được viết bằng tiếng Việt.',
+          );
+        }
         return result.matches;
       } catch (error) {
         lastError = error;
@@ -1551,7 +1586,7 @@ export class AiEngineService {
                   level: 'inferred level or null',
                   match_kind: 'match | suggestion | reject',
                   score: 0,
-                  reason: 'Vietnamese explanation',
+                  reason: 'Giải thích mức độ phù hợp bằng tiếng Việt.',
                 },
               ],
             }),

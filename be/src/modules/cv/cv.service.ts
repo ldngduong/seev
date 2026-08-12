@@ -12,6 +12,9 @@ import { DataSource, In, Repository } from 'typeorm';
 import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 import { AiEngineService } from '../ai/ai-engine.service';
+import { BillingService } from '../billing/billing.service';
+import type { ServiceCode } from '../billing/entities/service-product.entity';
+import { ActivityService } from '../activity/activity.service';
 import type { CvAuditResult } from '../ai/schemas/cv-audit-result.schema';
 import { JobResearchService } from '../crawler/job-research.service';
 import { uniqueNonEmpty } from '../crawler/utils/text-normalizer';
@@ -136,6 +139,8 @@ export class CvService {
     private readonly r2StorageService: R2StorageService,
     private readonly jobResearchService: JobResearchService,
     private readonly progressService: ResearchProgressService,
+    private readonly billingService: BillingService,
+    private readonly activityService: ActivityService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -178,6 +183,7 @@ export class CvService {
         error: null,
       }),
     );
+    void this.activityService.record({ subjectUserId: userId, actorUserId: userId, action: 'cv.uploaded', resourceType: 'user_cv', resourceId: cv.id, metadata: { file_name: cv.originalFileName, total_pages: cv.totalPages } }).catch(() => undefined);
 
     return this.toUserCvResponse(cv);
   }
@@ -369,7 +375,7 @@ export class CvService {
     const nextAttempt = await this.dataSource.transaction(async (manager) => {
       await manager.query(
         'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
-        [`${userId}:${session.userCvId}`],
+        [`${userId}:${session.userCvId}:${session.type}`],
       );
       const repository = manager.getRepository(CvResearchSession);
       const current = await repository.findOneBy({ id: session.id, userId });
@@ -383,6 +389,7 @@ export class CvService {
         where: {
           userId,
           userCvId: session.userCvId,
+          type: session.type,
           status: In(['queued', 'processing']),
         },
       });
@@ -419,6 +426,12 @@ export class CvService {
               seniorityLevelName: null,
             }
           : {}),
+      });
+      await this.billingService.reserveResearch(manager, {
+        userId,
+        serviceCode: this.serviceCodeForResearch(current.type),
+        sessionId: current.id,
+        attempt,
       });
       return attempt;
     });
@@ -460,14 +473,30 @@ export class CvService {
       );
     }
 
-    await this.researchSessionRepository.update(session.id, {
-      status: 'processing',
-      phase: 'job_matching',
-      progress: 75,
-      progressMessage: 'Đang thu thập và đối chiếu việc làm.',
-      error: null,
-      completedAt: null,
-      jobSuggestionsSnapshot: [],
+    const nextAttempt = await this.dataSource.transaction(async (manager) => {
+      const repository = manager.getRepository(CvResearchSession);
+      const current = await repository.findOne({
+        where: { id: session.id, userId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!current?.jobSearchIntentId) {
+        throw new BadRequestException('Phiên research này không còn intent tìm việc để chạy lại.');
+      }
+      if (['queued', 'processing'].includes(current.status)) {
+        throw new BadRequestException('Phiên research này đang được xử lý.');
+      }
+      const attempt = current.attempt + 1;
+      await repository.update(current.id, {
+        status: 'processing', phase: 'job_matching', progress: 75,
+        progressMessage: 'Đang thu thập và đối chiếu việc làm.', error: null,
+        completedAt: null, jobSuggestionsSnapshot: [], attempt,
+        heartbeatAt: () => 'CURRENT_TIMESTAMP',
+      });
+      await manager.query(
+        'UPDATE job_search_intents SET research_session_attempt = $1 WHERE id = $2',
+        [attempt, current.jobSearchIntentId],
+      );
+      return attempt;
     });
 
     try {
@@ -478,7 +507,7 @@ export class CvService {
     } catch (error) {
       await this.progressService.fail(
         session.id,
-        session.attempt,
+        nextAttempt,
         this.formatError(error),
       );
       throw error;
@@ -553,13 +582,14 @@ export class CvService {
     const creation = await this.dataSource.transaction(async (manager) => {
       await manager.query(
         'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
-        [`${input.userId}:${input.cv.id}`],
+        [`${input.userId}:${input.cv.id}:${input.type}`],
       );
       const repository = manager.getRepository(CvResearchSession);
       const active = await repository.findOne({
         where: {
           userId: input.userId,
           userCvId: input.cv.id,
+          type: input.type,
           status: In(['queued', 'processing']),
         },
       });
@@ -591,6 +621,12 @@ export class CvService {
           completedAt: null,
         }),
       );
+      await this.billingService.reserveResearch(manager, {
+        userId: input.userId,
+        serviceCode: this.serviceCodeForResearch(input.type),
+        sessionId: session.id,
+        attempt: session.attempt,
+      });
       return { session, created: true };
     });
     const { session } = creation;
@@ -599,6 +635,8 @@ export class CvService {
     if (!creation.created) {
       return this.toResearchResponse(session);
     }
+
+    void this.activityService.record({ subjectUserId: input.userId, actorUserId: input.userId, action: 'research.created', resourceType: 'cv_research_session', resourceId: session.id, metadata: { type: input.type, attempt: session.attempt } }).catch(() => undefined);
 
     try {
       await this.enqueueResearchSession(session.id, session.attempt);
@@ -625,6 +663,10 @@ export class CvService {
         removeOnFail: { age: 86_400, count: 1_000 },
       },
     );
+  }
+
+  private serviceCodeForResearch(type: CvResearchType): ServiceCode {
+    return type === 'quick' ? 'quick_research' : 'manual_research';
   }
 
   async processResearchSession(

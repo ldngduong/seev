@@ -13,6 +13,8 @@ import { JobCategory } from '../job-category/entities/job-category.entity';
 import { SourceCategoryMapping } from '../job-category/entities/source-category-mapping.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
 import { ResearchRealtimeModule } from '../research-realtime/research-realtime.module';
+import { AdminRealtimeModule } from '../admin-realtime/admin-realtime.module';
+import { AuthModule } from '../auth/auth.module';
 import { CategoryCrawlService } from './category-crawl.service';
 import { CrawlNotifyService } from './crawl-notify.service';
 import { CrawlerController } from './crawler.controller';
@@ -22,6 +24,8 @@ import { JobIntentMatch } from './entities/job-intent-match.entity';
 import { JobPost } from './entities/job-post.entity';
 import { JobPostSeniorityLevel } from './entities/job-post-seniority-level.entity';
 import { JobSearchIntent } from './entities/job-search-intent.entity';
+import { CategoryCrawlRun } from './entities/category-crawl-run.entity';
+import { CategoryCrawlRunItem } from './entities/category-crawl-run-item.entity';
 import { JobResearchService } from './job-research.service';
 import { JobResearchProcessor } from './processors/job-research.processor';
 import { CategoryCrawlProcessor } from './processors/category-crawl.processor';
@@ -43,8 +47,12 @@ import { JOB_RESEARCH_QUEUE } from './types/job-source.type';
       JobPost,
       JobPostSeniorityLevel,
       JobIntentMatch,
+      CategoryCrawlRun,
+      CategoryCrawlRunItem,
     ]),
     ResearchRealtimeModule,
+    AdminRealtimeModule,
+    AuthModule,
     AiModule,
     BullModule.registerQueue({
       name: JOB_RESEARCH_QUEUE,
@@ -70,6 +78,6 @@ import { JOB_RESEARCH_QUEUE } from './types/job-source.type';
     CategoryCrawlProcessor,
     CrawlNotifyService,
   ],
-  exports: [JobResearchService],
+  exports: [JobResearchService, CategoryCrawlService],
 })
 export class CrawlerModule {}

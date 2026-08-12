@@ -10,7 +10,7 @@ export interface CreateUserInput {
   email: string;
   password?: string | null;
   phone?: string | null;
-  credits?: number;
+  role?: 'user' | 'admin';
   address?: string | null;
   dateOfBirth?: string | null;
   gender?: string | null;
@@ -51,7 +51,7 @@ export class UsersService {
         email,
         password: input.password ?? null,
         phone: input.phone?.trim() || null,
-        credits: input.credits ?? 0,
+        role: input.role ?? 'user',
         address: input.address?.trim() || null,
         dateOfBirth: input.dateOfBirth ?? null,
         gender: input.gender?.trim() || null,

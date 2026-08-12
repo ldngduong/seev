@@ -1,7 +1,7 @@
 import { Search } from 'lucide-react'
 
 import { AnimatedCvPreview } from '@/features/landing/components/AnimatedCvPreview'
-import { Progress } from '@/components/ui/progress'
+import { Progress } from '@/shared/components/ui/progress'
 
 export function ResearchProcessingScreen({
   progress,

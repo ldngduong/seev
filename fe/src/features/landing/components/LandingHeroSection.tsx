@@ -1,8 +1,8 @@
 import { ArrowUpRight } from 'lucide-react'
 import { Link } from 'react-router'
 
-import { buttonVariants } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { buttonVariants } from '@/shared/components/ui/button'
+import { cn } from '@/shared/lib/utils'
 
 import { AnimatedCvPreview } from './AnimatedCvPreview'
 

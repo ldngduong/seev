@@ -4,7 +4,7 @@ export interface AuthUser {
   username: string | null
   email: string
   phone: string | null
-  credits: number
+  role: 'user' | 'admin'
   address: string | null
   dateOfBirth: string | null
   gender: string | null

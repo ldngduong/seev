@@ -1,64 +1,17 @@
-import { useEffect } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Check, CircleAlert, LoaderCircle } from 'lucide-react'
-import { useNavigate } from 'react-router'
 
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover'
-import { researchSocket } from '@/services/research-socket'
-import { cn } from '@/lib/utils'
-import {
-  getNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
-} from '../api/notifications-api'
+} from '@/shared/components/ui/popover'
+import { useNotifications } from '@/features/notifications/hooks/use-notifications'
+import { cn } from '@/shared/lib/utils'
 import type { UserNotification } from '../types/notification.types'
 
-const notificationQueryKey = ['notifications'] as const
-
 export function NotificationCenter() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const notificationsQuery = useQuery({
-    queryKey: notificationQueryKey,
-    queryFn: getNotifications,
-    staleTime: 30_000,
-  })
-  const readMutation = useMutation({ mutationFn: markNotificationRead })
-  const readAllMutation = useMutation({
-    mutationFn: markAllNotificationsRead,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: notificationQueryKey }),
-  })
-
-  useEffect(() => {
-    const handleNotification = () =>
-      queryClient.invalidateQueries({ queryKey: notificationQueryKey })
-    const handleConnect = () =>
-      queryClient.invalidateQueries({ queryKey: notificationQueryKey })
-
-    researchSocket.on('notification:updated', handleNotification)
-    researchSocket.on('connect', handleConnect)
-    researchSocket.connect()
-
-    return () => {
-      researchSocket.off('notification:updated', handleNotification)
-      researchSocket.off('connect', handleConnect)
-    }
-  }, [queryClient])
-
-  const items = notificationsQuery.data?.items ?? []
-  const unread = notificationsQuery.data?.meta.unread ?? 0
-
-  const openNotification = async (notification: UserNotification) => {
-    if (!notification.readAt) {
-      await readMutation.mutateAsync(notification.id)
-      await queryClient.invalidateQueries({ queryKey: notificationQueryKey })
-    }
-    navigate(notification.href)
-  }
+  const notifications = useNotifications()
+  const { items, unread } = notifications
 
   return (
     <Popover>
@@ -82,7 +35,7 @@ export function NotificationCenter() {
           {unread ? (
             <button
               type="button"
-              onClick={() => readAllMutation.mutate()}
+              onClick={() => notifications.markAllRead()}
               className="text-xs font-medium text-primary hover:underline"
             >
               Đánh dấu đã đọc
@@ -95,7 +48,7 @@ export function NotificationCenter() {
               <button
                 key={notification.id}
                 type="button"
-                onClick={() => void openNotification(notification)}
+                onClick={() => void notifications.openNotification(notification)}
                 className={cn(
                   'flex w-full gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted',
                   !notification.readAt && 'bg-primary/5',

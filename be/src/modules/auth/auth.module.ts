@@ -6,11 +6,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import type { Env } from '../../config/env.schema';
 import { UsersModule } from '../users/users.module';
+import { ActivityModule } from '../activity/activity.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { RefreshSession } from './entities/refresh-session.entity';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { AdminGuard } from './guards/admin.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -19,6 +21,7 @@ import { LocalStrategy } from './strategies/local.strategy';
 @Module({
   imports: [
     UsersModule,
+    ActivityModule,
     TypeOrmModule.forFeature([RefreshSession]),
     PassportModule.register({ session: false }),
     JwtModule.registerAsync({
@@ -42,8 +45,9 @@ import { LocalStrategy } from './strategies/local.strategy';
     GoogleStrategy,
     LocalAuthGuard,
     JwtAuthGuard,
+    AdminGuard,
     GoogleAuthGuard,
   ],
-  exports: [AuthService, JwtAuthGuard],
+  exports: [AuthService, JwtAuthGuard, AdminGuard],
 })
 export class AuthModule {}

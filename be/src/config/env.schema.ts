@@ -81,6 +81,8 @@ const envSchema = z.object({
   DEEPSEEK_API_KEY: z.string().optional(),
   DEEPSEEK_BASE_URL: z.url().default('https://api.deepseek.com'),
   DEEPSEEK_MODEL: z.string().default('deepseek-v4-pro'),
+  FIRECRAWL_API_KEY: z.string().optional(),
+  FIRECRAWL_BASE_URL: z.url().default('https://api.firecrawl.dev/v2'),
   CV_AUDIT_BATCH_TARGET_CHARACTERS: z.coerce
     .number()
     .int()

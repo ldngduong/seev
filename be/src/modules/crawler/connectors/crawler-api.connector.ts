@@ -99,44 +99,72 @@ export class CrawlerApiConnector implements JobSourceConnector {
     crawlUrl: string;
     expectedSourceLabel: string | null;
     maxJobs: number;
+    signal?: AbortSignal;
   }): Promise<CrawledJob[]> {
     const baseUrl = this.config
       .get('CRAWLER_API_URL', { infer: true })
       .replace(/\/+$/, '');
     const token = this.config.get('CRAWLER_BEARER_TOKEN', { infer: true });
-    const payload = await this.http.fetchJson<unknown>(
-      `${baseUrl}/api/v1/sources/${this.source}/search`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...(token ? { authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          query: '',
-          category_id:
-            target.categoryIds.length === 1 ? target.categoryIds[0] : null,
-          candidate_category_ids: target.categoryIds,
-          category_candidates: target.categoryCandidates,
-          crawl_url: target.crawlUrl,
-          expected_source_label: target.expectedSourceLabel,
-          keywords: [],
-          max_results_per_source: target.maxJobs,
-          pages: 5,
-          persist: false,
-        }),
-        timeoutMs: this.config.get('CRAWLER_API_TIMEOUT_MS', { infer: true }),
+    const request = {
+      method: 'POST' as const,
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
-    );
-    const parsed = parseCrawlerSearchResponse(payload);
-    const status = parsed.per_source[this.source];
-    if (status && status.status !== 'ok') {
-      throw new Error(status.error ?? `Crawler status '${status.status}'`);
+      body: JSON.stringify({
+        query: '',
+        category_id:
+          target.categoryIds.length === 1 ? target.categoryIds[0] : null,
+        candidate_category_ids: target.categoryIds,
+        category_candidates: target.categoryCandidates,
+        crawl_url: target.crawlUrl,
+        expected_source_label: target.expectedSourceLabel,
+        keywords: [],
+        max_results_per_source: target.maxJobs,
+        pages: 5,
+        persist: false,
+      }),
+      timeoutMs: this.config.get('CRAWLER_API_TIMEOUT_MS', { infer: true }),
+      signal: target.signal,
+    };
+
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const payload = await this.http.fetchJson<unknown>(
+          `${baseUrl}/api/v1/sources/${this.source}/search`,
+          request,
+        );
+        const parsed = parseCrawlerSearchResponse(payload);
+        const status = parsed.per_source[this.source];
+        if (status && status.status !== 'ok') {
+          throw new Error(status.error ?? `Crawler status '${status.status}'`);
+        }
+        return parsed.results.map((job) => ({
+          ...mapCrawledJobV1(job),
+          source: this.source,
+        }));
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        if (
+          attempt === 1 ||
+          !/fetch failed|timeout|network|econnreset|etimedout|429|5\d\d/i.test(
+            message,
+          )
+        ) {
+          throw error;
+        }
+        this.logger.warn(
+          `[crawler-api:${this.source}] fixed category tạm lỗi, thử lại: ${message}`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+      }
     }
-    return parsed.results.map((job) => ({
-      ...mapCrawledJobV1(job),
-      source: this.source,
-    }));
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`Crawler ${this.source} thất bại`);
   }
 
   private searchQuery(

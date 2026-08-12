@@ -1,6 +1,6 @@
 import { FileWarning, Goal, ListChecks, SearchCheck } from 'lucide-react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 
 const problems = [
   {

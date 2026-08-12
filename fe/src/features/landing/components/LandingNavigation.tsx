@@ -1,14 +1,13 @@
-import { useEffect, useState } from 'react'
 import { ArrowUpRight, LayoutDashboard, LogOut, User } from 'lucide-react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/features/auth/store/auth-store'
+} from '@/shared/components/ui/popover'
+import { cn } from '@/shared/lib/utils'
+import { useLandingNavigation } from '@/features/landing/hooks/use-landing-navigation'
 
 const navigationItems = [
   { label: 'Trang chủ', to: '/' },
@@ -17,31 +16,7 @@ const navigationItems = [
 ]
 
 export const LandingNavigation = () => {
-  const navigate = useNavigate()
-  const [isScrolled, setIsScrolled] = useState(false)
-  const { hydrate, logout, status, user } = useAuthStore()
-
-  useEffect(() => {
-    const updateScrollState = () => {
-      setIsScrolled(window.scrollY > 8)
-    }
-
-    updateScrollState()
-    window.addEventListener('scroll', updateScrollState, { passive: true })
-
-    return () => window.removeEventListener('scroll', updateScrollState)
-  }, [])
-
-  useEffect(() => {
-    if (status === 'idle') {
-      void hydrate()
-    }
-  }, [hydrate, status])
-
-  const handleLogout = async () => {
-    await logout()
-    navigate('/', { replace: true })
-  }
+  const { isScrolled, user, logout } = useLandingNavigation()
 
   return (
     <header
@@ -119,7 +94,7 @@ export const LandingNavigation = () => {
             </Link>
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={() => void logout()}
               className="flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
             >
               <LogOut className="size-4" />

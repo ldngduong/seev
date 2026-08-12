@@ -533,7 +533,7 @@ export const sourceCategoryPages = [
     1602,
     'topcv',
     '321',
-    'Product Manager/Product Owner',
+    'Product Owner/Product Manager',
     'https://www.topcv.vn/tim-viec-lam-product-manager-product-owner-cr257cb268cl321?type_keyword=1&sba=1&category_family=r257~b268l321',
   ],
   [

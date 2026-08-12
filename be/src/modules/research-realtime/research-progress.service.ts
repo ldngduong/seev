@@ -8,6 +8,8 @@ import {
   type CvResearchStatus,
 } from '../cv/entities/cv-research-session.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { BillingService } from '../billing/billing.service';
+import { ActivityService } from '../activity/activity.service';
 import { ResearchProgressGateway } from './research-progress.gateway';
 import type { ResearchProgressEvent } from './types/research-progress.type';
 
@@ -28,6 +30,8 @@ export class ResearchProgressService {
     private readonly sessions: Repository<CvResearchSession>,
     private readonly gateway: ResearchProgressGateway,
     private readonly notifications: NotificationsService,
+    private readonly billing: BillingService,
+    private readonly activity: ActivityService,
   ) {}
 
   async update(
@@ -90,12 +94,12 @@ export class ResearchProgressService {
     );
   }
 
-  complete(
+  async complete(
     sessionId: string,
     expectedAttempt: number,
     message = 'Research hoàn tất.',
   ) {
-    return this.update(
+    const event = await this.update(
       sessionId,
       {
         status: 'completed',
@@ -107,10 +111,13 @@ export class ResearchProgressService {
       },
       expectedAttempt,
     );
+    if (event) await this.billing.settleResearch(sessionId, expectedAttempt);
+    if (event) void this.activity.record({ subjectUserId: event.user_id, actorUserId: event.user_id, action: 'research.completed', resourceType: 'cv_research_session', resourceId: sessionId, metadata: { attempt: expectedAttempt } }).catch(() => undefined);
+    return event;
   }
 
-  fail(sessionId: string, expectedAttempt: number, error: string) {
-    return this.update(
+  async fail(sessionId: string, expectedAttempt: number, error: string) {
+    const event = await this.update(
       sessionId,
       {
         status: 'failed',
@@ -121,6 +128,9 @@ export class ResearchProgressService {
       },
       expectedAttempt,
     );
+    await this.billing.refundResearch(sessionId, expectedAttempt, error);
+    if (event) void this.activity.record({ subjectUserId: event.user_id, actorUserId: event.user_id, action: 'research.failed', resourceType: 'cv_research_session', resourceId: sessionId, status: 'failed', metadata: { attempt: expectedAttempt, error } }).catch(() => undefined);
+    return event;
   }
 
   async emitCurrent(sessionId: string, expectedAttempt?: number) {
@@ -139,6 +149,7 @@ export class ResearchProgressService {
 
   private toEvent(session: CvResearchSession): ResearchProgressEvent {
     return {
+      user_id: session.userId,
       session_id: session.id,
       user_cv_id: session.userCvId,
       status: session.status,

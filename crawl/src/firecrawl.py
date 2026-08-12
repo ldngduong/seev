@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import json
 import random
+import re
 import threading
 import time
 
@@ -130,22 +131,74 @@ def scrape_with_javascript(url: str, script: str) -> tuple[str, object | None]:
         "timeout": FIRECRAWL_TIMEOUT_MS,
         "actions": [{"type": "executeJavascript", "script": script}],
     }
-    with _FC_LOCK:
-        response = requests.post(
-            f"{FIRECRAWL_URL}/scrape",
-            json=payload,
-            headers={"Authorization": f"Bearer {FIRECRAWL_API_KEY}"},
-            timeout=min(180, FIRECRAWL_TIMEOUT_MS / 1000 + 30),
-        )
-    if response.status_code >= 400:
-        raise RuntimeError(f"Firecrawl action HTTP {response.status_code}: {response.text[:1000]}")
-    data = response.json()
-    if not data.get("success"):
-        raise RuntimeError(f"Firecrawl action lỗi: {data.get('error')}")
-    result = data.get("data") or {}
-    returns = ((result.get("actions") or {}).get("javascriptReturns") or [])
-    value = returns[-1].get("value") if returns and isinstance(returns[-1], dict) else None
-    return result.get("rawHtml") or "", value
+    last_err: Exception = RuntimeError("Firecrawl action unreachable")
+    for attempt in range(3):
+        if attempt > 0:
+            time.sleep(1.5 * (2 ** (attempt - 1)) + random.uniform(0, 1))
+        try:
+            with _FC_LOCK:
+                response = requests.post(
+                    f"{FIRECRAWL_URL}/scrape",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {FIRECRAWL_API_KEY}"},
+                    timeout=min(180, FIRECRAWL_TIMEOUT_MS / 1000 + 30),
+                )
+        except requests.RequestException as error:
+            last_err = error
+            log.warning(
+                "[firecrawl] action transport lỗi (lần %d) cho %s: %s",
+                attempt + 1,
+                url[:90],
+                error,
+            )
+            continue
+
+        if response.status_code in (401, 403):
+            raise RuntimeError(
+                f"Firecrawl action auth lỗi (HTTP {response.status_code}): kiểm tra CRAWLER_FIRECRAWL_API_KEY"
+            )
+        if response.status_code == 429 or response.status_code >= 500:
+            last_err = RuntimeError(f"Firecrawl action HTTP {response.status_code}")
+            log.warning(
+                "[firecrawl] action HTTP %d (lần %d) cho %s",
+                response.status_code,
+                attempt + 1,
+                url[:90],
+            )
+            continue
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Firecrawl action HTTP {response.status_code}: {response.text[:1000]}"
+            )
+
+        try:
+            data = response.json()
+        except ValueError as error:
+            last_err = error
+            continue
+        if not data.get("success"):
+            error_text = str(data.get("error") or "unknown error")
+            if re.search(r"fetch failed|timeout|network|socket|econnreset|etimedout", error_text, re.I):
+                last_err = RuntimeError(error_text)
+                log.warning(
+                    "[firecrawl] action tạm lỗi (lần %d) cho %s: %s",
+                    attempt + 1,
+                    url[:90],
+                    error_text[:160],
+                )
+                continue
+            raise RuntimeError(f"Firecrawl action lỗi: {error_text}")
+
+        result = data.get("data") or {}
+        html = result.get("rawHtml") or ""
+        if not html:
+            last_err = RuntimeError("Firecrawl action trả rawHtml rỗng")
+            continue
+        returns = ((result.get("actions") or {}).get("javascriptReturns") or [])
+        value = returns[-1].get("value") if returns and isinstance(returns[-1], dict) else None
+        return html, value
+
+    raise RuntimeError(f"Firecrawl action thất bại sau retry: {last_err}")
 
 
 def scrape_job_list_with_details(

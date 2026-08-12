@@ -18,6 +18,10 @@ import { SeniorityModule } from './modules/seniority/seniority.module';
 import { UsersModule } from './modules/users/users.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import type { Env } from './config/env.schema';
+import { BillingModule } from './modules/billing/billing.module';
+import { ActivityModule } from './modules/activity/activity.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -60,6 +64,10 @@ import type { Env } from './config/env.schema';
     SeniorityModule,
     UsersModule,
     NotificationsModule,
+    BillingModule,
+    ActivityModule,
+    AdminModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

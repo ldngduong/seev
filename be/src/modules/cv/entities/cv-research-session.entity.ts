@@ -47,10 +47,14 @@ export interface CvResearchJobSuggestionSnapshot {
 
 @Entity({ name: 'cv_research_sessions' })
 @Index('IDX_cv_research_sessions_user_created', ['userId', 'createdAt'])
-@Index('UQ_cv_research_sessions_active_cv', ['userId', 'userCvId'], {
-  unique: true,
-  where: `"status" IN ('queued', 'processing')`,
-})
+@Index(
+  'UQ_cv_research_sessions_active_cv_mode',
+  ['userId', 'userCvId', 'type'],
+  {
+    unique: true,
+    where: `"status" IN ('queued', 'processing')`,
+  },
+)
 export class CvResearchSession {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

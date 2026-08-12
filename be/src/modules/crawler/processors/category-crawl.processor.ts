@@ -6,6 +6,7 @@ import { CategoryCrawlService } from '../category-crawl.service';
 import {
   CATEGORY_CRAWL_JOB,
   CATEGORY_CRAWL_QUEUE,
+  type CategoryCrawlJobData,
 } from '../types/category-crawl.type';
 
 @Processor(CATEGORY_CRAWL_QUEUE, {
@@ -25,7 +26,7 @@ export class CategoryCrawlProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<{ runId: string }>) {
+  async process(job: Job<CategoryCrawlJobData>) {
     if (job.name !== CATEGORY_CRAWL_JOB) {
       this.logger.warn(
         `Bỏ qua job category crawl không được hỗ trợ: ${job.name}`,
@@ -33,15 +34,25 @@ export class CategoryCrawlProcessor extends WorkerHost {
       return;
     }
 
-    await this.categoryCrawlService.run(job.data.runId);
+    const runId = job.data.scheduled
+      ? await this.categoryCrawlService.createScheduledRun(job.timestamp)
+      : job.data.runId;
+    if (runId) {
+      await job.updateData({ ...job.data, runId });
+      await this.categoryCrawlService.attachQueueJob(runId, String(job.id));
+      await this.categoryCrawlService.run(runId);
+    }
   }
 
   @OnWorkerEvent('failed')
-  async onFailed(job: Job<{ runId: string }> | undefined, error: Error) {
+  async onFailed(job: Job<CategoryCrawlJobData> | undefined, error: Error) {
     this.logger.error(
       `Category crawl thất bại: ${error.message}${
         job?.data?.runId ? ` (run ${job.data.runId})` : ''
       }`,
     );
+    if (job?.data.runId) {
+      await this.categoryCrawlService.failRun(job.data.runId, error.message);
+    }
   }
 }

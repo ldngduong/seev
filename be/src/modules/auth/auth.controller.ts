@@ -22,12 +22,14 @@ import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import type { AuthenticatedRequest } from './types/authenticated-request.type';
+import { ActivityService } from '../activity/activity.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService<Env, true>,
+    private readonly activity: ActivityService,
   ) {}
 
   @Post('register')
@@ -42,6 +44,7 @@ export class AuthController {
     );
 
     this.setSessionCookies(res, session);
+    void this.activity.record({ subjectUserId: session.user.id, actorUserId: session.user.id, action: 'auth.registered', resourceType: 'user', resourceId: session.user.id, ipAddress: req.ip || null, userAgent: req.get('user-agent') ?? null }).catch(() => undefined);
 
     return { user: session.user };
   }
@@ -60,6 +63,7 @@ export class AuthController {
     );
 
     this.setSessionCookies(res, session);
+    void this.activity.record({ subjectUserId: session.user.id, actorUserId: session.user.id, action: 'auth.logged_in', resourceType: 'user', resourceId: session.user.id, ipAddress: req.ip || null, userAgent: req.get('user-agent') ?? null }).catch(() => undefined);
 
     return { user: session.user };
   }

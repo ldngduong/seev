@@ -18,6 +18,7 @@ import { JobCategory } from '../job-category/entities/job-category.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
 import { ResearchProgressService } from '../research-realtime/research-progress.service';
 import { CreateJobResearchIntentDto } from './dto/create-job-research-intent.dto';
+import { JobFeedQueryDto } from './dto/job-feed-query.dto';
 import { JobCrawlRun } from './entities/job-crawl-run.entity';
 import { AiEngineService } from '../ai/ai-engine.service';
 import { JobIntentMatch } from './entities/job-intent-match.entity';
@@ -85,6 +86,84 @@ export class JobResearchService {
       .where('expired_at <= NOW()')
       .execute();
     return result.affected ?? 0;
+  }
+
+  async listJobFeed(query: JobFeedQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 18;
+    const builder = this.jobPostRepository
+      .createQueryBuilder('job')
+      .where('job.expired_at > NOW()');
+
+    const search = query.search?.trim();
+    if (search) {
+      builder.andWhere(
+        '(job.title ILIKE :search OR job.company_name ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+    if (query.categoryId) {
+      builder.andWhere('job.job_category_id = :categoryId', {
+        categoryId: query.categoryId,
+      });
+    }
+    if (query.seniorityLevelId) {
+      builder.andWhere(
+        `EXISTS (
+          SELECT 1 FROM job_post_seniority_levels feed_seniority
+          WHERE feed_seniority.job_post_id = job.id
+            AND feed_seniority.seniority_level_id = :seniorityLevelId
+        )`,
+        { seniorityLevelId: query.seniorityLevelId },
+      );
+    }
+
+    builder
+      .orderBy('job.posted_at', 'DESC', 'NULLS LAST')
+      .addOrderBy('job.last_seen_at', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize);
+
+    const [jobs, total] = await builder.getManyAndCount();
+    const seniorityRows: Array<{
+      jobPostId: string;
+      id: string;
+      code: string;
+      displayName: string;
+    }> = jobs.length
+      ? await this.jobPostRepository.query(
+          `SELECT jsl."job_post_id" AS "jobPostId",
+                  sl."id", sl."code", sl."display_name" AS "displayName"
+             FROM "job_post_seniority_levels" jsl
+             JOIN "seniority_levels" sl ON sl."id" = jsl."seniority_level_id"
+            WHERE jsl."job_post_id" = ANY($1::uuid[])
+            ORDER BY jsl."is_primary" DESC, jsl."confidence" DESC`,
+          [jobs.map((job) => job.id)],
+        )
+      : [];
+    const seniorityByJob = new Map<
+      string,
+      Array<{ id: string; code: string; displayName: string }>
+    >();
+    for (const row of seniorityRows) {
+      seniorityByJob.set(row.jobPostId, [
+        ...(seniorityByJob.get(row.jobPostId) ?? []),
+        { id: row.id, code: row.code, displayName: row.displayName },
+      ]);
+    }
+
+    return {
+      items: jobs.map((job) => ({
+        ...job,
+        seniorityLevels: seniorityByJob.get(job.id) ?? [],
+      })),
+      meta: {
+        page,
+        page_size: pageSize,
+        total,
+        total_pages: Math.ceil(total / pageSize),
+      },
+    };
   }
 
   async createIntent(

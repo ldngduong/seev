@@ -1,12 +1,9 @@
 import {
   IsDateString,
   IsEmail,
-  IsInt,
   IsOptional,
   IsString,
-  Max,
   MaxLength,
-  Min,
   MinLength,
 } from 'class-validator';
 
@@ -33,12 +30,6 @@ export class RegisterDto {
   @IsString()
   @MaxLength(40, { message: 'Số điện thoại tối đa 40 ký tự.' })
   phone?: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(1_000_000)
-  credits?: number;
 
   @IsOptional()
   @IsString()

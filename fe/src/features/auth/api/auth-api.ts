@@ -1,4 +1,4 @@
-import { apiClient } from '@/services/api-client'
+import { apiClient } from '@/shared/lib/api-client'
 
 import type {
   AuthSessionResponse,

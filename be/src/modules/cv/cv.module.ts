@@ -5,6 +5,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AiModule } from '../ai/ai.module';
+import { BillingModule } from '../billing/billing.module';
+import { ActivityModule } from '../activity/activity.module';
 import { CrawlerModule } from '../crawler/crawler.module';
 import { JobCategory } from '../job-category/entities/job-category.entity';
 import { SeniorityLevel } from '../seniority/entities/seniority-level.entity';
@@ -23,6 +25,8 @@ import { CV_RESEARCH_QUEUE } from './types/cv-research-queue.type';
 @Module({
   imports: [
     AiModule,
+    BillingModule,
+    ActivityModule,
     CrawlerModule,
     ResearchRealtimeModule,
     StorageModule,

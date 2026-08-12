@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import time
 import unicodedata
+import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from typing import Optional
+
+from bs4 import BeautifulSoup
 
 from ..models import Job, SearchQuery
 
@@ -44,14 +47,26 @@ class BaseSource:
     def validate_fixed_page(self, query: SearchQuery, html: str) -> None:
         if not query.crawl_url or not query.expected_source_label:
             return
-        normalize = lambda value: " ".join(  # noqa: E731
-            "".join(
+
+        def tokens(value: str) -> set[str]:
+            ascii_text = "".join(
                 char
                 for char in unicodedata.normalize("NFD", value.lower())
                 if not unicodedata.combining(char)
-            ).split()
-        )
-        if normalize(query.expected_source_label) not in normalize(html):
+            )
+            return set(re.findall(r"[a-z0-9]+", ascii_text))
+
+        expected_tokens = tokens(query.expected_source_label)
+        soup = BeautifulSoup(html, "html.parser")
+        # Validate only stable page identity surfaces. Searching the full HTML
+        # can be fooled by an unrelated job card containing the same words.
+        candidates = [
+            soup.title.get_text(" ", strip=True) if soup.title else "",
+            *[heading.get_text(" ", strip=True) for heading in soup.select("h1, h2")],
+        ]
+        if not expected_tokens or not any(
+            expected_tokens.issubset(tokens(candidate)) for candidate in candidates
+        ):
             raise ValueError(
                 f"category_mapping_drift: expected label {query.expected_source_label!r} "
                 f"was not found at {query.crawl_url}"

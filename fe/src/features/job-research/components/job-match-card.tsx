@@ -8,7 +8,7 @@ import {
   MapPin,
   Sparkles,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 
 import type { JobIntentMatchResult } from '../types/job-research.types'
 import {

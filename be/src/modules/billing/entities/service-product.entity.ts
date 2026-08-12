@@ -1,0 +1,16 @@
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+
+export type ServiceCode = 'quick_research' | 'manual_research';
+
+@Entity({ name: 'service_products' })
+export class ServiceProduct {
+  @PrimaryGeneratedColumn('uuid') id!: string;
+  @Index({ unique: true }) @Column({ type: 'varchar' }) code!: ServiceCode;
+  @Column({ type: 'varchar' }) name!: string;
+  @Column({ nullable: true, type: 'text' }) description!: string | null;
+  @Column({ name: 'price_credits', type: 'bigint' }) priceCredits!: string;
+  @Column({ name: 'is_active', default: true, type: 'boolean' }) isActive!: boolean;
+  @Column({ default: 1, type: 'int' }) version!: number;
+  @CreateDateColumn({ name: 'created_at' }) createdAt!: Date;
+  @UpdateDateColumn({ name: 'updated_at' }) updatedAt!: Date;
+}

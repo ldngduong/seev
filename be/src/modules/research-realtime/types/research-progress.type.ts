@@ -6,6 +6,7 @@ import type {
 export const RESEARCH_PROGRESS_EVENT = 'research:progress';
 
 export interface ResearchProgressEvent {
+  user_id: string;
   session_id: string;
   user_cv_id: string;
   status: CvResearchStatus;

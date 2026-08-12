@@ -1,9 +1,9 @@
 import { Link } from 'react-router'
 
 import { CvPdfThumbnail } from '@/features/cv-library/components/CvPdfThumbnail'
-import { useUserCvPdfFile } from '@/hooks/use-user-cv-pdf-file'
-import { cn } from '@/lib/utils'
-import type { UserCv } from '@/types/cv'
+import { useUserCvPdfFile } from '@/entities/cv/hooks/use-user-cv-pdf-file'
+import { cn } from '@/shared/lib/utils'
+import type { UserCv } from '@/entities/cv/types/cv.types'
 
 type CvLibraryCardProps = {
   cv: UserCv

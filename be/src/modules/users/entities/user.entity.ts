@@ -29,8 +29,8 @@ export class User {
   @Column({ nullable: true, type: 'varchar' })
   phone!: string | null;
 
-  @Column({ default: 0, type: 'int' })
-  credits!: number;
+  @Column({ default: 'user', type: 'varchar' })
+  role!: 'user' | 'admin';
 
   @Column({ nullable: true, type: 'text' })
   address!: string | null;
