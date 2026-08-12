@@ -8,6 +8,6 @@ export class CreditAccount {
   @JoinColumn({ name: 'user_id' }) @OneToOne(() => User, { onDelete: 'CASCADE' }) user!: User;
   @Column({ default: '0', type: 'bigint' }) balance!: string;
   @VersionColumn() version!: number;
-  @CreateDateColumn({ name: 'created_at' }) createdAt!: Date;
-  @UpdateDateColumn({ name: 'updated_at' }) updatedAt!: Date;
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
 }

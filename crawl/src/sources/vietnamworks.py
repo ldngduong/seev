@@ -8,6 +8,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlsplit
 
+from bs4 import BeautifulSoup
+
 from ..config import VIETNAMWORKS_CITY_IDS
 from ..models import Job, SearchQuery
 from ..source_profiles import get_profile
@@ -18,6 +20,34 @@ from .base import BaseSource
 API_URL = "https://ms.vietnamworks.com/job-search/v1.0/search"
 
 TYPE_MAP = {1: "full_time", 2: "part_time", 3: "contract", 4: "internship"}
+
+
+def _detail_text(value: object) -> str | None:
+    """Normalize VietnamWorks' old HTML and newer nested rich-text fields."""
+    if isinstance(value, str):
+        soup = BeautifulSoup(value, "html.parser")
+        for br in soup.select("br"):
+            br.replace_with("\n")
+        text = soup.get_text("\n", strip=True)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return "\n".join(dict.fromkeys(lines)) or None
+    if isinstance(value, list):
+        parts = [_detail_text(item) for item in value]
+        return "\n".join(part for part in parts if part) or None
+    if isinstance(value, dict):
+        preferred = [
+            value.get("content"),
+            value.get("text"),
+            value.get("html"),
+            value.get("value"),
+        ]
+        preferred.extend(
+            nested
+            for key, nested in value.items()
+            if key not in {"content", "text", "html", "value"}
+        )
+        return _detail_text(preferred)
+    return None
 
 
 class VietnamWorksSource(BaseSource):
@@ -196,6 +226,16 @@ class VietnamWorksSource(BaseSource):
                             "deadline_source": "vietnamworks_api",
                             "seniority_source": "vietnamworks_api",
                         },
+                        description=(
+                            _detail_text(item.get("jobDescriptionNew"))
+                            or _detail_text(item.get("jobDescription"))
+                        ),
+                        requirements=(
+                            _detail_text(item.get("jobRequirementNew"))
+                            or _detail_text(item.get("jobRequirement"))
+                        ),
+                        detail_source="vietnamworks_search_api",
+                        detail_parser_version=1,
                     )
                     jobs.append(job)
                 total_pages = int((data.get("meta") or {}).get("nbPages") or 0)

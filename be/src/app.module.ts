@@ -22,6 +22,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { ActivityModule } from './modules/activity/activity.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { JobFitModule } from './modules/job-fit/job-fit.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     ActivityModule,
     AdminModule,
     DashboardModule,
+    JobFitModule,
   ],
   controllers: [AppController],
   providers: [AppService],

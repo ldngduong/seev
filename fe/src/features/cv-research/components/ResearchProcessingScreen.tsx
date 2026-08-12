@@ -13,7 +13,7 @@ export function ResearchProcessingScreen({
   return (
     <section className="grid min-h-[calc(100vh-12rem)] place-items-center overflow-hidden rounded-xl border bg-card p-6">
       <div className="grid w-full place-items-center gap-7 text-center">
-        <div className="relative w-72 sm:w-80">
+        <div className="relative w-72 sm:w-[28rem]">
           <AnimatedCvPreview />
           <div className="seev-research-magnifier pointer-events-none absolute left-1/2 top-1/2 z-30 grid size-16 place-items-center rounded-full border bg-background/95 text-primary shadow-lg">
             <Search className="size-7" />

@@ -21,8 +21,23 @@ export function isDisplayableSkill(value: string) {
     skill.split(/\s+/).length <= 6 &&
     !/[<>]/.test(skill) &&
     !/&(?:lt|gt|nbsp|amp);/i.test(skill) &&
-    !/(?:class|style|span|div|br|icon|fa-solid|verified)\s*=/i.test(skill)
+    !/(?:class|style|span|div|br|icon|fa-solid|verified)\s*=/i.test(skill) &&
+    !/(nhà tuyển dụng|đã xác thực|giấy phép kinh doanh|tài khoản ntd|địa điểm làm việc|danh mục hành chính|hãy đăng nhập)/i.test(skill)
   )
+}
+
+export function formatJobContent(value: string | null | undefined) {
+  if (!value) return ''
+  const doc = new DOMParser().parseFromString(value, 'text/html')
+  doc.querySelectorAll('script, style, noscript').forEach((element) => element.remove())
+  doc.querySelectorAll('br').forEach((element) => element.replaceWith('\n'))
+  doc.querySelectorAll('li').forEach((element) => element.append('\n'))
+  return (doc.body.textContent || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 export function formatJobType(value: string) {

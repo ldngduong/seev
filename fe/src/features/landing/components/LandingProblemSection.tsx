@@ -4,23 +4,23 @@ import { cn } from '@/shared/lib/utils'
 
 const problems = [
   {
-    title: 'Nhận xét thiếu minh chứng',
-    copy: 'Phần lớn các công cụ review chỉ bảo bạn nên sửa gì, chứ không chỉ rõ chính xác câu văn nào đang gặp vấn đề.',
+    title: 'CV CNTT quá chung chung',
+    copy: 'Một hồ sơ ghi “Software Developer” có thể chưa thể hiện rõ thế mạnh Backend, Frontend, Mobile, Data hay DevOps.',
     icon: FileWarning,
   },
   {
-    title: 'Định hướng vị trí chưa rõ ràng',
-    copy: 'Một CV trông có vẻ chỉn chu nhưng vẫn có thể bị lệch nhóm ngành, sai cấp bậc hoặc chưa đúng bộ kỹ năng yêu cầu.',
+    title: 'Chọn sai vị trí hoặc mức kinh nghiệm',
+    copy: 'Bạn có thể có đúng kỹ năng nhưng vẫn ứng tuyển vào công việc đòi hỏi nhiều hoặc ít kinh nghiệm hơn thực tế.',
     icon: Goal,
   },
   {
-    title: 'Thiếu hụt từ khóa quan trọng',
-    copy: 'Việc bỏ sót các thuật ngữ khiến CV dễ bị bộ lọc ATS và nhà tuyển dụng bỏ qua, dù bạn có kinh nghiệm phù hợp.',
+    title: 'Kỹ năng chỉ được liệt kê',
+    copy: 'Ghi tên framework và công nghệ là chưa đủ nếu phần dự án chưa cho thấy bạn đã dùng chúng để làm gì.',
     icon: SearchCheck,
   },
   {
-    title: 'Lời khuyên chung chung',
-    copy: 'Ứng viên cần hướng dẫn cụ thể và ưu tiên theo đúng vị trí đã chọn, thay vì một danh sách kiểm tra lý thuyết.',
+    title: 'Danh sách việc làm nhiều nhiễu',
+    copy: 'Cùng một công việc nhưng mỗi trang tuyển dụng đặt một tên khác nhau, khiến bạn khó biết đâu là vị trí phù hợp.',
     icon: ListChecks,
   },
 ]
@@ -31,7 +31,7 @@ export const LandingProblemSection = () => {
     <section id="product" className="relative z-10 rounded-4xl bg-card p-6">
         <div className="flex flex-col gap-5 lg:col-span-3">
           <h2 className="text-3xl md:text-4xl font-bold text-center">
-            Vì sao một CV tốt vẫn có thể chưa tìm được việc?           
+            Vì sao CV CNTT vẫn khó tìm đúng việc?
           </h2>
 
           <div className="grid gap-6 md:grid-cols-4">

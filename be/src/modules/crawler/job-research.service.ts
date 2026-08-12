@@ -23,6 +23,7 @@ import { JobCrawlRun } from './entities/job-crawl-run.entity';
 import { AiEngineService } from '../ai/ai-engine.service';
 import { JobIntentMatch } from './entities/job-intent-match.entity';
 import { JobPost } from './entities/job-post.entity';
+import { JobPostDetail } from './entities/job-post-detail.entity';
 import { JobPostSeniorityLevel } from './entities/job-post-seniority-level.entity';
 import { JobSearchIntent } from './entities/job-search-intent.entity';
 import type {
@@ -43,6 +44,7 @@ import {
   uniqueNonEmpty,
 } from './utils/text-normalizer';
 import { resolveSeniorityGroup } from './utils/seniority-intent';
+import { sanitizeJobSkills } from './utils/job-content-sanitizer';
 
 interface CreateIntentResult {
   intent: JobSearchIntent;
@@ -60,6 +62,8 @@ export class JobResearchService {
     private readonly crawlRunRepository: Repository<JobCrawlRun>,
     @InjectRepository(JobPost)
     private readonly jobPostRepository: Repository<JobPost>,
+    @InjectRepository(JobPostDetail)
+    private readonly jobPostDetailRepository: Repository<JobPostDetail>,
     @InjectRepository(JobPostSeniorityLevel)
     private readonly jobPostSeniorityRepository: Repository<JobPostSeniorityLevel>,
     @InjectRepository(JobIntentMatch)
@@ -141,6 +145,13 @@ export class JobResearchService {
           [jobs.map((job) => job.id)],
         )
       : [];
+    const detailRows: Array<{ jobPostId: string }> = jobs.length
+      ? await this.jobPostRepository.query(
+          `SELECT job_post_id AS "jobPostId" FROM job_post_details WHERE job_post_id = ANY($1::uuid[]) AND quality_score >= 0.8`,
+          [jobs.map((job) => job.id)],
+        )
+      : [];
+    const detailReadyIds = new Set(detailRows.map((row) => row.jobPostId));
     const seniorityByJob = new Map<
       string,
       Array<{ id: string; code: string; displayName: string }>
@@ -155,7 +166,9 @@ export class JobResearchService {
     return {
       items: jobs.map((job) => ({
         ...job,
+        skills: sanitizeJobSkills(job.skills),
         seniorityLevels: seniorityByJob.get(job.id) ?? [],
+        detailReady: detailReadyIds.has(job.id),
       })),
       meta: {
         page,
@@ -828,7 +841,7 @@ export class JobResearchService {
         title: jobPost.title,
         categoryName: jobPost.jobCategoryName,
         seniorityCode: (codesByJob.get(jobPost.id) ?? [])[0] ?? null,
-        skills: jobPost.skills,
+        skills: sanitizeJobSkills(jobPost.skills),
       })),
     });
     const resultByJobId = new Map(
@@ -900,6 +913,10 @@ export class JobResearchService {
         !crawledJob.expiredAt ||
         crawledJob.expiredAt <= new Date() ||
         crawledJob.seniorityMatches.length === 0 ||
+        !crawledJob.description ||
+        crawledJob.description.trim().length < 40 ||
+        !crawledJob.requirements ||
+        crawledJob.requirements.trim().length < 40 ||
         crawledJob.raw.deadline_source !==
           expectedDeadlineSource[crawledJob.source] ||
         (crawledJob.postedAt != null &&
@@ -1051,6 +1068,30 @@ export class JobResearchService {
     });
 
     const savedJob = await this.jobPostRepository.save(jobPost);
+    const detailContentHash = createContentHash([
+      crawledJob.description,
+      crawledJob.requirements,
+    ]);
+    await this.jobPostDetailRepository.save(
+      this.jobPostDetailRepository.create({
+        jobPostId: savedJob.id,
+        description: crawledJob.description!,
+        requirements: crawledJob.requirements!,
+        contentHash: detailContentHash,
+        sourceEvidence: {
+          source: crawledJob.source,
+          source_url: crawledJob.sourceUrl,
+          extraction: crawledJob.detailSource,
+        },
+        parserVersion: crawledJob.detailParserVersion ?? 1,
+        qualityScore:
+          crawledJob.description!.trim().length >= 80 &&
+          crawledJob.requirements!.trim().length >= 80
+            ? 1
+            : 0.8,
+        fetchedAt: now,
+      }),
+    );
     await this.jobPostSeniorityRepository.delete({ jobPostId: savedJob.id });
     await this.jobPostSeniorityRepository.save(
       validMatches.map((match) =>
@@ -1105,12 +1146,13 @@ export class JobResearchService {
             title: match.jobPost.title,
             company_name: match.jobPost.companyName,
             salary_text: match.jobPost.salaryText,
+            expired_at: match.jobPost.expiredAt.toISOString(),
             locations: match.jobPost.locations,
             seniority_text:
               typeof match.jobPost.raw.source_seniority_text === 'string'
                 ? match.jobPost.raw.source_seniority_text
                 : null,
-            skills: match.jobPost.skills,
+            skills: sanitizeJobSkills(match.jobPost.skills),
           },
         })),
       },

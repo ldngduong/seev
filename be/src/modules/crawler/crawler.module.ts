@@ -22,6 +22,7 @@ import { CrawlerHttpService } from './crawler-http.service';
 import { JobCrawlRun } from './entities/job-crawl-run.entity';
 import { JobIntentMatch } from './entities/job-intent-match.entity';
 import { JobPost } from './entities/job-post.entity';
+import { JobPostDetail } from './entities/job-post-detail.entity';
 import { JobPostSeniorityLevel } from './entities/job-post-seniority-level.entity';
 import { JobSearchIntent } from './entities/job-search-intent.entity';
 import { CategoryCrawlRun } from './entities/category-crawl-run.entity';
@@ -45,6 +46,7 @@ import { JOB_RESEARCH_QUEUE } from './types/job-source.type';
       JobSearchIntent,
       JobCrawlRun,
       JobPost,
+      JobPostDetail,
       JobPostSeniorityLevel,
       JobIntentMatch,
       CategoryCrawlRun,

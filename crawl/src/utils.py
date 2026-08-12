@@ -31,6 +31,47 @@ def clean_html(html: str | None, max_len: int = 100_000) -> str:
     return text.strip()[:max_len]
 
 
+_NON_SKILL_PHRASES = (
+    "nhà tuyển dụng",
+    "đã xác thực",
+    "giấy phép kinh doanh",
+    "tài khoản ntd",
+    "địa điểm làm việc",
+    "danh mục hành chính",
+    "hãy đăng nhập",
+    "cập nhật",
+)
+
+
+def clean_skill(value: str | None) -> str | None:
+    """Accept only compact skill labels; reject TopCV tooltip/HTML chrome."""
+    if not value:
+        return None
+    raw = value.strip()
+    lowered = raw.lower()
+    if (
+        len(raw) > 60
+        or len(raw.split()) > 8
+        or re.search(r"<\/?[a-z][^>]*>|&(?:lt|gt|nbsp|amp);", raw, re.I)
+        or any(phrase in lowered for phrase in _NON_SKILL_PHRASES)
+    ):
+        return None
+    cleaned = re.sub(r"\s+", " ", raw).strip(" ,;|\n\t")
+    return cleaned or None
+
+
+def clean_skills(values: list[str] | None) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        cleaned = clean_skill(value)
+        key = cleaned.casefold() if cleaned else ""
+        if cleaned and key not in seen:
+            seen.add(key)
+            result.append(cleaned)
+    return result
+
+
 def normalize_city(location: str | None) -> str | None:
     """Map a free-text location to a canonical city key (e.g. 'ho chi minh')."""
     if not location:

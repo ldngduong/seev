@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
 import type { CrawledJob } from '../types/crawled-job.type';
+import {
+  sanitizeJobContent,
+  sanitizeJobSkills,
+} from '../utils/job-content-sanitizer';
 
 /**
  * V1 wire contract produced by the Python crawler service.
@@ -8,7 +12,7 @@ import type { CrawledJob } from '../types/crawled-job.type';
  */
 export const crawlerJobSchema = z
   .object({
-    contract_version: z.literal(2),
+    contract_version: z.literal(3),
     source: z.string().min(1),
     source_job_id: z.string().min(1),
     title: z.string().min(1),
@@ -43,6 +47,10 @@ export const crawlerJobSchema = z
     category_id: z.string().uuid().nullable().optional(),
     category_name: z.string().nullable().optional(),
     raw: z.record(z.string(), z.unknown()).default({}),
+    description: z.string().nullable().optional(),
+    requirements: z.string().nullable().optional(),
+    detail_source: z.string().nullable().optional(),
+    detail_parser_version: z.number().int().positive().nullable().optional(),
   })
   .strict();
 
@@ -99,13 +107,17 @@ export function mapCrawledJobV1(job: CrawlerJobV1): CrawledJob {
     experienceMax: job.experience_max ?? null,
     jobType: job.job_type ?? null,
     experience: job.experience ?? null,
-    skills: job.skills,
+    skills: sanitizeJobSkills(job.skills),
     postedAt: toDate(job.posted_at),
     expiredAt: toDate(job.expired_at),
     logo: job.logo ?? null,
     categoryId: job.category_id ?? null,
     categoryName: job.category_name ?? null,
     raw: job.raw,
+    description: sanitizeJobContent(job.description) || null,
+    requirements: sanitizeJobContent(job.requirements) || null,
+    detailSource: job.detail_source ?? null,
+    detailParserVersion: job.detail_parser_version ?? null,
   };
 }
 

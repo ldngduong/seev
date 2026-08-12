@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-CONTRACT_VERSION = 2
+CONTRACT_VERSION = 3
 
 
 class SeniorityMatch(BaseModel):
@@ -69,6 +69,10 @@ class Job(BaseModel):
     skills: list[str] = Field(default_factory=list)
     logo: Optional[str] = None
     raw: dict[str, Any] = Field(default_factory=dict)
+    description: Optional[str] = None
+    requirements: Optional[str] = None
+    detail_source: Optional[str] = None
+    detail_parser_version: Optional[int] = None
     # Canonical Seev IT category. Native source categories remain in raw.
     category_id: Optional[str] = None
     category_name: Optional[str] = None
@@ -97,6 +101,10 @@ class Job(BaseModel):
             "skills": self.skills,
             "locations": self.locations,
             "logo": self.logo,
+            "description": self.description,
+            "requirements": self.requirements,
+            "detail_source": self.detail_source,
+            "detail_parser_version": self.detail_parser_version,
         }
 
     def locations_to_text(self) -> str | None:
@@ -140,6 +148,10 @@ class Job(BaseModel):
             category_id=self.category_id,
             category_name=self.category_name,
             raw=self.raw,
+            description=self.description,
+            requirements=self.requirements,
+            detail_source=self.detail_source,
+            detail_parser_version=self.detail_parser_version,
         )
         return contract.model_dump()
 
@@ -178,6 +190,10 @@ class CrawledJobV1(BaseModel):
     category_id: Optional[str] = None
     category_name: Optional[str] = None
     raw: dict[str, Any] = Field(default_factory=dict)
+    description: Optional[str] = None
+    requirements: Optional[str] = None
+    detail_source: Optional[str] = None
+    detail_parser_version: Optional[int] = None
 
 
 class SearchQuery(BaseModel):

@@ -18,6 +18,6 @@ import { ResearchProgressService } from './research-progress.service';
     TypeOrmModule.forFeature([CvResearchSession]),
   ],
   providers: [ResearchProgressGateway, ResearchProgressService],
-  exports: [ResearchProgressService],
+  exports: [ResearchProgressService, ResearchProgressGateway],
 })
 export class ResearchRealtimeModule {}

@@ -26,8 +26,8 @@ export class CategoryCrawlRun {
   @Column({ name: 'bull_job_id', nullable: true, type: 'varchar' }) bullJobId!: string | null;
   @Column({ name: 'report_snapshot', nullable: true, type: 'jsonb' }) reportSnapshot!: CategoryCrawlReport | null;
   @Column({ nullable: true, type: 'text' }) error!: string | null;
-  @Column({ name: 'started_at', nullable: true, type: 'timestamp' }) startedAt!: Date | null;
-  @Column({ name: 'completed_at', nullable: true, type: 'timestamp' }) completedAt!: Date | null;
-  @CreateDateColumn({ name: 'created_at' }) createdAt!: Date;
-  @UpdateDateColumn({ name: 'updated_at' }) updatedAt!: Date;
+  @Column({ name: 'started_at', nullable: true, type: 'timestamptz' }) startedAt!: Date | null;
+  @Column({ name: 'completed_at', nullable: true, type: 'timestamptz' }) completedAt!: Date | null;
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
 }

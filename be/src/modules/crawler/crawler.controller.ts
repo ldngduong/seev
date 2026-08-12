@@ -40,7 +40,6 @@ export class CrawlerController {
     };
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('feed')
   getJobFeed(@Query() query: JobFeedQueryDto) {
     return this.jobResearchService.listJobFeed(query);

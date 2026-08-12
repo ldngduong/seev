@@ -13,6 +13,13 @@ export const serviceProducts = [
     description: 'Audit CV theo ngành, cấp bậc và địa điểm do người dùng lựa chọn.',
     priceCredits: 10,
   },
+  {
+    id: '20000000-0000-4000-8000-000000000003',
+    code: 'job_fit_analysis',
+    name: 'Đánh giá độ phù hợp việc làm',
+    description: 'Phân tích mức độ phù hợp giữa một CV đã lưu và một việc làm cụ thể.',
+    priceCredits: 3,
+  },
 ] as const;
 
 type Query = (sql: string, parameters?: unknown[]) => Promise<unknown>;

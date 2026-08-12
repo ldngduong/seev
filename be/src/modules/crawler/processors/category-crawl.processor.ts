@@ -6,6 +6,7 @@ import { CategoryCrawlService } from '../category-crawl.service';
 import {
   CATEGORY_CRAWL_JOB,
   CATEGORY_CRAWL_QUEUE,
+  EXPIRED_JOB_CLEANUP_JOB,
   type CategoryCrawlJobData,
 } from '../types/category-crawl.type';
 
@@ -27,6 +28,9 @@ export class CategoryCrawlProcessor extends WorkerHost {
   }
 
   async process(job: Job<CategoryCrawlJobData>) {
+    if (job.name === EXPIRED_JOB_CLEANUP_JOB) {
+      return { deleted: await this.categoryCrawlService.deleteExpiredJobs() };
+    }
     if (job.name !== CATEGORY_CRAWL_JOB) {
       this.logger.warn(
         `Bỏ qua job category crawl không được hỗ trợ: ${job.name}`,

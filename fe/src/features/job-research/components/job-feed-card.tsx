@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Clock,
   ExternalLink,
+  Sparkles,
   MapPin,
 } from 'lucide-react'
 
@@ -20,8 +21,12 @@ import {
   formatPostedAt,
   openJobPopup,
 } from './job-match-ui'
+import { useState } from 'react'
+import { JobFitDialog } from '@/features/job-fit/components/job-fit-dialog'
+import { Link } from 'react-router'
 
-export function JobFeedCard({ job }: { job: JobFeedItem }) {
+export function JobFeedCard({ job, publicMode = false }: { job: JobFeedItem; publicMode?: boolean }) {
+  const [fitOpen, setFitOpen] = useState(false)
   const postedAt = formatPostedAt(job.postedAt)
   const visibleSkills = job.skills.filter(isDisplayableSkill).slice(0, 4)
 
@@ -80,15 +85,16 @@ export function JobFeedCard({ job }: { job: JobFeedItem }) {
 
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/60 pt-3">
         <SourceBadge source={job.source} />
-        <button
+        <div className="flex items-center gap-2">{job.detailReady ? publicMode ? <Link to="/login?redirect=%2Fjobs" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/8"><Sparkles className="size-3" />Kiểm tra phù hợp</Link> : <button type="button" onClick={() => setFitOpen(true)} className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/8"><Sparkles className="size-3" />Kiểm tra phù hợp</button> : null}<button
           type="button"
           onClick={() => openJobPopup(job.sourceUrl)}
           className="inline-flex items-center gap-1 rounded-full bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700"
         >
           Xem việc làm
           <ExternalLink className="size-3" />
-        </button>
+        </button></div>
       </div>
+      {!publicMode ? <JobFitDialog jobId={job.id} jobTitle={job.title} open={fitOpen} onOpenChange={setFitOpen} /> : null}
     </article>
   )
 }

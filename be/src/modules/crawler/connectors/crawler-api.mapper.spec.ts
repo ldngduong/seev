@@ -6,7 +6,7 @@ import {
 
 describe('crawler-api.mapper', () => {
   const v1Job: CrawlerJobV1 = {
-    contract_version: 2,
+    contract_version: 3,
     source: 'topcv',
     source_job_id: '42',
     title: 'Backend Developer',
@@ -67,7 +67,7 @@ describe('crawler-api.mapper', () => {
 
   it('defaults missing optional fields to null/[]', () => {
     const job = mapCrawledJobV1({
-      contract_version: 2,
+      contract_version: 3,
       source: 'topcv',
       source_job_id: '7',
       title: 'Frontend',

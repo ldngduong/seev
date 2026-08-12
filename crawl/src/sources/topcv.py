@@ -17,7 +17,7 @@ from ..config import TOPCV_CITY_PARAMS, TOPCV_DETAIL_BATCH_SIZE
 from ..models import Job, SearchQuery
 from ..firecrawl import scrape_job_list_with_details
 from ..source_profiles import get_profile
-from ..utils import normalize_city, parse_iso, parse_salary_vnd, parse_vn_date, slugify
+from ..utils import clean_html, clean_skills, normalize_city, parse_iso, parse_salary_vnd, parse_vn_date, slugify
 from .base import BaseSource
 
 log = logging.getLogger("crawler")
@@ -68,6 +68,15 @@ class TopCVSource(BaseSource):
             job.job_type = get_profile(self.name).map_job_type(employment.replace("_", " "))
         job.raw["deadline_source"] = "topcv_json_ld"
         job.raw["seniority_source"] = "topcv_json_ld"
+        job.description = clean_html(detail.get("description"))
+        job.requirements = clean_html(detail.get("requirements"))
+        structured_skills = detail.get("skills")
+        if isinstance(structured_skills, str):
+            structured_skills = structured_skills.split(",")
+        if isinstance(structured_skills, list):
+            job.skills = clean_skills([str(skill) for skill in structured_skills]) or job.skills
+        job.detail_source = detail.get("detailSource")
+        job.detail_parser_version = detail.get("detailParserVersion")
 
     def fetch(self, query: SearchQuery) -> list[Job]:
         profile = get_profile(self.name)
@@ -148,14 +157,9 @@ class TopCVSource(BaseSource):
                         for t in item.select(".item-tag")
                         if t.get_text(strip=True) and "kinh nghiệm" not in t.get_text(strip=True).lower()
                     ]
-                    hidden_tags = []
-                    for tag in item.select("[data-original-title]"):
-                        hidden_tags.extend(
-                            part.strip()
-                            for part in (tag.get("data-original-title") or "").split(",")
-                            if part.strip()
-                        )
-                    skills = list(dict.fromkeys([*visible_tags, *hidden_tags]))
+                    # Never read generic `data-original-title`: TopCV also uses it
+                    # for employer verification and location tooltips containing HTML.
+                    skills = clean_skills(visible_tags)
                     lo, hi, cur = parse_salary_vnd(salary_text)
                     job = Job(
                         source=self.name,
@@ -170,9 +174,9 @@ class TopCVSource(BaseSource):
                         salary_text=salary_text,
                         experience=exp,
                         posted_at=parse_vn_date(posted_text),
-                        skills=[s for s in skills if s],
+                        skills=skills,
                         logo=logo,
-                        raw={"source_tags": hidden_tags},
+                        raw={"source_tags": skills},
                     )
                     self._apply_detail(job)
                     jobs.append(job)

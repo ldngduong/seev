@@ -14,8 +14,8 @@ export class CategoryCrawlRunItem {
   @Column({ name: 'saved_count', default: 0, type: 'int' }) savedCount!: number;
   @Column({ name: 'duration_ms', nullable: true, type: 'int' }) durationMs!: number | null;
   @Column({ nullable: true, type: 'text' }) error!: string | null;
-  @Column({ name: 'started_at', nullable: true, type: 'timestamp' }) startedAt!: Date | null;
-  @Column({ name: 'completed_at', nullable: true, type: 'timestamp' }) completedAt!: Date | null;
-  @CreateDateColumn({ name: 'created_at' }) createdAt!: Date;
-  @UpdateDateColumn({ name: 'updated_at' }) updatedAt!: Date;
+  @Column({ name: 'started_at', nullable: true, type: 'timestamptz' }) startedAt!: Date | null;
+  @Column({ name: 'completed_at', nullable: true, type: 'timestamptz' }) completedAt!: Date | null;
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
 }

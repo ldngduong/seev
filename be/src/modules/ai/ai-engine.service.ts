@@ -25,6 +25,7 @@ import {
   type JobMatchResult,
 } from './schemas/job-match.schema';
 import { buildAuditUnits } from './utils/audit-unit-builder';
+import { jobFitResultSchema, type JobFitResult } from './schemas/job-fit.schema';
 
 interface AnalyzeCvInput {
   target: {
@@ -108,6 +109,77 @@ export class AiEngineService {
     }
 
     return results;
+  }
+
+  async analyzeJobFit(input: {
+    resumeText: string;
+    job: {
+      title: string;
+      categoryName: string | null;
+      seniorityNames: string[];
+      locations: string[];
+      jobType: string | null;
+      skills: string[];
+      description: string;
+      requirements: string;
+    };
+  }): Promise<JobFitResult> {
+    const client = this.getClient();
+    const model = this.configService.get('DEEPSEEK_MODEL', { infer: true });
+    const content = await this.requestAuditJson(client, {
+      model,
+      stream: false,
+      reasoning_effort: 'high',
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: 'Bạn là chuyên gia tuyển dụng CNTT. Chỉ trả về JSON hợp lệ, không dùng markdown. Mọi nội dung giải thích phải bằng tiếng Việt.',
+        },
+        {
+          role: 'user',
+          content: [
+            'Đánh giá mức độ phù hợp giữa CV và một việc làm cụ thể.',
+            'Không được suy diễn ứng viên có kỹ năng hoặc kinh nghiệm không xuất hiện trong CV.',
+            'Chỉ dùng mô tả và yêu cầu do nhà tuyển dụng cung cấp bên dưới; bỏ qua phúc lợi, quảng cáo công ty và nội dung liên quan khác.',
+            'Với mỗi yêu cầu quan trọng, phải trích nguyên văn bằng chứng ngắn từ CV. Nếu không có bằng chứng, dùng status gap hoặc unknown và để cv_evidence rỗng.',
+            'Không viết “ứng viên không có”; hãy viết “CV chưa thể hiện”.',
+            'Chấm đúng năm chiều và đúng trọng số: role_category 20, technical_skills 30, experience_scope 25, seniority 20, work_context 5.',
+            'Điểm từng chiều phải nằm trong [0,max_score]. Không tự cộng tổng điểm trong JSON.',
+            'verdict: very_good nếu bằng chứng rất mạnh; good nếu phù hợp phần lớn; consider nếu còn khoảng trống đáng kể; low nếu lệch vai trò/yêu cầu cốt lõi.',
+            '',
+            'Trả đúng cấu trúc JSON:',
+            JSON.stringify({
+              verdict: 'good', confidence: 0.85, summary: 'Nhận định ngắn bằng tiếng Việt.',
+              dimensions: [
+                { code: 'role_category', score: 16, max_score: 20, rationale: '...' },
+                { code: 'technical_skills', score: 23, max_score: 30, rationale: '...' },
+                { code: 'experience_scope', score: 18, max_score: 25, rationale: '...' },
+                { code: 'seniority', score: 15, max_score: 20, rationale: '...' },
+                { code: 'work_context', score: 4, max_score: 5, rationale: '...' },
+              ],
+              requirement_evidence: [{ requirement: 'Yêu cầu gốc', status: 'met', cv_evidence: ['Bằng chứng nguyên văn từ CV'], explanation: '...' }],
+              strengths: ['...'], gaps: ['...'], actions: ['...'],
+            }),
+            '',
+            'Việc làm:',
+            JSON.stringify(input.job, null, 2),
+            '',
+            'Nội dung CV:',
+            input.resumeText.slice(0, 18000),
+          ].join('\n'),
+        },
+      ],
+      thinking: { type: 'enabled' },
+    } as ChatCompletionCreateParamsNonStreaming);
+    const result = jobFitResultSchema.parse(this.parseJsonContent(content));
+    const expectedWeights = new Map([
+      ['role_category', 20], ['technical_skills', 30], ['experience_scope', 25], ['seniority', 20], ['work_context', 5],
+    ]);
+    if (new Set(result.dimensions.map((item) => item.code)).size !== 5 || result.dimensions.some((item) => item.max_score !== expectedWeights.get(item.code) || item.score > item.max_score)) {
+      throw new BadGatewayException('AI trả cấu trúc điểm job match không hợp lệ.');
+    }
+    return result;
   }
 
   async inferCvTarget(input: {

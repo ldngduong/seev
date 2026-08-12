@@ -16,7 +16,7 @@ export function useRegisterPage() {
   const status = useAuthStore((state) => state.status)
   const storeError = useAuthStore((state) => state.error)
   const clearError = useAuthStore((state) => state.clearError)
-  const redirect = searchParams.get('redirect') || '/research-cv'
+  const redirect = searchParams.get('redirect') || '/dashboard'
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {

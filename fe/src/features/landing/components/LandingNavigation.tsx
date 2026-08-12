@@ -11,8 +11,8 @@ import { useLandingNavigation } from '@/features/landing/hooks/use-landing-navig
 
 const navigationItems = [
   { label: 'Trang chủ', to: '/' },
-  { label: 'Bảng giá', to: '/#pricing' },
-  { label: 'Khám phá', to: '/#product' },
+  { label: 'Việc làm', to: '/viec-lam' },
+  { label: 'Bảng giá', to: '/pricing' },
 ]
 
 export const LandingNavigation = () => {

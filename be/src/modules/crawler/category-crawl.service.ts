@@ -16,7 +16,7 @@ import { CrawlerHttpService } from './crawler-http.service';
 import { CategoryCrawlRunItem } from './entities/category-crawl-run-item.entity';
 import { CategoryCrawlRun } from './entities/category-crawl-run.entity';
 import { JobResearchService } from './job-research.service';
-import { CATEGORY_CRAWL_JOB, CATEGORY_CRAWL_QUEUE, type CategoryCrawlJobData } from './types/category-crawl.type';
+import { CATEGORY_CRAWL_JOB, CATEGORY_CRAWL_QUEUE, EXPIRED_JOB_CLEANUP_JOB, type CategoryCrawlJobData } from './types/category-crawl.type';
 import { JobSource } from './types/job-source.type';
 
 @Injectable()
@@ -127,12 +127,24 @@ export class CategoryCrawlService implements OnModuleInit {
   async schedule() {
     const cron = this.config.get('CRAWL_CATEGORY_CRON', { infer: true });
     const repeatable = await this.queue.getRepeatableJobs();
-    if (repeatable.some((job) => job.name === CATEGORY_CRAWL_JOB)) return;
-    await this.queue.add(CATEGORY_CRAWL_JOB, { scheduled: true }, {
-      jobId: 'category-crawl-schedule', repeat: { pattern: cron },
-      removeOnComplete: { age: 60 * 60 * 24 * 7 }, removeOnFail: { age: 60 * 60 * 24 * 30 },
-    });
-    this.logger.log(`Đã lên lịch category crawl theo cron '${cron}'`);
+    if (!repeatable.some((job) => job.name === CATEGORY_CRAWL_JOB)) {
+      await this.queue.add(CATEGORY_CRAWL_JOB, { scheduled: true }, {
+        jobId: 'category-crawl-schedule', repeat: { pattern: cron },
+        removeOnComplete: { age: 60 * 60 * 24 * 7 }, removeOnFail: { age: 60 * 60 * 24 * 30 },
+      });
+      this.logger.log(`Đã lên lịch category crawl theo cron '${cron}'`);
+    }
+    if (!repeatable.some((job) => job.name === EXPIRED_JOB_CLEANUP_JOB)) {
+      await this.queue.add(EXPIRED_JOB_CLEANUP_JOB, {}, {
+        jobId: 'expired-job-cleanup-schedule', repeat: { pattern: '15 * * * *' },
+        removeOnComplete: { age: 60 * 60 * 24 * 7 }, removeOnFail: { age: 60 * 60 * 24 * 30 },
+      });
+      this.logger.log('Đã lên lịch dọn việc làm hết hạn theo giờ.');
+    }
+  }
+
+  deleteExpiredJobs() {
+    return this.jobResearch.deleteExpiredJobs();
   }
 
   async run(runId: string) {

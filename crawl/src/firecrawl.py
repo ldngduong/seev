@@ -207,16 +207,28 @@ def scrape_job_list_with_details(
     link_selector: str,
     batch_size: int,
 ) -> tuple[str, list[dict]]:
-    """Discover cards and hydrate their JobPosting JSON-LD in one browser scrape."""
+    """Discover cards and hydrate exact job details in one billed browser scrape.
+
+    Detail pages are fetched from the already-open, same-origin category page.
+    Besides JSON-LD metadata we keep only the employer-authored sections needed
+    for matching. Navigation, benefits, company marketing and related jobs are
+    deliberately excluded here instead of being cleaned later by the AI.
+    """
     script = r"""(async () => {
       const selector = __SELECTOR__;
       const urls=[...new Set([...document.querySelectorAll(selector)].map(a=>a.href.split('?')[0]))].slice(0,__BATCH_SIZE__);
       const out=[]; const sleep=ms=>new Promise(r=>setTimeout(r,ms)); let cursor=0;
+      const normalized=value=>(value||'').replace(/\s+/g,' ').trim().toLowerCase();
+      const textOf=node=>{if(!node)return null;const clone=node.cloneNode(true);clone.querySelectorAll('script,style,button,a.apply-now,form').forEach(el=>el.remove());clone.querySelectorAll('br').forEach(el=>el.replaceWith('\n'));clone.querySelectorAll('li').forEach(el=>el.append('\n'));const value=(clone.textContent||'').replace(/\u00a0/g,' ').replace(/[ \t]+\n/g,'\n').replace(/\n[ \t]+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();return value||null};
+      const section=(doc,labels,source)=>{const heading=[...doc.querySelectorAll('h1,h2,h3,h4')].find(el=>labels.some(label=>normalized(el.textContent)===label||normalized(el.textContent).startsWith(label)));if(!heading)return null;let box=null;if(source==='topcv')box=heading.closest('.box-job-information-detail-item');if(source==='itviec')box=heading.closest('.paragraph');box=box||heading.parentElement;if(!box)return null;const clone=box.cloneNode(true);clone.querySelectorAll('h1,h2,h3,h4').forEach(el=>el.remove());return textOf(clone)};
       const worker=async()=>{while(cursor<urls.length){const url=urls[cursor++];try{
         let response;for(let attempt=0;attempt<3;attempt++){response=await fetch(url,{credentials:'include'});if(response.status!==429)break;await sleep(900*(attempt+1));}
         const html=await response.text();const doc=new DOMParser().parseFromString(html,'text/html');
         const posting=[...doc.querySelectorAll('script[type="application/ld+json"]')].map(s=>{try{return JSON.parse(s.textContent)}catch{return null}}).filter(Boolean).find(v=>v['@type']==='JobPosting');
-        out.push({url,status:response.status,datePosted:posting?.datePosted??null,validThrough:posting?.validThrough??null,employmentType:posting?.employmentType??null,occupationalCategory:posting?.occupationalCategory??null,monthsOfExperience:posting?.experienceRequirements?.monthsOfExperience??null,skills:posting?.skills??null});
+        const source=location.hostname.includes('topcv')?'topcv':'itviec';
+        const description=source==='topcv'?section(doc,['mô tả công việc'],source):section(doc,['job description','mô tả công việc'],source);
+        const requirements=source==='topcv'?section(doc,['yêu cầu ứng viên'],source):section(doc,['your skills and experience','requirements','kỹ năng và kinh nghiệm','yêu cầu công việc'],source);
+        out.push({url,status:response.status,datePosted:posting?.datePosted??null,validThrough:posting?.validThrough??null,employmentType:posting?.employmentType??null,occupationalCategory:posting?.occupationalCategory??null,monthsOfExperience:posting?.experienceRequirements?.monthsOfExperience??null,skills:posting?.skills??null,description,requirements,detailSource:`${source}_structured_json`,detailParserVersion:2});
         await sleep(200);
       }catch(error){out.push({url,error:String(error)})}}};
       await Promise.all(Array.from({length:Math.min(2,urls.length)},worker));return out;

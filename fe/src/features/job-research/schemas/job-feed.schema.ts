@@ -19,6 +19,7 @@ export const jobFeedItemSchema = z.object({
   skills: z.array(z.string()),
   postedAt: z.string().nullable(),
   expiredAt: z.string(),
+  detailReady: z.boolean(),
   seniorityLevels: z.array(
     z.object({
       id: z.string().uuid(),

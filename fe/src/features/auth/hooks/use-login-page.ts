@@ -13,7 +13,7 @@ export function useLoginPage() {
   const status = useAuthStore((state) => state.status)
   const storeError = useAuthStore((state) => state.error)
   const clearError = useAuthStore((state) => state.clearError)
-  const redirect = searchParams.get('redirect') || '/research-cv'
+  const redirect = searchParams.get('redirect') || '/dashboard'
   const googleError =
     searchParams.get('error') === 'google_auth_failed'
       ? 'Google đăng nhập chưa hoàn tất.'

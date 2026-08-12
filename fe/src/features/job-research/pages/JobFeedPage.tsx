@@ -10,12 +10,12 @@ import { JobFeedCard } from '../components/job-feed-card'
 import { JobFeedSkeleton } from '../components/job-feed-skeleton'
 import { useJobFeed } from '../hooks/use-job-feed'
 
-export function JobFeedPage() {
+export function JobFeedPage({ publicMode = false }: { publicMode?: boolean }) {
   const { filters, actions, jobs, meta, isLoading, isError } = useJobFeed()
 
   return (
     <main className="flex w-full flex-col gap-5">
-      <DashboardPageHeader title="Việc làm" />
+      <DashboardPageHeader title={publicMode ? 'Việc làm CNTT' : 'Việc làm'} />
 
       <section className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <label className="relative min-w-0 flex-1">
@@ -66,7 +66,7 @@ export function JobFeedPage() {
       {jobs.length > 0 ? (
         <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {jobs.map((job) => (
-            <JobFeedCard key={job.id} job={job} />
+            <JobFeedCard key={job.id} job={job} publicMode={publicMode} />
           ))}
         </section>
       ) : null}

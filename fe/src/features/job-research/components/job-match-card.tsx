@@ -26,6 +26,7 @@ export function JobMatchCard({ match }: { match: JobIntentMatchResult }) {
     matched_terms: matchedTerms,
     match_reason: matchReason,
   } = match
+  const isExpired = Boolean(job.expiredAt && new Date(job.expiredAt).getTime() <= Date.now())
 
   return (
     <article className="flex h-full flex-col gap-3 rounded-2xl border border-border/60 bg-card p-4 transition hover:border-primary/40 hover:shadow-sm">
@@ -45,6 +46,7 @@ export function JobMatchCard({ match }: { match: JobIntentMatchResult }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
+        {isExpired ? <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700">Đã hết hạn</span> : null}
         {job.salaryText ? (
           <MetaChip icon={Banknote} className="bg-emerald-500/10 text-emerald-600">
             {job.salaryText}
@@ -63,7 +65,7 @@ export function JobMatchCard({ match }: { match: JobIntentMatchResult }) {
 
       {matchedTerms.length > 0 || matchReason ? (
         <div className="space-y-2 border-t border-border/60 pt-3">
-          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
             <Sparkles className="size-3.5" />
             Vì sao phù hợp
           </p>
@@ -91,13 +93,14 @@ export function JobMatchCard({ match }: { match: JobIntentMatchResult }) {
         <SourceBadge source={job.source} />
         <button
           type="button"
-          onClick={() => openJobPopup(job.sourceUrl)}
+          onClick={() => { if (!isExpired) openJobPopup(job.sourceUrl) }}
+          disabled={isExpired}
           className={cn(
             'inline-flex items-center gap-1 rounded-full bg-zinc-900 px-3.5 py-1.5',
-            'text-xs font-medium text-white transition hover:bg-zinc-700',
+            'text-xs font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground',
           )}
         >
-          Mở
+          {isExpired ? 'Đã hết hạn' : 'Mở'}
           <ExternalLink className="size-3" />
         </button>
       </div>

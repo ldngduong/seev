@@ -10,7 +10,7 @@ from ..config import ITVIEC_CITY_SLUGS, ITVIEC_DETAIL_BATCH_SIZE
 from ..firecrawl import scrape_job_list_with_details
 from ..models import Job, SearchQuery
 from ..source_profiles import get_profile
-from ..utils import contains_city, normalize_city, parse_iso, parse_salary_vnd, parse_vn_date
+from ..utils import clean_html, clean_skills, contains_city, normalize_city, parse_iso, parse_salary_vnd, parse_vn_date
 from .base import BaseSource
 
 log = logging.getLogger("crawler")
@@ -50,7 +50,7 @@ class ITViecSource(BaseSource):
             job.job_type = get_profile(self.name).map_job_type(employment.replace("_", " "))
         skills = detail.get("skills")
         if isinstance(skills, str):
-            job.skills = list(dict.fromkeys([*job.skills, *[s.strip() for s in skills.split(",") if s.strip()]]))
+            job.skills = clean_skills([*job.skills, *skills.split(",")])
         months = detail.get("monthsOfExperience")
         if isinstance(months, (int, float)) and months >= 0:
             years = float(months) / 12
@@ -68,6 +68,10 @@ class ITViecSource(BaseSource):
             job.raw["experience_quality"] = "source_reported_unverified"
         job.raw["deadline_source"] = "itviec_json_ld"
         job.raw["seniority_source"] = "itviec_title"
+        job.description = clean_html(detail.get("description"))
+        job.requirements = clean_html(detail.get("requirements"))
+        job.detail_source = detail.get("detailSource")
+        job.detail_parser_version = detail.get("detailParserVersion")
 
     def fetch(self, query: SearchQuery) -> list[Job]:
         profile = get_profile(self.name)

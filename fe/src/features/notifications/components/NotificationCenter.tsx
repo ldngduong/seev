@@ -42,7 +42,7 @@ export function NotificationCenter() {
             </button>
           ) : null}
         </div>
-        <div className="max-h-96 overflow-y-auto p-2">
+        <div className="flex max-h-96 flex-col gap-1 overflow-y-auto p-2">
           {items.length ? (
             items.map((notification) => (
               <button
@@ -63,7 +63,7 @@ export function NotificationCenter() {
                     {notification.message}
                   </span>
                   <span className="mt-1 block text-[11px] text-muted-foreground">
-                    {formatRelativeTime(notification.updatedAt)}
+                    {formatRelativeTime(notification.occurredAt)}
                   </span>
                 </span>
                 {!notification.readAt ? (

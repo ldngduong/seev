@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 
 export type NotificationStatus = 'running' | 'completed' | 'failed';
-export type NotificationResourceType = 'cv_research_session';
+export type NotificationResourceType = 'cv_research_session' | 'job_fit_analysis';
 
 @Entity({ name: 'user_notifications' })
 @Index('IDX_user_notifications_user_created', ['userId', 'createdAt'])
@@ -42,12 +42,19 @@ export class UserNotification {
   @Column({ type: 'varchar' })
   href!: string;
 
-  @Column({ name: 'read_at', nullable: true, type: 'timestamp' })
+  @Column({ name: 'read_at', nullable: true, type: 'timestamptz' })
   readAt!: Date | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @Column({
+    name: 'occurred_at',
+    type: 'timestamptz',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
+  occurredAt!: Date;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 }

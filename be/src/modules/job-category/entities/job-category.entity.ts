@@ -48,9 +48,9 @@ export class JobCategory {
   @OneToMany(() => CategorySeniorityLevel, (rule) => rule.category)
   seniorityRules!: CategorySeniorityLevel[];
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 }

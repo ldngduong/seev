@@ -11,6 +11,10 @@ import {
 import type { CvResearchSession } from '@/entities/cv/types/cv.types'
 import { useResearchProgress } from '@/features/cv-research/hooks/use-research-progress'
 import type { ResearchProgressEvent } from '@/features/cv-research/types/research-progress.types'
+import { listJobFits, retryJobFit } from '@/features/job-fit/api/job-fit-api'
+import type { JobFitAnalysis } from '@/features/job-fit/types/job-fit.types'
+import { researchSocket } from '@/features/cv-research/api/research-socket'
+import { useEffect } from 'react'
 
 const PAGE_SIZE = 10
 
@@ -19,7 +23,7 @@ export function useResearchHistory() {
   const [page, setPage] = useState(1)
   const [search, setSearchValue] = useState('')
   const [status, setStatusValue] = useState('all')
-  const [type, setTypeValue] = useState('all')
+  const [type, setTypeValue] = useState<'quick' | 'custom' | 'job_fit'>('quick')
   const [cvId, setCvIdValue] = useState('all')
   const deferredSearch = useDeferredValue(search.trim())
   const cvsQuery = useQuery({
@@ -33,14 +37,28 @@ export function useResearchHistory() {
       pageSize: PAGE_SIZE,
       search: deferredSearch || undefined,
       status: status === 'all' ? undefined : status,
-      type: type === 'all' ? undefined : type as 'quick' | 'custom',
+      type: type as 'quick' | 'custom',
       userCvId: cvId === 'all' ? undefined : cvId,
     }),
     placeholderData: keepPreviousData,
+    enabled: type !== 'job_fit',
+  })
+  const jobFitsQuery = useQuery({
+    queryKey: ['job-fits', { page, search: deferredSearch, status, cvId }],
+    queryFn: () => listJobFits({ page, pageSize: PAGE_SIZE, search: deferredSearch || undefined, status: status === 'all' ? undefined : status, userCvId: cvId === 'all' ? undefined : cvId }),
+    placeholderData: keepPreviousData,
+    enabled: type === 'job_fit',
   })
   const retryMutation = useMutation({
     mutationFn: retryCvResearchSession,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cv-research-sessions'] }),
+  })
+  const retryJobFitMutation = useMutation({
+    mutationFn: retryJobFit,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['job-fits'] })
+      void queryClient.invalidateQueries({ queryKey: ['billing', 'account'] })
+    },
   })
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['cv-research-sessions'] })
@@ -69,6 +87,21 @@ export function useResearchHistory() {
     }
   }, [queryClient, refresh])
   useResearchProgress(handleProgress, refresh)
+  useEffect(() => {
+    const handleJobFit = (analysis: JobFitAnalysis) => {
+      queryClient.setQueriesData<{ items: JobFitAnalysis[]; meta: { page: number; page_size: number; total: number; total_pages: number } }>(
+        { queryKey: ['job-fits'] },
+        (current) => current ? { ...current, items: current.items.map((item) => item.id === analysis.id ? analysis : item) } : current,
+      )
+      if (analysis.status === 'completed' || analysis.status === 'failed') {
+        void queryClient.invalidateQueries({ queryKey: ['job-fits'] })
+        void queryClient.invalidateQueries({ queryKey: ['billing', 'account'] })
+      }
+    }
+    researchSocket.on('job-fit:progress', handleJobFit)
+    researchSocket.connect()
+    return () => { researchSocket.off('job-fit:progress', handleJobFit) }
+  }, [queryClient])
 
   const resetPage = (setter: (value: string) => void) => (value: string) => {
     setter(value)
@@ -76,19 +109,22 @@ export function useResearchHistory() {
   }
 
   return {
-    sessions: sessionsQuery.data?.items ?? [],
-    meta: sessionsQuery.data?.meta,
+    sessions: type === 'job_fit' ? [] : sessionsQuery.data?.items ?? [],
+    jobFits: type === 'job_fit' ? jobFitsQuery.data?.items ?? [] : [],
+    meta: type === 'job_fit' ? jobFitsQuery.data?.meta : sessionsQuery.data?.meta,
     cvs: cvsQuery.data?.items ?? [],
     search, setSearch: resetPage(setSearchValue),
     status, setStatus: resetPage(setStatusValue),
-    type, setType: resetPage(setTypeValue),
+    type, setType: (value: 'quick' | 'custom' | 'job_fit') => { setTypeValue(value); setPage(1) },
     cvId, setCvId: resetPage(setCvIdValue),
     setPage,
-    isLoading: sessionsQuery.isLoading,
-    isError: sessionsQuery.isError,
-    isRefreshing: sessionsQuery.isFetching,
-    refresh: () => void sessionsQuery.refetch(),
+    isLoading: type === 'job_fit' ? jobFitsQuery.isLoading : sessionsQuery.isLoading,
+    isError: type === 'job_fit' ? jobFitsQuery.isError : sessionsQuery.isError,
+    isRefreshing: type === 'job_fit' ? jobFitsQuery.isFetching : sessionsQuery.isFetching,
+    refresh: () => void (type === 'job_fit' ? jobFitsQuery.refetch() : sessionsQuery.refetch()),
     retry: retryMutation.mutate,
     retryingSessionId: retryMutation.isPending ? retryMutation.variables : undefined,
+    retryJobFit: retryJobFitMutation.mutate,
+    retryingJobFitId: retryJobFitMutation.isPending ? retryJobFitMutation.variables : undefined,
   }
 }

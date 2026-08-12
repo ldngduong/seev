@@ -15,7 +15,7 @@ export function GoogleSuccessGuard() {
       const user = await hydrate()
 
       if (mounted && user) {
-        navigate('/research-cv', { replace: true })
+        navigate('/dashboard', { replace: true })
       }
     }
 

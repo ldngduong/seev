@@ -111,15 +111,15 @@ export class JobPost {
   @Column({ name: 'expired_at', type: 'timestamptz' })
   expiredAt!: Date;
 
-  @Column({ name: 'last_seen_at', type: 'timestamp' })
+  @Column({ name: 'last_seen_at', type: 'timestamptz' })
   lastSeenAt!: Date;
 
   @Column({ default: () => "'{}'::jsonb", type: 'jsonb' })
   raw!: Record<string, unknown>;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 }

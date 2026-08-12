@@ -1,8 +1,10 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import { User } from './entities/user.entity';
+
+const DEFAULT_SIGNUP_CREDITS = '40';
 
 export interface CreateUserInput {
   fullName: string;
@@ -24,6 +26,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly dataSource: DataSource,
   ) {}
 
   findById(id: string) {
@@ -44,8 +47,9 @@ export class UsersService {
 
     await this.assertUniqueIdentity(email, username);
 
-    return this.userRepository.save(
-      this.userRepository.create({
+    return this.dataSource.transaction(async (manager) => {
+      const user = await manager.getRepository(User).save(
+        manager.getRepository(User).create({
         fullName: input.fullName.trim(),
         username,
         email,
@@ -58,8 +62,27 @@ export class UsersService {
         avatar: input.avatar?.trim() || null,
         bio: input.bio?.trim() || null,
         googleId: input.googleId ?? null,
-      }),
-    );
+        }),
+      );
+      await manager.query(
+        `INSERT INTO credit_accounts (user_id, balance)
+         VALUES ($1, $2)`,
+        [user.id, DEFAULT_SIGNUP_CREDITS],
+      );
+      await manager.query(
+        `INSERT INTO credit_transactions
+          (user_id, type, amount_delta, balance_before, balance_after, idempotency_key, reason, metadata)
+         VALUES ($1, 'opening_balance', $2, 0, $2, $3, $4, $5::jsonb)`,
+        [
+          user.id,
+          DEFAULT_SIGNUP_CREDITS,
+          `signup:${user.id}`,
+          'Credit chào mừng khi tạo tài khoản',
+          JSON.stringify({ source: 'signup' }),
+        ],
+      );
+      return user;
+    });
   }
 
   async update(user: User, patch: Partial<CreateUserInput>) {

@@ -48,6 +48,10 @@ export interface CrawledJob {
   categoryId: string | null;
   categoryName: string | null;
   raw: Record<string, unknown>;
+  description: string | null;
+  requirements: string | null;
+  detailSource: string | null;
+  detailParserVersion: number | null;
 }
 
 export interface JobSourceConnector {

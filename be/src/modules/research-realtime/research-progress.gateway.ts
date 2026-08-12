@@ -68,6 +68,10 @@ export class ResearchProgressGateway implements OnGatewayConnection {
       .emit('notification:updated', notification);
   }
 
+  emitJobFitToUser(userId: string, payload: unknown) {
+    this.server.to(this.userRoom(userId)).emit('job-fit:progress', payload);
+  }
+
   private userRoom(userId: string) {
     return `research:user:${userId}`;
   }

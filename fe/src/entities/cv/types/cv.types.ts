@@ -89,6 +89,7 @@ export interface CvResearchJobSuggestion {
     title: string
     company_name: string | null
     salary_text: string | null
+    expired_at: string | null
     locations: string[]
     seniority_text: string | null
     skills: string[]

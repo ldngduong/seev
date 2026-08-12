@@ -6,7 +6,7 @@ import { useAuthStore } from '../store/auth-store'
 export function GuestGuard() {
   const [searchParams] = useSearchParams()
   const { hydrate, status } = useAuthStore()
-  const redirect = searchParams.get('redirect') || '/research-cv'
+  const redirect = searchParams.get('redirect') || '/dashboard'
 
   useEffect(() => {
     if (status === 'idle') {

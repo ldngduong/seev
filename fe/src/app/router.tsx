@@ -20,6 +20,9 @@ import { AdminUserDetailPage } from '@/features/admin/pages/AdminUserDetailPage'
 import { AdminCrawlsPage } from '@/features/admin/pages/AdminCrawlsPage'
 import { AdminPricingPage } from '@/features/admin/pages/AdminPricingPage'
 import { AdminCrawlDetailPage } from '@/features/admin/pages/AdminCrawlDetailPage'
+import { JobFitResultPage } from '@/features/job-fit/pages/JobFitResultPage'
+import { PricingPage } from '@/features/landing/pages/PricingPage'
+import { PublicJobsPage } from '@/features/landing/pages/PublicJobsPage'
 
 export const router = createBrowserRouter([
   {
@@ -29,6 +32,8 @@ export const router = createBrowserRouter([
         index: true,
         element: <LandingPage />,
       },
+      { path: 'pricing', element: <PricingPage /> },
+      { path: 'viec-lam', element: <PublicJobsPage /> },
       {
         element: <GuestGuard />,
         children: [
@@ -77,6 +82,10 @@ export const router = createBrowserRouter([
           {
             path: '/jobs',
             element: <JobFeedPage />,
+          },
+          {
+            path: '/jobs/:jobId/fit/:analysisId',
+            element: <JobFitResultPage />,
           },
           {
             path: '/research-history',

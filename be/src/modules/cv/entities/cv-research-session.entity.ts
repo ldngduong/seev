@@ -39,6 +39,7 @@ export interface CvResearchJobSuggestionSnapshot {
     title: string;
     company_name: string | null;
     salary_text: string | null;
+    expired_at: string;
     locations: string[];
     seniority_text: string | null;
     skills: string[];
@@ -137,10 +138,10 @@ export class CvResearchSession {
   @Column({ default: 1, type: 'int' })
   attempt!: number;
 
-  @Column({ name: 'started_at', nullable: true, type: 'timestamp' })
+  @Column({ name: 'started_at', nullable: true, type: 'timestamptz' })
   startedAt!: Date | null;
 
-  @Column({ name: 'heartbeat_at', nullable: true, type: 'timestamp' })
+  @Column({ name: 'heartbeat_at', nullable: true, type: 'timestamptz' })
   heartbeatAt!: Date | null;
 
   @Column({ name: 'audit_snapshot', nullable: true, type: 'jsonb' })
@@ -156,12 +157,12 @@ export class CvResearchSession {
   @Column({ nullable: true, type: 'text' })
   error!: string | null;
 
-  @Column({ name: 'completed_at', nullable: true, type: 'timestamp' })
+  @Column({ name: 'completed_at', nullable: true, type: 'timestamptz' })
   completedAt!: Date | null;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 }

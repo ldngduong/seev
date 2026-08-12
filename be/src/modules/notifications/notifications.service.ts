@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 
 import type { CvResearchSession } from '../cv/entities/cv-research-session.entity';
+import type { JobFitAnalysis } from '../job-fit/entities/job-fit-analysis.entity';
 import type { NotificationQueryDto } from './dto/notification-query.dto';
 import {
   UserNotification,
@@ -23,7 +24,7 @@ export class NotificationsService {
     };
     const [items, total] = await this.notifications.findAndCount({
       where,
-      order: { updatedAt: 'DESC' },
+      order: { occurredAt: 'DESC', createdAt: 'DESC' },
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
     });
@@ -76,13 +77,46 @@ export class NotificationsService {
       message: session.progressMessage ?? this.defaultMessageFor(status),
       href: `/research-history/${session.id}`,
       readAt: status === 'running' ? existing?.readAt ?? null : null,
+      occurredAt: new Date(),
     });
 
     return this.notifications.save(notification);
   }
 
+  async syncJobFit(analysis: JobFitAnalysis) {
+    const status = this.toNotificationStatus(analysis.status);
+    const existing = await this.notifications.findOneBy({
+      userId: analysis.userId,
+      resourceType: 'job_fit_analysis',
+      resourceId: analysis.id,
+    });
+    const job = analysis.jobSnapshot as { title?: string };
+    const notification = this.notifications.create({
+      ...existing,
+      userId: analysis.userId,
+      resourceType: 'job_fit_analysis',
+      resourceId: analysis.id,
+      status,
+      title:
+        status === 'completed'
+          ? 'Đánh giá việc làm hoàn tất'
+          : status === 'failed'
+            ? 'Đánh giá việc làm cần xem lại'
+            : 'Đang đánh giá việc làm',
+      message:
+        analysis.progressMessage ??
+        (job.title
+          ? `Đang đối chiếu CV với ${job.title}.`
+          : 'Đang đối chiếu CV với yêu cầu việc làm.'),
+      href: `/jobs/${analysis.jobPostId ?? String(analysis.jobSnapshot.id ?? 'expired')}/fit/${analysis.id}`,
+      readAt: status === 'running' ? existing?.readAt ?? null : null,
+      occurredAt: new Date(),
+    });
+    return this.notifications.save(notification);
+  }
+
   private toNotificationStatus(
-    status: CvResearchSession['status'],
+    status: CvResearchSession['status'] | JobFitAnalysis['status'],
   ): NotificationStatus {
     if (status === 'completed') return 'completed';
     if (status === 'failed') return 'failed';

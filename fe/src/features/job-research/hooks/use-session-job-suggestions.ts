@@ -31,7 +31,7 @@ function snapshotToMatch(suggestion: CvResearchJobSuggestion): JobIntentMatchRes
       jobType: null, level: null, experience: null, logo: null, locations: job.locations,
       seniorityText: job.seniority_text, jobCategoryId: null, jobCategoryName: null,
       seniorityLevelId: null, seniorityLevelName: null, skills: job.skills, postedAt: null,
-      expiredAt: null, lastSeenAt: '', createdAt: '', updatedAt: '',
+      expiredAt: job.expired_at, lastSeenAt: '', createdAt: '', updatedAt: '',
     },
   }
 }

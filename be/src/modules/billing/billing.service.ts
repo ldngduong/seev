@@ -32,15 +32,16 @@ export class BillingService {
     return items.map((item) => ({
       id: item.id, type: item.type, amount_delta: item.amountDelta,
       balance_before: item.balanceBefore, balance_after: item.balanceAfter,
-      service_product_id: item.serviceProductId, research_session_id: item.researchSessionId,
+      service_product_id: item.serviceProductId, subject_type: item.subjectType,
+      subject_id: item.subjectId,
       actor_user_id: item.actorUserId, reason: item.reason, metadata: item.metadata,
       created_at: item.createdAt,
     }));
   }
 
-  async reserveResearch(manager: EntityManager, input: { userId: string; serviceCode: ServiceCode; sessionId: string; attempt: number }) {
+  async reserveService(manager: EntityManager, input: { userId: string; serviceCode: ServiceCode; subjectType: 'cv_research' | 'job_fit'; subjectId: string; attempt: number }) {
     const usageRepository = manager.getRepository(ServiceUsage);
-    const existing = await usageRepository.findOneBy({ researchSessionId: input.sessionId, attempt: input.attempt });
+    const existing = await usageRepository.findOneBy({ subjectType: input.subjectType, subjectId: input.subjectId, attempt: input.attempt });
     if (existing) return existing;
 
     const product = await manager.getRepository(ServiceProduct).findOneBy({ code: input.serviceCode, isActive: true });
@@ -59,22 +60,26 @@ export class BillingService {
     await manager.getRepository(CreditAccount).save(account);
     await this.createTransaction(manager, {
       userId: input.userId, type: 'service_reserve', delta: -price,
-      before, after, serviceProductId: product.id, researchSessionId: input.sessionId,
-      actorUserId: input.userId, idempotencyKey: `research:${input.sessionId}:${input.attempt}:reserve`,
+      before, after, serviceProductId: product.id, subjectType: input.subjectType, subjectId: input.subjectId,
+      actorUserId: input.userId, idempotencyKey: `${input.subjectType}:${input.subjectId}:${input.attempt}:reserve`,
       reason: `Đặt trước credit cho ${product.name}`, metadata: { service_code: product.code, service_version: product.version },
     });
     return usageRepository.save(usageRepository.create({
       userId: input.userId, serviceProductId: product.id, serviceCode: product.code,
       serviceName: product.name, unitPriceCredits: product.priceCredits, quantity: 1,
-      totalCredits: product.priceCredits, researchSessionId: input.sessionId,
+      totalCredits: product.priceCredits, subjectType: input.subjectType, subjectId: input.subjectId,
       attempt: input.attempt, status: 'reserved', reservedAt: new Date(), settledAt: null, refundedAt: null,
     }));
   }
 
-  async settleResearch(sessionId: string, attempt: number) {
+  reserveResearch(manager: EntityManager, input: { userId: string; serviceCode: ServiceCode; sessionId: string; attempt: number }) {
+    return this.reserveService(manager, { userId: input.userId, serviceCode: input.serviceCode, subjectType: 'cv_research', subjectId: input.sessionId, attempt: input.attempt });
+  }
+
+  async settleService(subjectType: 'cv_research' | 'job_fit', subjectId: string, attempt: number) {
     return this.dataSource.transaction(async (manager) => {
       const usage = await manager.getRepository(ServiceUsage).findOne({
-        where: { researchSessionId: sessionId, attempt }, lock: { mode: 'pessimistic_write' },
+        where: { subjectType, subjectId, attempt }, lock: { mode: 'pessimistic_write' },
       });
       if (!usage || usage.status !== 'reserved') return usage;
       usage.status = 'consumed';
@@ -83,10 +88,14 @@ export class BillingService {
     });
   }
 
-  async refundResearch(sessionId: string, attempt: number, reason: string) {
+  settleResearch(sessionId: string, attempt: number) {
+    return this.settleService('cv_research', sessionId, attempt);
+  }
+
+  async refundService(subjectType: 'cv_research' | 'job_fit', subjectId: string, attempt: number, reason: string) {
     return this.dataSource.transaction(async (manager) => {
       const usage = await manager.getRepository(ServiceUsage).findOne({
-        where: { researchSessionId: sessionId, attempt }, lock: { mode: 'pessimistic_write' },
+        where: { subjectType, subjectId, attempt }, lock: { mode: 'pessimistic_write' },
       });
       if (!usage || usage.status === 'refunded') return usage;
       if (usage.status === 'consumed') return usage;
@@ -98,13 +107,17 @@ export class BillingService {
       await manager.getRepository(CreditAccount).save(account);
       await this.createTransaction(manager, {
         userId: usage.userId, type: 'refund', delta, before, after,
-        serviceProductId: usage.serviceProductId, researchSessionId: usage.researchSessionId,
-        actorUserId: null, idempotencyKey: `research:${sessionId}:${attempt}:refund`, reason, metadata: { attempt },
+        serviceProductId: usage.serviceProductId, subjectType: usage.subjectType, subjectId: usage.subjectId,
+        actorUserId: null, idempotencyKey: `${subjectType}:${subjectId}:${attempt}:refund`, reason, metadata: { attempt },
       });
       usage.status = 'refunded';
       usage.refundedAt = new Date();
       return manager.getRepository(ServiceUsage).save(usage);
     });
+  }
+
+  refundResearch(sessionId: string, attempt: number, reason: string) {
+    return this.refundService('cv_research', sessionId, attempt, reason);
   }
 
   async adjust(input: { userId: string; actorUserId: string; amountDelta: string; reason: string; idempotencyKey: string }) {
@@ -121,7 +134,7 @@ export class BillingService {
       await manager.getRepository(CreditAccount).save(account);
       const transaction = await this.createTransaction(manager, {
         userId: input.userId, type: delta > 0n ? 'admin_grant' : 'admin_deduct', delta,
-        before, after, serviceProductId: null, researchSessionId: null,
+        before, after, serviceProductId: null, subjectType: null, subjectId: null,
         actorUserId: input.actorUserId, idempotencyKey: input.idempotencyKey,
         reason: input.reason, metadata: {},
       });
@@ -151,14 +164,14 @@ export class BillingService {
 
   private createTransaction(manager: EntityManager, input: {
     userId: string; type: CreditTransactionType; delta: bigint; before: bigint; after: bigint;
-    serviceProductId: string | null; researchSessionId: string | null; actorUserId: string | null;
+    serviceProductId: string | null; subjectType: 'cv_research' | 'job_fit' | null; subjectId: string | null; actorUserId: string | null;
     idempotencyKey: string; reason: string | null; metadata: Record<string, unknown>;
   }) {
     const repository = manager.getRepository(CreditTransaction);
     return repository.save(repository.create({
       userId: input.userId, type: input.type, amountDelta: input.delta.toString(),
       balanceBefore: input.before.toString(), balanceAfter: input.after.toString(),
-      serviceProductId: input.serviceProductId, researchSessionId: input.researchSessionId,
+      serviceProductId: input.serviceProductId, subjectType: input.subjectType, subjectId: input.subjectId,
       actorUserId: input.actorUserId, idempotencyKey: input.idempotencyKey,
       reason: input.reason, metadata: input.metadata,
     }));
