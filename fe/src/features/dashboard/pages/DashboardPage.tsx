@@ -13,14 +13,13 @@ import { useDashboard } from '../hooks/use-dashboard'
 
 export function DashboardPage() {
   const user = useAuthStore((state) => state.user)
-  const { dashboard, isLoading, isError } = useDashboard()
+  const { dashboard, isLoading } = useDashboard()
   const summary = dashboard?.summary
   const firstName = user?.fullName.trim().split(/\s+/).at(-1)
   const usedServices = dashboard?.service_breakdown ?? []
 
   return <main className="flex flex-col gap-5">
     <div><DashboardPageHeader title={firstName ? `Chào ${firstName}` : 'Tổng quan'} actions={<Link to="/research/new" className={cn(buttonVariants())}>Research mới<ArrowRight className="size-4" /></Link>} /><p className="mt-1 text-sm text-muted-foreground">Tổng quan hoạt động của bạn trong 30 ngày gần nhất.</p></div>
-    {isError ? <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">Không tải được dữ liệu tổng quan.</div> : null}
     <section className="grid grid-cols-12 gap-3">
       <div className="col-span-12 sm:col-span-6 xl:col-span-3"><AnalyticsMetricCard icon={WalletCards} label="Số dư" value={summary ? `${summary.balance} credit` : isLoading ? '...' : '0 credit'} detail={summary ? `Đã dùng ${summary.credits_used_30d} credit trong tháng` : 'Số credit có thể sử dụng'} /></div>
       <div className="col-span-12 sm:col-span-6 xl:col-span-3"><AnalyticsMetricCard icon={CheckCircle2} label="Research hoàn tất" value={summary?.completed_30d ?? (isLoading ? '...' : 0)} detail={`${summary?.researches_30d ?? 0} phiên được tạo trong 30 ngày`} /></div>

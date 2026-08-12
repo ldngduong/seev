@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  FileInput,
   FileSearch,
   SlidersHorizontal,
   Sparkles,
@@ -22,6 +23,7 @@ import {
 } from "@/shared/components/ui/select";
 import { cn } from "@/shared/lib/utils";
 import { VIETNAM_PROVINCES } from "@/features/cv-research/utils/vietnam-provinces";
+import { ExternalJobResearchForm } from '@/features/external-job-research/components/external-job-research-form'
 
 export const ResearchCvPage = () => {
   const research = useResearchCvPage();
@@ -45,7 +47,7 @@ export const ResearchCvPage = () => {
       />
 
       {!mode ? (
-        <section className="grid overflow-hidden rounded-2xl border border-border/60 bg-card md:grid-cols-2 md:divide-x md:divide-border/60">
+        <section className="grid overflow-hidden rounded-2xl border border-border/60 bg-card md:grid-cols-3 md:divide-x md:divide-border/60">
           <ResearchModeButton
             icon={Sparkles}
             title="Research nhanh"
@@ -58,18 +60,24 @@ export const ResearchCvPage = () => {
             description="So sánh CV với nhóm ngành, cấp bậc hoặc mô tả công việc đã chọn."
             onClick={() => setMode("custom")}
           />
+          <ResearchModeButton
+            icon={FileInput}
+            title="Theo nội dung tuyển dụng"
+            description="Đối chiếu CV với JD hoặc liên kết tuyển dụng do bạn cung cấp."
+            onClick={() => setMode("external")}
+          />
         </section>
       ) : (
         <section className="rounded-xl border bg-card p-5">
           <div className="mb-5 flex items-start justify-between gap-4 border-b pb-4">
             <div>
               <h2 className="text-xl font-semibold text-zinc-700">
-                {mode === "quick" ? "Research nhanh" : "Research tùy chỉnh"}
+                {mode === "quick" ? "Research nhanh" : mode === 'custom' ? "Research tùy chỉnh" : 'Theo nội dung tuyển dụng'}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {mode === "quick"
                   ? "Chọn CV bạn muốn Seev phân tích."
-                  : "Chọn CV và cung cấp ngữ cảnh vị trí bạn muốn so sánh."}
+                  : mode === 'custom' ? "Chọn CV và cung cấp ngữ cảnh vị trí bạn muốn so sánh." : 'Chọn CV rồi cung cấp JD hoặc liên kết tuyển dụng.'}
               </p>
             </div>
             <Button type="button" variant="ghost" onClick={() => setMode(null)}>
@@ -77,7 +85,7 @@ export const ResearchCvPage = () => {
             </Button>
           </div>
 
-          <div className="grid gap-5">
+          {mode === 'external' ? <ExternalJobResearchForm /> : <div className="grid gap-5">
             <div className="space-y-2">
               <Label htmlFor="userCvId">CV</Label>
               <Combobox
@@ -165,13 +173,7 @@ export const ResearchCvPage = () => {
               </div>
             ) : null}
 
-            {research.isError ? (
-              <p className="text-sm text-destructive">
-                Không thể bắt đầu research. Kiểm tra CV đã chọn và thử lại.
-              </p>
-            ) : null}
             {research.price !== null ? <p className="text-sm text-muted-foreground">Chi phí: <strong className="text-foreground">{research.price} credits</strong>{research.balance !== null ? ` · Số dư ${research.balance} credits` : ''}</p> : null}
-            {!research.hasEnoughCredits ? <p className="text-sm text-destructive">Số dư credit không đủ để bắt đầu research.</p> : null}
 
             <div className="flex justify-end border-t pt-5">
               <Button
@@ -188,7 +190,7 @@ export const ResearchCvPage = () => {
                 {isSubmitting ? "Đang bắt đầu..." : "Bắt đầu research"}
               </Button>
             </div>
-          </div>
+          </div>}
         </section>
       )}
     </main>

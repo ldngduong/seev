@@ -27,7 +27,7 @@ export function LandingFooter() {
         </nav>
 
         <Link to="/register" className={cn(buttonVariants({ variant: 'secondary' }), 'shrink-0')}>
-          Tạo tài khoản, nhận 40 credit
+          Tạo tài khoản
           <ArrowUpRight />
         </Link>
       </div>

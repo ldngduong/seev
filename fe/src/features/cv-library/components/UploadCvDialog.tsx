@@ -16,7 +16,6 @@ import { Label } from '@/shared/components/ui/label'
 type UploadCvDialogProps = {
   open: boolean
   isUploading: boolean
-  isError: boolean
   onOpenChange: (open: boolean) => void
   onSubmit: (values: { file: File; name?: string }) => void
 }
@@ -24,7 +23,6 @@ type UploadCvDialogProps = {
 export function UploadCvDialog({
   open,
   isUploading,
-  isError,
   onOpenChange,
   onSubmit,
 }: UploadCvDialogProps) {
@@ -80,11 +78,6 @@ export function UploadCvDialog({
             />
           </div>
 
-          {isError ? (
-            <p className="text-sm text-destructive">
-              Tải lên thất bại. Kiểm tra cấu hình R2 và file PDF.
-            </p>
-          ) : null}
 
           <DialogFooter>
             <Button

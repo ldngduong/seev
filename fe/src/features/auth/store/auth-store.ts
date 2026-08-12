@@ -6,6 +6,7 @@ import type {
   LoginPayload,
   RegisterPayload,
 } from '../types/auth.types'
+import { getApiErrorMessage } from '@/shared/lib/api-error'
 
 type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'guest'
 
@@ -18,33 +19,6 @@ interface AuthState {
   register: (payload: RegisterPayload) => Promise<AuthUser>
   logout: () => Promise<void>
   clearError: () => void
-}
-
-function getErrorMessage(error: unknown) {
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'response' in error &&
-    typeof error.response === 'object' &&
-    error.response !== null &&
-    'data' in error.response
-  ) {
-    const data = error.response.data as { message?: unknown }
-
-    if (typeof data.message === 'string') {
-      return data.message
-    }
-
-    if (Array.isArray(data.message)) {
-      return data.message.join(', ')
-    }
-  }
-
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  return 'Đã xảy ra lỗi.'
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -73,7 +47,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user, status: 'authenticated', error: null })
       return user
     } catch (error) {
-      const message = getErrorMessage(error)
+      const message = getApiErrorMessage(error)
       set({ user: null, status: 'guest', error: message })
       throw error
     }
@@ -87,7 +61,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user, status: 'authenticated', error: null })
       return user
     } catch (error) {
-      const message = getErrorMessage(error)
+      const message = getApiErrorMessage(error)
       set({ user: null, status: 'guest', error: message })
       throw error
     }

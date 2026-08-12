@@ -13,6 +13,8 @@ const productBenefits: Record<BillingProduct['code'], string[]> = {
   quick_research: ['Tự nhận diện mảng CNTT phù hợp', 'Nhận xét trực tiếp trên CV', 'Gợi ý việc làm theo hồ sơ'],
   manual_research: ['Chọn mảng và mức kinh nghiệm', 'Lọc theo địa điểm mong muốn', 'Nhận xét CV theo mục tiêu đã chọn'],
   job_fit_analysis: ['So sánh một CV với một việc làm', 'Chỉ rõ điểm phù hợp và còn thiếu', 'Gợi ý việc cần làm trước khi ứng tuyển'],
+  external_jd_research: ['Dán nội dung hoặc tải tệp JD', 'Hỗ trợ PDF, Word và TXT', 'Đối chiếu yêu cầu với bằng chứng trong CV'],
+  external_link_research: ['Đọc trang việc làm hoặc bài tuyển dụng', 'Lọc nội dung trước khi đánh giá', 'Đối chiếu yêu cầu với bằng chứng trong CV'],
 }
 
 export function PricingPage() {
@@ -24,12 +26,11 @@ export function PricingPage() {
         <section className="mx-auto max-w-3xl text-center">
           <p className="text-sm font-medium text-primary">Bảng giá</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-900 md:text-6xl">Chỉ trả credit cho lần bạn sử dụng</h1>
-          <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-muted-foreground">Không cần đăng ký gói tháng. Tài khoản mới có sẵn 40 credit để bạn thử các tính năng của Seev.</p>
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-muted-foreground">Không cần đăng ký gói tháng. Credit chỉ được trừ khi bạn bắt đầu sử dụng một dịch vụ.</p>
         </section>
 
-        {catalog.isLoading ? <div className="mx-auto mt-12 grid max-w-6xl gap-4 md:grid-cols-3">{Array.from({ length: 3 }, (_, index) => <div key={index} className="h-96 animate-pulse rounded-3xl bg-muted" />)}</div> : null}
-        {catalog.isError ? <p className="mx-auto mt-12 max-w-xl rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-center text-sm text-destructive">Không tải được bảng giá. Vui lòng thử lại sau.</p> : null}
-        {catalog.data ? <section className="mx-auto mt-12 grid max-w-6xl items-stretch gap-4 md:grid-cols-3">{catalog.data.map((product) => <PricingCard key={product.id} product={product} />)}</section> : null}
+        {catalog.isLoading ? <div className="mx-auto mt-12 grid max-w-7xl gap-4 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-96 animate-pulse rounded-3xl bg-muted" />)}</div> : null}
+        {catalog.data ? <section className="mx-auto mt-12 grid max-w-7xl items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">{catalog.data.map((product) => <PricingCard key={product.id} product={product} />)}</section> : null}
       </main>
       <LandingFooter />
     </div>

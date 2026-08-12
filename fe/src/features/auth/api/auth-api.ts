@@ -1,4 +1,5 @@
 import { apiClient } from '@/shared/lib/api-client'
+import { getApiBaseUrl } from '@/shared/lib/runtime-env'
 
 import type {
   AuthSessionResponse,
@@ -32,6 +33,6 @@ export async function logout() {
 }
 
 export function getGoogleAuthUrl() {
-  const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
+  const baseUrl = getApiBaseUrl()
   return `${baseUrl.replace(/\/$/, '')}/auth/google`
 }

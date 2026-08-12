@@ -43,11 +43,6 @@ export function MyCvsPage() {
           </label>
         </div>
 
-        {library.isError ? (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-            Không tải được danh sách CV.
-          </div>
-        ) : null}
         {library.isLoading ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
             {Array.from({ length: 8 }).map((_, index) => (
@@ -97,7 +92,6 @@ export function MyCvsPage() {
       <UploadCvDialog
         open={library.isUploadDialogOpen}
         isUploading={library.isUploading}
-        isError={library.isUploadError}
         onOpenChange={library.setIsUploadDialogOpen}
         onSubmit={library.uploadCv}
       />

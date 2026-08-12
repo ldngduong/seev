@@ -2,6 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router'
+import { toast } from 'sonner'
+import { getApiErrorMessage } from '@/shared/lib/api-error'
 
 import { loginSchema, type LoginFormValues } from '../schemas/auth.schemas'
 import { useAuthStore } from '../store/auth-store'
@@ -11,7 +13,6 @@ export function useLoginPage() {
   const [searchParams] = useSearchParams()
   const login = useAuthStore((state) => state.login)
   const status = useAuthStore((state) => state.status)
-  const storeError = useAuthStore((state) => state.error)
   const clearError = useAuthStore((state) => state.clearError)
   const redirect = searchParams.get('redirect') || '/dashboard'
   const googleError =
@@ -24,17 +25,22 @@ export function useLoginPage() {
   })
 
   useEffect(() => clearError(), [clearError])
+  useEffect(() => { if (googleError) toast.error(googleError) }, [googleError])
 
   const onSubmit = form.handleSubmit(async (values) => {
-    await login(values)
-    navigate(redirect, { replace: true })
-  })
+    try {
+      await login(values)
+      toast.success('Đăng nhập thành công.')
+      navigate(redirect, { replace: true })
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Email hoặc mật khẩu không đúng.'))
+    }
+  }, (errors) => toast.error(Object.values(errors)[0]?.message ?? 'Kiểm tra lại thông tin đăng nhập.'))
 
   return {
     form,
     onSubmit,
     redirect,
-    error: storeError || googleError,
     isSubmitting: status === 'loading' || form.formState.isSubmitting,
   }
 }

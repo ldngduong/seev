@@ -11,7 +11,7 @@ export class ServiceUsage {
   @Column({ name: 'unit_price_credits', type: 'bigint' }) unitPriceCredits!: string;
   @Column({ default: 1, type: 'int' }) quantity!: number;
   @Column({ name: 'total_credits', type: 'bigint' }) totalCredits!: string;
-  @Column({ name: 'subject_type', type: 'varchar' }) subjectType!: 'cv_research' | 'job_fit';
+  @Column({ name: 'subject_type', type: 'varchar' }) subjectType!: 'cv_research' | 'job_fit' | 'external_job_research';
   @Column({ name: 'subject_id', type: 'uuid' }) subjectId!: string;
   @Column({ type: 'int' }) attempt!: number;
   @Column({ default: 'reserved', type: 'varchar' }) status!: 'reserved' | 'consumed' | 'refunded';

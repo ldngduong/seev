@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { Link, useParams } from 'react-router'
 
-import type { AuditFeedback } from '@/entities/cv/types/cv.types'
 import { useUserCvPdfFile } from '@/entities/cv/hooks/use-user-cv-pdf-file'
 import { PdfAuditViewer } from '@/features/cv-research/components/pdf-audit-viewer'
 import { ResearchProcessingScreen } from '@/features/cv-research/components/ResearchProcessingScreen'
@@ -12,7 +11,7 @@ import { ScrollArea } from '@/shared/components/ui/scroll-area'
 import { cn } from '@/shared/lib/utils'
 import { JobFitResultPanel } from '../components/job-fit-result-panel'
 import { useJobFit, useRetryJobFit } from '../hooks/use-job-fit'
-import type { JobFitResult } from '../types/job-fit.types'
+import { buildJobFitGapFeedbacks } from '../utils/job-fit-feedbacks'
 
 export function JobFitResultPage() {
   const { analysisId } = useParams()
@@ -22,7 +21,7 @@ export function JobFitResultPage() {
   const cvFile = useUserCvPdfFile(analysis?.cv?.id)
   const selectedFeedbackId = useAuditStore((state) => state.selectedFeedbackId)
   const setSelectedFeedbackId = useAuditStore((state) => state.setSelectedFeedbackId)
-  const feedbacks = useMemo(() => buildJobFitFeedbacks(analysis?.result?.requirement_evidence ?? []), [analysis?.result?.requirement_evidence])
+  const feedbacks = useMemo(() => buildJobFitGapFeedbacks(analysis?.result?.requirement_evidence ?? [], 'job-fit'), [analysis?.result?.requirement_evidence])
   const activeFeedback = feedbacks.find((feedback) => feedback.id === selectedFeedbackId) ?? null
 
   useEffect(() => { setSelectedFeedbackId(feedbacks[0]?.id ?? null) }, [feedbacks, setSelectedFeedbackId])
@@ -56,18 +55,4 @@ export function JobFitResultPage() {
       </section>
     </main>
   )
-}
-
-function buildJobFitFeedbacks(evidenceItems: JobFitResult['requirement_evidence']): AuditFeedback[] {
-  return evidenceItems.flatMap((item, itemIndex) => item.cv_evidence.map((evidence, evidenceIndex) => ({
-    id: `job-fit-${itemIndex}-${evidenceIndex}`,
-    source_line_id: `job-fit-${itemIndex}-${evidenceIndex}`,
-    section: item.requirement,
-    original_text: evidence,
-    highlight_text: evidence,
-    severity: item.status === 'met' ? 'info' as const : 'warning' as const,
-    issue: item.explanation,
-    suggestion: '',
-    highlight_color: item.status === 'met' ? 'yellow' as const : 'red' as const,
-  })))
 }

@@ -1,4 +1,4 @@
-import { IsInt, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class AdjustCreditsDto {
   @IsInt() @Min(-1_000_000_000) @Max(1_000_000_000) amount!: number;
@@ -8,6 +8,11 @@ export class AdjustCreditsDto {
 
 export class UpdateServicePriceDto {
   @IsInt() @Min(0) @Max(1_000_000) priceCredits!: number;
+}
+
+export class UpdateNewAccountCreditsDto {
+  @IsBoolean() enabled!: boolean;
+  @IsInt() @Min(0) @Max(1_000_000) credits!: number;
 }
 
 export class RemoveQueueJobDto {

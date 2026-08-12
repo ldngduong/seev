@@ -2,14 +2,13 @@ import { LogIn } from 'lucide-react'
 
 import { Button } from '@/shared/components/ui/button'
 
-import { AuthError } from '../components/AuthError'
 import { AuthField } from '../components/AuthField'
 import { AuthShell } from '../components/AuthShell'
 import { GoogleAuthButton } from '../components/GoogleAuthButton'
 import { useLoginPage } from '../hooks/use-login-page'
 
 const LoginPage = () => {
-  const { form, onSubmit, redirect, error, isSubmitting } = useLoginPage()
+  const { form, onSubmit, redirect, isSubmitting } = useLoginPage()
 
   return (
     <AuthShell
@@ -21,14 +20,12 @@ const LoginPage = () => {
       footerHref={`/register?redirect=${encodeURIComponent(redirect)}`}
     >
       <form className="space-y-4" onSubmit={onSubmit}>
-        <AuthError message={error} />
         <AuthField
           id="email"
           label="Email"
           type="email"
           autoComplete="email"
           placeholder="ban@example.com"
-          error={form.formState.errors.email?.message}
           {...form.register('email')}
         />
         <AuthField
@@ -37,7 +34,6 @@ const LoginPage = () => {
           type="password"
           autoComplete="current-password"
           placeholder="Mật khẩu của bạn"
-          error={form.formState.errors.password?.message}
           {...form.register('password')}
         />
 

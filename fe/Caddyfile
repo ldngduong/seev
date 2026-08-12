@@ -1,0 +1,13 @@
+:80 {
+  root * /usr/share/nginx/html
+
+  @health path /healthz
+  respond @health "ok" 200
+
+  @runtimeConfig path /env.js
+  header @runtimeConfig Cache-Control "no-store, no-cache, must-revalidate"
+
+  try_files {path} /index.html
+  encode zstd gzip
+  file_server
+}

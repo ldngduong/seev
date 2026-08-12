@@ -18,6 +18,7 @@ const activityLabels: Record<string, string> = {
   'research.failed': 'Nghiên cứu thất bại',
   'admin.credit_adjusted': 'Điều chỉnh số dư',
   'admin.service_price_updated': 'Cập nhật giá dịch vụ',
+  'admin.new_account_credits_updated': 'Cập nhật credit tài khoản mới',
 }
 
 export function formatTransactionType(type: string) { return transactionLabels[type] ?? 'Giao dịch credit' }

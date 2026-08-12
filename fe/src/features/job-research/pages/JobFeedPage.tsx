@@ -47,11 +47,6 @@ export function JobFeedPage({ publicMode = false }: { publicMode?: boolean }) {
       </section>
 
       {isLoading ? <JobFeedSkeleton /> : null}
-      {isError ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Không tải được danh sách việc làm.
-        </div>
-      ) : null}
       {!isLoading && !isError && jobs.length === 0 ? (
         <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed border-border/70 bg-muted/20 p-8 text-center">
           <div>

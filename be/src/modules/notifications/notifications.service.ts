@@ -4,6 +4,7 @@ import { IsNull, Repository } from 'typeorm';
 
 import type { CvResearchSession } from '../cv/entities/cv-research-session.entity';
 import type { JobFitAnalysis } from '../job-fit/entities/job-fit-analysis.entity';
+import type { ExternalJobResearch } from '../external-job-research/entities/external-job-research.entity';
 import type { NotificationQueryDto } from './dto/notification-query.dto';
 import {
   UserNotification,
@@ -115,8 +116,30 @@ export class NotificationsService {
     return this.notifications.save(notification);
   }
 
+  async syncExternalJobResearch(research: ExternalJobResearch) {
+    const status = this.toNotificationStatus(research.status);
+    const existing = await this.notifications.findOneBy({
+      userId: research.userId,
+      resourceType: 'external_job_research',
+      resourceId: research.id,
+    });
+    const notification = this.notifications.create({
+      ...existing,
+      userId: research.userId,
+      resourceType: 'external_job_research',
+      resourceId: research.id,
+      status,
+      title: status === 'completed' ? 'Đánh giá nội dung tuyển dụng hoàn tất' : status === 'failed' ? 'Đánh giá nội dung tuyển dụng thất bại' : 'Đang đánh giá nội dung tuyển dụng',
+      message: research.progressMessage ?? 'Đang đối chiếu CV với nội dung tuyển dụng.',
+      href: `/research-history/external/${research.id}`,
+      readAt: status === 'running' ? existing?.readAt ?? null : null,
+      occurredAt: new Date(),
+    });
+    return this.notifications.save(notification);
+  }
+
   private toNotificationStatus(
-    status: CvResearchSession['status'] | JobFitAnalysis['status'],
+    status: CvResearchSession['status'] | JobFitAnalysis['status'] | ExternalJobResearch['status'],
   ): NotificationStatus {
     if (status === 'completed') return 'completed';
     if (status === 'failed') return 'failed';

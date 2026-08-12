@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 
 export type NotificationStatus = 'running' | 'completed' | 'failed';
-export type NotificationResourceType = 'cv_research_session' | 'job_fit_analysis';
+export type NotificationResourceType = 'cv_research_session' | 'job_fit_analysis' | 'external_job_research';
 
 @Entity({ name: 'user_notifications' })
 @Index('IDX_user_notifications_user_created', ['userId', 'createdAt'])

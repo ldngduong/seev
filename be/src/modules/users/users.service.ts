@@ -2,9 +2,10 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 
+import { CreditAccount } from '../billing/entities/credit-account.entity';
+import { CreditTransaction } from '../billing/entities/credit-transaction.entity';
+import { SystemSettingsService } from '../system-settings/system-settings.service';
 import { User } from './entities/user.entity';
-
-const DEFAULT_SIGNUP_CREDITS = '40';
 
 export interface CreateUserInput {
   fullName: string;
@@ -24,9 +25,10 @@ export interface CreateUserInput {
 @Injectable()
 export class UsersService {
   constructor(
+    private readonly dataSource: DataSource,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    private readonly dataSource: DataSource,
+    private readonly systemSettings: SystemSettingsService,
   ) {}
 
   findById(id: string) {
@@ -48,8 +50,8 @@ export class UsersService {
     await this.assertUniqueIdentity(email, username);
 
     return this.dataSource.transaction(async (manager) => {
-      const user = await manager.getRepository(User).save(
-        manager.getRepository(User).create({
+      const users = manager.getRepository(User);
+      const user = await users.save(users.create({
         fullName: input.fullName.trim(),
         username,
         email,
@@ -62,25 +64,38 @@ export class UsersService {
         avatar: input.avatar?.trim() || null,
         bio: input.bio?.trim() || null,
         googleId: input.googleId ?? null,
+      }));
+
+      const setting = await this.systemSettings.getNewAccountCredits(manager);
+      const openingBalance =
+        input.role !== 'admin' && setting.enabled ? setting.credits : 0;
+
+      await manager.getRepository(CreditAccount).save(
+        manager.getRepository(CreditAccount).create({
+          userId: user.id,
+          balance: String(openingBalance),
         }),
       );
-      await manager.query(
-        `INSERT INTO credit_accounts (user_id, balance)
-         VALUES ($1, $2)`,
-        [user.id, DEFAULT_SIGNUP_CREDITS],
-      );
-      await manager.query(
-        `INSERT INTO credit_transactions
-          (user_id, type, amount_delta, balance_before, balance_after, idempotency_key, reason, metadata)
-         VALUES ($1, 'opening_balance', $2, 0, $2, $3, $4, $5::jsonb)`,
-        [
-          user.id,
-          DEFAULT_SIGNUP_CREDITS,
-          `signup:${user.id}`,
-          'Credit chào mừng khi tạo tài khoản',
-          JSON.stringify({ source: 'signup' }),
-        ],
-      );
+
+      if (openingBalance > 0) {
+        await manager.getRepository(CreditTransaction).save(
+          manager.getRepository(CreditTransaction).create({
+            userId: user.id,
+            type: 'opening_balance',
+            amountDelta: String(openingBalance),
+            balanceBefore: '0',
+            balanceAfter: String(openingBalance),
+            serviceProductId: null,
+            subjectType: null,
+            subjectId: null,
+            actorUserId: null,
+            idempotencyKey: `new-account:${user.id}`,
+            reason: 'Credit chào mừng khi tạo tài khoản',
+            metadata: { source: 'new_account_credits_setting' },
+          }),
+        );
+      }
+
       return user;
     });
   }

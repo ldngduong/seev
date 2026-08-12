@@ -23,6 +23,8 @@ import { ActivityModule } from './modules/activity/activity.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { JobFitModule } from './modules/job-fit/job-fit.module';
+import { ExternalJobResearchModule } from './modules/external-job-research/external-job-research.module';
+import { SystemSettingsModule } from './modules/system-settings/system-settings.module';
 
 @Module({
   imports: [
@@ -70,6 +72,8 @@ import { JobFitModule } from './modules/job-fit/job-fit.module';
     AdminModule,
     DashboardModule,
     JobFitModule,
+    ExternalJobResearchModule,
+    SystemSettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

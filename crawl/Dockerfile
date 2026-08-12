@@ -1,22 +1,20 @@
 FROM python:3.12-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 WORKDIR /app
 
-# curl_cffi needs recent libcurl; playwright browsers need system libs
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl libcurl4-openssl-dev build-essential \
-    && rm -rf /var/lib/apt/lists/*
+RUN addgroup --system crawler \
+    && adduser --system --ingroup crawler crawler
 
-COPY requirements.txt .
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Chromium system deps are reused by Camoufox's Firefox (Indeed + Cloudflare
-# fallbacks). The chromium binary itself is unused (slim image can stash it);
-# `--with-deps` is what guarantees the GUI/GL libraries both browsers need.
-RUN playwright install --with-deps chromium || true
+COPY --chown=crawler:crawler src ./src
 
-COPY . .
-
+USER crawler
 EXPOSE 8000
 
 CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]

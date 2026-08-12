@@ -72,6 +72,10 @@ export class ResearchProgressGateway implements OnGatewayConnection {
     this.server.to(this.userRoom(userId)).emit('job-fit:progress', payload);
   }
 
+  emitExternalJobResearchToUser(userId: string, payload: unknown) {
+    this.server.to(this.userRoom(userId)).emit('external-job-research:progress', payload);
+  }
+
   private userRoom(userId: string) {
     return `research:user:${userId}`;
   }

@@ -2,7 +2,7 @@ export type NotificationStatus = 'running' | 'completed' | 'failed'
 
 export interface UserNotification {
   id: string
-  resourceType: 'cv_research_session' | 'job_fit_analysis'
+  resourceType: 'cv_research_session' | 'job_fit_analysis' | 'external_job_research'
   resourceId: string
   status: NotificationStatus
   title: string

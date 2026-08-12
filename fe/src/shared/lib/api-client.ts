@@ -1,6 +1,7 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios'
+import { getApiBaseUrl } from './runtime-env'
 
-const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
+const baseURL = getApiBaseUrl()
 
 export const apiClient = axios.create({
   baseURL,

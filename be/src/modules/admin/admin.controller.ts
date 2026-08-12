@@ -6,7 +6,7 @@ import type { AuthenticatedRequest } from '../auth/types/authenticated-request.t
 import { CategoryCrawlService } from '../crawler/category-crawl.service';
 import { RunCategoryCrawlDto } from '../crawler/dto/run-category-crawl.dto';
 import { AdminService } from './admin.service';
-import { AdjustCreditsDto, UpdateServicePriceDto } from './dto/admin.dto';
+import { AdjustCreditsDto, UpdateNewAccountCreditsDto, UpdateServicePriceDto } from './dto/admin.dto';
 import { ExternalQuotaService } from './external-quota.service';
 
 @Controller('admin')
@@ -19,6 +19,8 @@ export class AdminController {
   @Post('users/:id/credits') adjust(@Param('id') id: string, @Body() dto: AdjustCreditsDto, @Req() request: AuthenticatedRequest) { return this.admin.adjustCredits(id, request.user.id, dto.amount, dto.reason, dto.idempotencyKey); }
   @Get('services') services() { return this.admin.catalog(); }
   @Patch('services/:id') price(@Param('id') id: string, @Body() dto: UpdateServicePriceDto, @Req() request: AuthenticatedRequest) { return this.admin.updatePrice(id, dto.priceCredits, request.user.id); }
+  @Get('settings/new-account-credits') newAccountCredits() { return this.admin.getNewAccountCredits(); }
+  @Patch('settings/new-account-credits') updateNewAccountCredits(@Body() dto: UpdateNewAccountCreditsDto, @Req() request: AuthenticatedRequest) { return this.admin.updateNewAccountCredits(dto, request.user.id); }
   @Get('external-quotas') quotasStatus() { return this.quotas.getAll(); }
   @Get('crawls') crawlRuns(@Query('page') page?: string, @Query('pageSize') pageSize?: string) { return this.crawls.listRuns(Number(page) || 1, Math.min(Number(pageSize) || 20, 100)); }
   @Get('crawls/queue') crawlQueue() { return this.crawls.getQueueOverview(); }

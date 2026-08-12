@@ -8,6 +8,7 @@ import { AdminPage } from '../components/admin-page'
 import { AdminServiceBreakdown } from '../components/admin-service-breakdown'
 import { ExternalQuotaCard } from '../components/external-quota-card'
 import { LatestCrawlSummary } from '../components/latest-crawl-summary'
+import { NewAccountCreditsCard } from '../components/new-account-credits-card'
 import { useAdminDashboard } from '../hooks/use-admin-dashboard'
 
 export function AdminDashboardPage() {
@@ -24,7 +25,8 @@ export function AdminDashboardPage() {
       <article className="col-span-12 flex h-full flex-col rounded-2xl border border-border/60 bg-card p-5 xl:col-span-8"><div><h2 className="font-semibold text-zinc-800">Tăng trưởng sử dụng</h2><p className="mt-1 text-sm text-muted-foreground">Người dùng mới và số phiên nghiên cứu theo ngày.</p></div><div className="mt-3 flex-1"><AdminGrowthChart data={dashboard?.trend ?? []} /></div></article>
       <article className="col-span-12 flex h-full flex-col rounded-2xl border border-border/60 bg-card p-5 xl:col-span-4"><div><h2 className="font-semibold text-zinc-800">Credit theo ngày</h2><p className="mt-1 text-sm text-muted-foreground">Credit được tiêu thụ bởi các phiên hoàn tất.</p></div><div className="mt-3 flex-1"><AdminCreditChart data={dashboard?.trend ?? []} /></div></article>
       <div className="col-span-12 h-full [&>*]:h-full xl:col-span-4"><AdminServiceBreakdown services={dashboard?.service_breakdown ?? []} /></div>
-      <div className="col-span-12 h-full [&>*]:h-full xl:col-span-8"><LatestCrawlSummary run={dashboard?.latest_crawl ?? null} /></div>
+      <div className="col-span-12 h-full [&>*]:h-full xl:col-span-4"><LatestCrawlSummary run={dashboard?.latest_crawl ?? null} /></div>
+      <div className="col-span-12 h-full [&>*]:h-full xl:col-span-4"><NewAccountCreditsCard setting={state.newAccountCredits} isSaving={state.isSavingNewAccountCredits} onSave={state.saveNewAccountCredits} /></div>
       <div className="col-span-12 mt-2 flex items-center justify-between gap-3"><div><h2 className="font-semibold text-zinc-800">Hạn mức nhà cung cấp</h2><p className="mt-1 text-sm text-muted-foreground">Theo dõi khả năng xử lý và chi phí dịch vụ bên ngoài.</p></div><Button size="sm" variant="ghost" onClick={() => void state.refreshQuotas()} disabled={state.isRefreshingQuotas}><RefreshCw />Làm mới</Button></div>
       {state.quotas.map((quota) => <div key={quota.provider} className="col-span-12 h-full [&>*]:h-full md:col-span-6"><ExternalQuotaCard quota={quota} /></div>)}
     </section>

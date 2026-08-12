@@ -1,6 +1,6 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
-export type ServiceCode = 'quick_research' | 'manual_research' | 'job_fit_analysis';
+export type ServiceCode = 'quick_research' | 'manual_research' | 'job_fit_analysis' | 'external_jd_research' | 'external_link_research';
 
 @Entity({ name: 'service_products' })
 export class ServiceProduct {

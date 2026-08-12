@@ -20,12 +20,32 @@ export const serviceProducts = [
     description: 'Phân tích mức độ phù hợp giữa một CV đã lưu và một việc làm cụ thể.',
     priceCredits: 3,
   },
+  {
+    id: '20000000-0000-4000-8000-000000000004',
+    code: 'external_jd_research',
+    name: 'Đánh giá theo JD',
+    description: 'Đối chiếu CV với JD được dán hoặc tải lên.',
+    priceCredits: 5,
+  },
+  {
+    id: '20000000-0000-4000-8000-000000000005',
+    code: 'external_link_research',
+    name: 'Đánh giá theo liên kết tuyển dụng',
+    description: 'Đọc nội dung tuyển dụng từ liên kết rồi đối chiếu với CV.',
+    priceCredits: 8,
+  },
 ] as const;
 
 type Query = (sql: string, parameters?: unknown[]) => Promise<unknown>;
 type AdminSeedInput = { email: string; password: string; fullName: string };
 
 export async function seedSaasCore(query: Query, admin: AdminSeedInput = defaultAdminAccount) {
+  await query(
+    `INSERT INTO system_settings (key, value)
+     VALUES ('new_account_credits', '{"enabled":false,"credits":0}'::jsonb)
+     ON CONFLICT (key) DO NOTHING`,
+  );
+
   for (const product of serviceProducts) {
     await query(
       `INSERT INTO service_products (id, code, name, description, price_credits, is_active, version)

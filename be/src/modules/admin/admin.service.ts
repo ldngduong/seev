@@ -11,6 +11,7 @@ import { ServiceUsage } from '../billing/entities/service-usage.entity';
 import { CvResearchSession } from '../cv/entities/cv-research-session.entity';
 import { UserCv } from '../cv/entities/user-cv.entity';
 import { User } from '../users/entities/user.entity';
+import { NewAccountCreditsSetting, SystemSettingsService } from '../system-settings/system-settings.service';
 
 @Injectable()
 export class AdminService {
@@ -24,6 +25,7 @@ export class AdminService {
     @InjectRepository(UserCv) private readonly cvs: Repository<UserCv>,
     private readonly billing: BillingService,
     private readonly activity: ActivityService,
+    private readonly systemSettings: SystemSettingsService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -99,6 +101,18 @@ export class AdminService {
   }
 
   catalog() { return this.billing.getCatalog(); }
+  getNewAccountCredits() { return this.systemSettings.getNewAccountCredits(); }
+  async updateNewAccountCredits(value: NewAccountCreditsSetting, actorUserId: string) {
+    const setting = await this.systemSettings.updateNewAccountCredits(value, actorUserId);
+    await this.activity.record({
+      actorUserId,
+      action: 'admin.new_account_credits_updated',
+      resourceType: 'system_setting',
+      resourceId: null,
+      metadata: { enabled: setting.enabled, credits: setting.credits },
+    });
+    return setting;
+  }
   async updatePrice(productId: string, price: number, actorUserId: string) {
     const product = await this.billing.updatePrice(productId, String(price));
     await this.activity.record({ actorUserId, action: 'admin.service_price_updated', resourceType: 'service_product', resourceId: product.id, metadata: { price_credits: price, version: product.version } });

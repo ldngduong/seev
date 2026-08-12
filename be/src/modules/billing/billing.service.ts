@@ -39,7 +39,7 @@ export class BillingService {
     }));
   }
 
-  async reserveService(manager: EntityManager, input: { userId: string; serviceCode: ServiceCode; subjectType: 'cv_research' | 'job_fit'; subjectId: string; attempt: number }) {
+  async reserveService(manager: EntityManager, input: { userId: string; serviceCode: ServiceCode; subjectType: 'cv_research' | 'job_fit' | 'external_job_research'; subjectId: string; attempt: number }) {
     const usageRepository = manager.getRepository(ServiceUsage);
     const existing = await usageRepository.findOneBy({ subjectType: input.subjectType, subjectId: input.subjectId, attempt: input.attempt });
     if (existing) return existing;
@@ -76,7 +76,7 @@ export class BillingService {
     return this.reserveService(manager, { userId: input.userId, serviceCode: input.serviceCode, subjectType: 'cv_research', subjectId: input.sessionId, attempt: input.attempt });
   }
 
-  async settleService(subjectType: 'cv_research' | 'job_fit', subjectId: string, attempt: number) {
+  async settleService(subjectType: 'cv_research' | 'job_fit' | 'external_job_research', subjectId: string, attempt: number) {
     return this.dataSource.transaction(async (manager) => {
       const usage = await manager.getRepository(ServiceUsage).findOne({
         where: { subjectType, subjectId, attempt }, lock: { mode: 'pessimistic_write' },
@@ -92,7 +92,7 @@ export class BillingService {
     return this.settleService('cv_research', sessionId, attempt);
   }
 
-  async refundService(subjectType: 'cv_research' | 'job_fit', subjectId: string, attempt: number, reason: string) {
+  async refundService(subjectType: 'cv_research' | 'job_fit' | 'external_job_research', subjectId: string, attempt: number, reason: string) {
     return this.dataSource.transaction(async (manager) => {
       const usage = await manager.getRepository(ServiceUsage).findOne({
         where: { subjectType, subjectId, attempt }, lock: { mode: 'pessimistic_write' },
@@ -164,7 +164,7 @@ export class BillingService {
 
   private createTransaction(manager: EntityManager, input: {
     userId: string; type: CreditTransactionType; delta: bigint; before: bigint; after: bigint;
-    serviceProductId: string | null; subjectType: 'cv_research' | 'job_fit' | null; subjectId: string | null; actorUserId: string | null;
+    serviceProductId: string | null; subjectType: 'cv_research' | 'job_fit' | 'external_job_research' | null; subjectId: string | null; actorUserId: string | null;
     idempotencyKey: string; reason: string | null; metadata: Record<string, unknown>;
   }) {
     const repository = manager.getRepository(CreditTransaction);

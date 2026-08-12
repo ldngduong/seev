@@ -15,6 +15,8 @@ import { listJobFits, retryJobFit } from '@/features/job-fit/api/job-fit-api'
 import type { JobFitAnalysis } from '@/features/job-fit/types/job-fit.types'
 import { researchSocket } from '@/features/cv-research/api/research-socket'
 import { useEffect } from 'react'
+import { listExternalJobResearches, retryExternalJobResearch } from '@/features/external-job-research/api/external-job-research-api'
+import type { ExternalJobResearch } from '@/features/external-job-research/types/external-job-research.types'
 
 const PAGE_SIZE = 10
 
@@ -23,7 +25,7 @@ export function useResearchHistory() {
   const [page, setPage] = useState(1)
   const [search, setSearchValue] = useState('')
   const [status, setStatusValue] = useState('all')
-  const [type, setTypeValue] = useState<'quick' | 'custom' | 'job_fit'>('quick')
+  const [type, setTypeValue] = useState<'quick' | 'custom' | 'job_fit' | 'external'>('quick')
   const [cvId, setCvIdValue] = useState('all')
   const deferredSearch = useDeferredValue(search.trim())
   const cvsQuery = useQuery({
@@ -41,13 +43,19 @@ export function useResearchHistory() {
       userCvId: cvId === 'all' ? undefined : cvId,
     }),
     placeholderData: keepPreviousData,
-    enabled: type !== 'job_fit',
+    enabled: type === 'quick' || type === 'custom',
   })
   const jobFitsQuery = useQuery({
     queryKey: ['job-fits', { page, search: deferredSearch, status, cvId }],
     queryFn: () => listJobFits({ page, pageSize: PAGE_SIZE, search: deferredSearch || undefined, status: status === 'all' ? undefined : status, userCvId: cvId === 'all' ? undefined : cvId }),
     placeholderData: keepPreviousData,
     enabled: type === 'job_fit',
+  })
+  const externalQuery = useQuery({
+    queryKey: ['external-job-researches', { page, search: deferredSearch, status, cvId }],
+    queryFn: () => listExternalJobResearches({ page, pageSize: PAGE_SIZE, search: deferredSearch || undefined, status: status === 'all' ? undefined : status, userCvId: cvId === 'all' ? undefined : cvId }),
+    placeholderData: keepPreviousData,
+    enabled: type === 'external',
   })
   const retryMutation = useMutation({
     mutationFn: retryCvResearchSession,
@@ -60,6 +68,7 @@ export function useResearchHistory() {
       void queryClient.invalidateQueries({ queryKey: ['billing', 'account'] })
     },
   })
+  const retryExternalMutation = useMutation({ mutationFn: retryExternalJobResearch, onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['external-job-researches'] }); void queryClient.invalidateQueries({ queryKey: ['billing', 'account'] }) } })
   const refresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['cv-research-sessions'] })
   }, [queryClient])
@@ -99,8 +108,13 @@ export function useResearchHistory() {
       }
     }
     researchSocket.on('job-fit:progress', handleJobFit)
+    const handleExternal = (research: ExternalJobResearch) => {
+      queryClient.setQueriesData<{ items: ExternalJobResearch[]; meta: { page: number; page_size: number; total: number; total_pages: number } }>({ queryKey: ['external-job-researches'] }, (current) => current ? { ...current, items: current.items.map((item) => item.id === research.id ? { ...item, ...research } : item) } : current)
+      if (research.status === 'completed' || research.status === 'failed') { void queryClient.invalidateQueries({ queryKey: ['external-job-researches'] }); void queryClient.invalidateQueries({ queryKey: ['billing', 'account'] }) }
+    }
+    researchSocket.on('external-job-research:progress', handleExternal)
     researchSocket.connect()
-    return () => { researchSocket.off('job-fit:progress', handleJobFit) }
+    return () => { researchSocket.off('job-fit:progress', handleJobFit); researchSocket.off('external-job-research:progress', handleExternal) }
   }, [queryClient])
 
   const resetPage = (setter: (value: string) => void) => (value: string) => {
@@ -109,22 +123,25 @@ export function useResearchHistory() {
   }
 
   return {
-    sessions: type === 'job_fit' ? [] : sessionsQuery.data?.items ?? [],
+    sessions: type === 'quick' || type === 'custom' ? sessionsQuery.data?.items ?? [] : [],
     jobFits: type === 'job_fit' ? jobFitsQuery.data?.items ?? [] : [],
-    meta: type === 'job_fit' ? jobFitsQuery.data?.meta : sessionsQuery.data?.meta,
+    externalResearches: type === 'external' ? externalQuery.data?.items ?? [] : [],
+    meta: type === 'job_fit' ? jobFitsQuery.data?.meta : type === 'external' ? externalQuery.data?.meta : sessionsQuery.data?.meta,
     cvs: cvsQuery.data?.items ?? [],
     search, setSearch: resetPage(setSearchValue),
     status, setStatus: resetPage(setStatusValue),
-    type, setType: (value: 'quick' | 'custom' | 'job_fit') => { setTypeValue(value); setPage(1) },
+    type, setType: (value: 'quick' | 'custom' | 'job_fit' | 'external') => { setTypeValue(value); setPage(1) },
     cvId, setCvId: resetPage(setCvIdValue),
     setPage,
-    isLoading: type === 'job_fit' ? jobFitsQuery.isLoading : sessionsQuery.isLoading,
-    isError: type === 'job_fit' ? jobFitsQuery.isError : sessionsQuery.isError,
-    isRefreshing: type === 'job_fit' ? jobFitsQuery.isFetching : sessionsQuery.isFetching,
-    refresh: () => void (type === 'job_fit' ? jobFitsQuery.refetch() : sessionsQuery.refetch()),
+    isLoading: type === 'job_fit' ? jobFitsQuery.isLoading : type === 'external' ? externalQuery.isLoading : sessionsQuery.isLoading,
+    isError: type === 'job_fit' ? jobFitsQuery.isError : type === 'external' ? externalQuery.isError : sessionsQuery.isError,
+    isRefreshing: type === 'job_fit' ? jobFitsQuery.isFetching : type === 'external' ? externalQuery.isFetching : sessionsQuery.isFetching,
+    refresh: () => void (type === 'job_fit' ? jobFitsQuery.refetch() : type === 'external' ? externalQuery.refetch() : sessionsQuery.refetch()),
     retry: retryMutation.mutate,
     retryingSessionId: retryMutation.isPending ? retryMutation.variables : undefined,
     retryJobFit: retryJobFitMutation.mutate,
     retryingJobFitId: retryJobFitMutation.isPending ? retryJobFitMutation.variables : undefined,
+    retryExternal: retryExternalMutation.mutate,
+    retryingExternalId: retryExternalMutation.isPending ? retryExternalMutation.variables : undefined,
   }
 }

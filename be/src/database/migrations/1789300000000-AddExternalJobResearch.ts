@@ -1,0 +1,14 @@
+import { MigrationInterface, QueryRunner } from 'typeorm';
+
+export class AddExternalJobResearch1789300000000 implements MigrationInterface {
+  name = 'AddExternalJobResearch1789300000000';
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`CREATE TABLE "external_job_researches" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "user_id" uuid NOT NULL, "user_cv_id" uuid NOT NULL, "cv_content_hash" character varying NOT NULL, "source_kind" character varying NOT NULL, "input_kind" character varying NOT NULL, "status" character varying NOT NULL DEFAULT 'queued', "phase" character varying NOT NULL DEFAULT 'queued', "progress" smallint NOT NULL DEFAULT 0, "progress_message" character varying, "attempt" integer NOT NULL DEFAULT 1, "score" smallint, "verdict" character varying, "confidence" double precision, "result" jsonb, "error" text, "started_at" TIMESTAMP WITH TIME ZONE, "completed_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "CHK_external_job_research_source" CHECK ("source_kind" IN ('jd','link')), CONSTRAINT "CHK_external_job_research_input" CHECK ("input_kind" IN ('text','pdf','word','txt','url')), CONSTRAINT "CHK_external_job_research_status" CHECK ("status" IN ('queued','processing','completed','failed')), CONSTRAINT "CHK_external_job_research_progress" CHECK ("progress" BETWEEN 0 AND 100), CONSTRAINT "CHK_external_job_research_score" CHECK ("score" IS NULL OR "score" BETWEEN 0 AND 100), CONSTRAINT "PK_external_job_researches" PRIMARY KEY ("id"), CONSTRAINT "FK_external_job_research_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE, CONSTRAINT "FK_external_job_research_cv" FOREIGN KEY ("user_cv_id") REFERENCES "user_cvs"("id") ON DELETE CASCADE)`);
+    await queryRunner.query(`CREATE INDEX "IDX_external_job_research_user_created" ON "external_job_researches" ("user_id", "created_at" DESC)`);
+    await queryRunner.query(`INSERT INTO "service_products" ("id", "code", "name", "description", "price_credits") VALUES ('20000000-0000-4000-8000-000000000004', 'external_jd_research', 'Đánh giá theo JD', 'Đối chiếu CV với JD được dán hoặc tải lên.', 5), ('20000000-0000-4000-8000-000000000005', 'external_link_research', 'Đánh giá theo liên kết tuyển dụng', 'Đọc nội dung tuyển dụng từ liên kết rồi đối chiếu với CV.', 8) ON CONFLICT ("code") DO UPDATE SET "name"=EXCLUDED."name", "description"=EXCLUDED."description", "is_active"=true`);
+  }
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DELETE FROM "service_products" WHERE "code" IN ('external_jd_research','external_link_research')`);
+    await queryRunner.query(`DROP TABLE "external_job_researches"`);
+  }
+}

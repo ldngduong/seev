@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useDeferredValue, useState } from 'react'
 
 import { listUserCvs, uploadUserCv } from '@/entities/cv/api/cv-api'
+import { toast } from 'sonner'
 
 const PAGE_SIZE = 12
 
@@ -23,6 +24,7 @@ export function useCvLibrary() {
   const uploadMutation = useMutation({
     mutationFn: uploadUserCv,
     onSuccess: () => {
+      toast.success('Đã thêm CV vào thư viện.')
       setIsUploadDialogOpen(false)
       void queryClient.invalidateQueries({ queryKey: ['user-cvs'] })
     },

@@ -12,12 +12,13 @@ import { CrawlerModule } from '../crawler/crawler.module';
 import { CvResearchSession } from '../cv/entities/cv-research-session.entity';
 import { UserCv } from '../cv/entities/user-cv.entity';
 import { User } from '../users/entities/user.entity';
+import { SystemSettingsModule } from '../system-settings/system-settings.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { ExternalQuotaService } from './external-quota.service';
 
 @Module({
-  imports: [AuthModule, ActivityModule, BillingModule, CrawlerModule, TypeOrmModule.forFeature([User, CreditAccount, CreditTransaction, ServiceProduct, ServiceUsage, CvResearchSession, UserCv])],
+  imports: [AuthModule, ActivityModule, BillingModule, CrawlerModule, SystemSettingsModule, TypeOrmModule.forFeature([User, CreditAccount, CreditTransaction, ServiceProduct, ServiceUsage, CvResearchSession, UserCv])],
   controllers: [AdminController], providers: [AdminService, ExternalQuotaService],
 })
 export class AdminModule {}
