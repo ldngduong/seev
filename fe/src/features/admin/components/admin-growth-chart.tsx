@@ -9,7 +9,7 @@ const config = {
 } satisfies ChartConfig
 
 export function AdminGrowthChart({ data }: { data: AdminDashboard['trend'] }) {
-  return <ChartContainer config={config} className="min-h-72 w-full aspect-auto">
+  return <ChartContainer config={config} className="h-72 w-full aspect-auto">
     <AreaChart accessibilityLayer data={data} margin={{ left: 4, right: 8, top: 12 }}>
       <defs><linearGradient id="admin-research" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="var(--color-researches)" stopOpacity={0.3} /><stop offset="95%" stopColor="var(--color-researches)" stopOpacity={0.02} /></linearGradient></defs>
       <CartesianGrid vertical={false} strokeDasharray="3 3" />

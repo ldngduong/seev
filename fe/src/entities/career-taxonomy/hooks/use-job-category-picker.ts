@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 
 import { getJobCategoryTree } from '@/entities/career-taxonomy/api/career-taxonomy-api'
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 
 export function useJobCategoryPicker(value: string | null | undefined, onChange: (ids: string[], label: string) => void) {
   const [open, setOpen] = useState(false)
@@ -15,7 +16,7 @@ export function useJobCategoryPicker(value: string | null | undefined, onChange:
   const selectedCategory = groups.flatMap((group) => group.categories).find((category) => category.id === selectedCategoryId)
   const selectedGroup = groups.find((group) => group.categories.some((category) => category.id === selectedCategoryId))
   const selectedLabel = selectedCategory && selectedGroup ? `${selectedGroup.name} › ${selectedCategory.name}` : ''
-  const normalizedQuery = query.trim().toLowerCase()
+  const normalizedQuery = useDebouncedValue(query.trim().toLowerCase(), 200)
   const visibleGroups = useMemo(() => groups.map((group) => ({
     ...group,
     categories: group.categories.filter((category) => [category.name, category.code, group.name].join(' ').toLowerCase().includes(normalizedQuery)),

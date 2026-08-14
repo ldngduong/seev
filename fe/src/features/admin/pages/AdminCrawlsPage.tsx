@@ -18,25 +18,24 @@ const statusLabels: Record<string, string> = {
 export function AdminCrawlsPage() {
   const state = useAdminCrawls()
   const active = state.runs.find((run) => ['queued', 'processing'].includes(run.status))
-  const manualRuns = state.runs.filter((run) => run.trigger_type === 'manual')
-  const automaticRuns = state.runs.filter((run) => run.trigger_type === 'scheduled')
-  const manualJobs = state.queue?.jobs.filter((job) => !job.scheduled) ?? []
-  const automaticJobs = state.queue?.jobs.filter((job) => job.scheduled) ?? []
+  const hasActiveQueueJob = state.queue?.jobs.some((job) => job.state === 'active') ?? false
+  const manualJobs = state.queue?.jobs.filter((job) => !job.scheduled && job.state !== 'active') ?? []
+  const automaticJobs = state.queue?.jobs.filter((job) => job.scheduled && job.state !== 'active') ?? []
 
   return <AdminPage title="Thu thập việc làm" description="Theo dõi tiến trình, lịch chạy và kết quả thu thập dữ liệu.">
-    <Tabs defaultValue="manual" className="gap-5">
-      <TabsList><TabsTrigger value="manual">Chạy thủ công</TabsTrigger><TabsTrigger value="automatic">Lịch tự động</TabsTrigger></TabsList>
+    <Tabs value={state.type} onValueChange={(value) => state.setType(value as 'manual' | 'scheduled')} className="gap-5">
+      <TabsList><TabsTrigger value="manual">Chạy thủ công</TabsTrigger><TabsTrigger value="scheduled">Lịch tự động</TabsTrigger></TabsList>
       <TabsContent value="manual" className="grid gap-5">
-        <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={state.refresh}><RefreshCw />Làm mới</Button><Button onClick={() => state.trigger(false)} disabled={state.isTriggering || Boolean(active)}><Play />Bắt đầu thu thập</Button>{active?.trigger_type === 'manual' ? <Button variant="destructive" disabled={state.isCancelling || active.cancel_requested} onClick={() => state.cancel(active.id)}>{active.cancel_requested || state.isCancelling ? 'Đang dừng...' : 'Dừng lượt chạy'}</Button> : null}</div>
+        <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={state.refresh}><RefreshCw />Làm mới</Button><Button onClick={() => state.trigger(false)} disabled={state.isTriggering || Boolean(active) || hasActiveQueueJob}><Play />Bắt đầu thu thập</Button>{active?.trigger_type === 'manual' ? <Button variant="destructive" disabled={state.isCancelling || active.cancel_requested} onClick={() => state.cancel(active.id)}>{active.cancel_requested || state.isCancelling ? 'Đang dừng...' : 'Dừng lượt chạy'}</Button> : null}</div>
         {active?.trigger_type === 'manual' ? <ActiveRun run={active} /> : <EmptyRun icon={Play} title="Không có lượt chạy thủ công" description="Bắt đầu một lượt mới để cập nhật kho việc làm." />}
         <QueueJobs title="Tác vụ đang chờ xử lý" jobs={manualJobs} onRemove={state.remove} />
-        <RunHistory runs={manualRuns} empty="Chưa có lịch sử chạy thủ công." />
+        <RunHistory runs={state.runs} empty="Chưa có lịch sử chạy thủ công." />
       </TabsContent>
-      <TabsContent value="automatic" className="grid gap-5">
-        {state.queue?.schedule.length ? <section className="grid gap-3 md:grid-cols-2">{state.queue.schedule.map((schedule) => <div key={schedule.key} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-card p-5"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><CalendarClock className="size-5" /></span><div><h2 className="font-semibold text-zinc-800">{describeCron(schedule.pattern)}</h2><p className="mt-1 text-sm text-muted-foreground">Lần chạy kế tiếp: {new Date(schedule.next).toLocaleString('vi-VN')}</p></div></div>)}</section> : <EmptyRun icon={CalendarClock} title="Chưa cấu hình lịch tự động" description="Thêm lịch chạy trong cấu hình backend để hệ thống tự cập nhật dữ liệu." />}
+      <TabsContent value="scheduled" className="grid gap-5">
+        {state.queue?.schedule.length ? <section className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,32rem),1fr))]">{state.queue.schedule.map((schedule) => <div key={schedule.key} className="flex w-full items-start gap-3 rounded-2xl border border-border/60 bg-card p-5"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><CalendarClock className="size-5" /></span><div><h2 className="font-semibold text-zinc-800">{describeCron(schedule.pattern)}</h2><p className="mt-1 text-sm text-muted-foreground">Lần chạy kế tiếp: {new Date(schedule.next).toLocaleString('vi-VN')}</p></div></div>)}</section> : <EmptyRun icon={CalendarClock} title="Chưa cấu hình lịch tự động" description="Thêm lịch chạy trong cấu hình backend để hệ thống tự cập nhật dữ liệu." />}
         {active?.trigger_type === 'scheduled' ? <ActiveRun run={active} /> : null}
         <QueueJobs title="Tác vụ tự động đang chờ" jobs={automaticJobs} onRemove={state.remove} />
-        <RunHistory runs={automaticRuns} empty="Chưa có lịch sử chạy tự động." />
+        <RunHistory runs={state.runs} empty="Chưa có lịch sử chạy tự động." />
       </TabsContent>
     </Tabs>
     {state.meta ? <DataPagination page={state.meta.page} totalPages={state.meta.total_pages} total={state.meta.total} onPageChange={state.setPage} /> : null}

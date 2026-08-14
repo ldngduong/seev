@@ -1,7 +1,8 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { useCallback, useDeferredValue, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import { getSeniorityLevels } from '@/entities/career-taxonomy/api/career-taxonomy-api'
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 
 import { getJobFeed } from '../api/job-research-api'
 import {
@@ -14,7 +15,7 @@ export function useJobFeed() {
   const [search, setSearchValue] = useState('')
   const [categoryId, setCategoryIdValue] = useState('all')
   const [seniorityLevelId, setSeniorityLevelIdValue] = useState('all')
-  const deferredSearch = useDeferredValue(search.trim())
+  const debouncedSearch = useDebouncedValue(search.trim())
 
   const seniorityQuery = useQuery({
     queryKey: ['seniority-levels', 'feed', categoryId],
@@ -28,13 +29,13 @@ export function useJobFeed() {
   const feedQuery = useQuery({
     queryKey: [
       'job-feed',
-      { page, deferredSearch, categoryId, seniorityLevelId },
+      { page, search: debouncedSearch, categoryId, seniorityLevelId },
     ],
     queryFn: () =>
       getJobFeed({
         page,
         pageSize: JOB_FEED_PAGE_SIZE,
-        search: deferredSearch || undefined,
+        search: debouncedSearch || undefined,
         categoryId: categoryId === 'all' ? undefined : categoryId,
         seniorityLevelId:
           seniorityLevelId === 'all' ? undefined : seniorityLevelId,

@@ -126,17 +126,32 @@ export class CategoryCrawlService implements OnModuleInit {
 
   async schedule() {
     const cron = this.config.get('CRAWL_CATEGORY_CRON', { infer: true });
+    const timezone = this.config.get('CRAWL_CATEGORY_TIMEZONE', { infer: true });
     const repeatable = await this.queue.getRepeatableJobs();
-    if (!repeatable.some((job) => job.name === CATEGORY_CRAWL_JOB)) {
+    const categorySchedules = repeatable.filter((job) => job.name === CATEGORY_CRAWL_JOB);
+    const currentCategorySchedule = categorySchedules.find(
+      (job) => job.pattern === cron && job.tz === timezone,
+    );
+    for (const stale of categorySchedules.filter((job) => job.key !== currentCategorySchedule?.key)) {
+      await this.queue.removeRepeatableByKey(stale.key);
+    }
+    if (!currentCategorySchedule) {
       await this.queue.add(CATEGORY_CRAWL_JOB, { scheduled: true }, {
-        jobId: 'category-crawl-schedule', repeat: { pattern: cron },
+        jobId: 'category-crawl-schedule', repeat: { pattern: cron, tz: timezone },
         removeOnComplete: { age: 60 * 60 * 24 * 7 }, removeOnFail: { age: 60 * 60 * 24 * 30 },
       });
-      this.logger.log(`Đã lên lịch category crawl theo cron '${cron}'`);
+      this.logger.log(`Đã lên lịch category crawl theo cron '${cron}' (${timezone})`);
     }
-    if (!repeatable.some((job) => job.name === EXPIRED_JOB_CLEANUP_JOB)) {
+    const cleanupSchedules = repeatable.filter((job) => job.name === EXPIRED_JOB_CLEANUP_JOB);
+    const currentCleanupSchedule = cleanupSchedules.find(
+      (job) => job.pattern === '15 * * * *' && job.tz === timezone,
+    );
+    for (const stale of cleanupSchedules.filter((job) => job.key !== currentCleanupSchedule?.key)) {
+      await this.queue.removeRepeatableByKey(stale.key);
+    }
+    if (!currentCleanupSchedule) {
       await this.queue.add(EXPIRED_JOB_CLEANUP_JOB, {}, {
-        jobId: 'expired-job-cleanup-schedule', repeat: { pattern: '15 * * * *' },
+        jobId: 'expired-job-cleanup-schedule', repeat: { pattern: '15 * * * *', tz: timezone },
         removeOnComplete: { age: 60 * 60 * 24 * 7 }, removeOnFail: { age: 60 * 60 * 24 * 30 },
       });
       this.logger.log('Đã lên lịch dọn việc làm hết hạn theo giờ.');
@@ -276,8 +291,8 @@ export class CategoryCrawlService implements OnModuleInit {
     await this.runs.update(runId, { bullJobId });
   }
 
-  async listRuns(page = 1, pageSize = 20) {
-    const [items, total] = await this.runs.findAndCount({ order: { createdAt: 'DESC' }, skip: (page - 1) * pageSize, take: pageSize });
+  async listRuns(page = 1, pageSize = 20, triggerType?: 'manual' | 'scheduled') {
+    const [items, total] = await this.runs.findAndCount({ where: triggerType ? { triggerType } : {}, order: { createdAt: 'DESC' }, skip: (page - 1) * pageSize, take: pageSize });
     return { items: items.map((item) => this.toRun(item)), meta: { page, page_size: pageSize, total, total_pages: Math.max(1, Math.ceil(total / pageSize)) } };
   }
 
@@ -294,20 +309,36 @@ export class CategoryCrawlService implements OnModuleInit {
       this.queue.getRepeatableJobs(),
       this.queue.getJobs(['waiting', 'active', 'delayed', 'failed'], 0, 49, true),
     ]);
+    const visibleSchedules = repeatable.filter(
+      (item) => item.name === CATEGORY_CRAWL_JOB && item.next != null,
+    );
+    const visibleJobs = jobs.filter(
+      (job) =>
+        job.name === CATEGORY_CRAWL_JOB &&
+        !(job.data.scheduled && !job.data.runId),
+    );
     return {
       counts,
-      schedule: repeatable.map((item) => ({ key: item.key, name: item.name, pattern: item.pattern, next: item.next })),
-      jobs: await Promise.all(jobs.map(async (job) => ({ id: String(job.id), name: job.name, state: await job.getState(), run_id: job.data.runId ?? null, scheduled: Boolean(job.data.scheduled), timestamp: job.timestamp, delay: job.delay, failed_reason: job.failedReason || null, attempts_made: job.attemptsMade }))),
+      schedule: visibleSchedules.map((item) => ({ key: item.key, name: item.name, pattern: item.pattern, next: item.next })),
+      jobs: await Promise.all(visibleJobs.map(async (job) => ({ id: String(job.id), name: job.name, state: await job.getState(), run_id: job.data.runId ?? null, scheduled: Boolean(job.data.scheduled), timestamp: job.timestamp, delay: job.delay, failed_reason: job.failedReason || null, attempts_made: job.attemptsMade }))),
     };
   }
 
   async removeQueueJob(jobId: string) {
     const job = await this.queue.getJob(jobId);
     if (!job) throw new BadRequestException('Queue job không tồn tại.');
+    if (job.name !== CATEGORY_CRAWL_JOB || (job.data.scheduled && !job.data.runId)) {
+      throw new BadRequestException('Đây là lịch hệ thống, không phải một lượt chạy có thể gỡ.');
+    }
     const state = await job.getState();
     if (!['waiting', 'delayed', 'failed'].includes(state)) throw new BadRequestException(`Không thể gỡ job đang ở trạng thái ${state}.`);
     const runId = job.data.runId;
-    await job.remove();
+    try {
+      await job.remove();
+    } catch (error) {
+      this.logger.warn(`Không thể gỡ queue job ${jobId}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new BadRequestException('Trạng thái tác vụ vừa thay đổi. Hãy làm mới danh sách rồi thử lại.');
+    }
     if (runId) {
       await this.runs.update(runId, { status: state === 'failed' ? 'failed' : 'cancelled', phase: state === 'failed' ? 'failed' : 'cancelled', progressMessage: 'Queue job đã được gỡ bởi quản trị viên.', completedAt: new Date() });
       await this.emit(runId);

@@ -20,14 +20,11 @@ export interface AdminUser { id: string; full_name: string; email: string; usern
 export interface AdminUserDetail {
   user: { id: string; fullName: string; email: string; username: string | null; role: 'user' | 'admin'; createdAt: string }
   account: { balance: string }
-  transactions: CreditTransaction[]
-  sessions: unknown[]
-  cvs: unknown[]
-  activities: ActivityLog[]
+  summary: { sessions: number; cvs: number }
 }
 export interface CreditTransaction { id: string; type: string; amount_delta: string; balance_before: string; balance_after: string; reason: string | null; metadata: Record<string, unknown>; created_at: string }
 export interface ActivityLog { id: string; action: string; resourceType: string | null; resourceId: string | null; status: 'success' | 'failed'; metadata: Record<string, unknown>; createdAt: string }
-export interface ServiceProduct { id: string; code: 'quick_research' | 'manual_research' | 'job_fit_analysis' | 'external_jd_research' | 'external_link_research'; name: string; description: string | null; price_credits: string; is_active: boolean; version: number; updated_at: string }
+export interface ServiceProduct { id: string; code: 'quick_research' | 'manual_research' | 'job_fit_analysis' | 'external_jd_research' | 'external_link_research' | 'job_suggestion_retry'; name: string; description: string | null; price_credits: string; is_active: boolean; version: number; updated_at: string }
 export interface ExternalQuota { provider: 'deepseek' | 'firecrawl'; status: 'available' | 'unconfigured' | 'unavailable'; data: Record<string, unknown> | null; error: string | null }
 export interface NewAccountCreditsSetting { enabled: boolean; credits: number; updated_at?: string }
 export interface CrawlRun { id: string; trigger_type: 'scheduled' | 'manual'; status: string; phase: string; progress: number; progress_message: string | null; total_targets: number; completed_targets: number; failed_targets: number; total_jobs: number; saved_jobs: number; current_source: string | null; current_category: string | null; cancel_requested: boolean; bull_job_id: string | null; report: Record<string, unknown> | null; error: string | null; created_at: string; started_at: string | null; completed_at: string | null; updated_at: string }

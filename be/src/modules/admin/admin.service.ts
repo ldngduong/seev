@@ -84,14 +84,21 @@ export class AdminService {
   async getUser(userId: string) {
     const user = await this.users.findOneBy({ id: userId });
     if (!user) throw new BadRequestException('Người dùng không tồn tại.');
-    const [account, transactions, sessions, cvs, activities] = await Promise.all([
-      this.billing.getAccount(userId), this.billing.listTransactions(userId, 100),
-      this.sessions.find({ where: { userId }, order: { createdAt: 'DESC' }, take: 100 }),
-      this.cvs.find({ where: { userId }, order: { createdAt: 'DESC' }, take: 100 }),
-      this.activity.listForUser(userId, 200),
+    const [account, sessionCount, cvCount] = await Promise.all([
+      this.billing.getAccount(userId),
+      this.sessions.countBy({ userId }),
+      this.cvs.countBy({ userId }),
     ]);
     const { password: _password, ...safeUser } = user;
-    return { user: safeUser, account, transactions, sessions, cvs, activities };
+    return { user: safeUser, account, summary: { sessions: sessionCount, cvs: cvCount } };
+  }
+
+  listUserTransactions(userId: string, page: number, pageSize: number) {
+    return this.billing.listTransactionsPage(userId, page, pageSize);
+  }
+
+  listUserActivities(userId: string, page: number, pageSize: number) {
+    return this.activity.listForUserPage(userId, page, pageSize);
   }
 
   async adjustCredits(userId: string, actorUserId: string, amount: number, reason: string, idempotencyKey: string) {

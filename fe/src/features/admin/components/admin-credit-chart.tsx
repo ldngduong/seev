@@ -6,7 +6,7 @@ import type { AdminDashboard } from '../types/admin.types'
 const config = { credits: { label: 'Credit tiêu thụ', color: 'var(--chart-3)' } } satisfies ChartConfig
 
 export function AdminCreditChart({ data }: { data: AdminDashboard['trend'] }) {
-  return <ChartContainer config={config} className="min-h-72 w-full aspect-auto">
+  return <ChartContainer config={config} className="h-72 w-full aspect-auto">
     <BarChart accessibilityLayer data={data} margin={{ left: 4, right: 4, top: 12 }}>
       <CartesianGrid vertical={false} strokeDasharray="3 3" />
       <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={10} minTickGap={34} tickFormatter={(value: string) => new Date(`${value}T00:00:00`).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} />

@@ -1,16 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import { getApiErrorMessage } from '@/shared/lib/api-error'
 import { adminSocket } from '../api/admin-socket'
 import { cancelCrawl, getCrawlQueue, getCrawlRuns, removeQueueJob, triggerCrawl } from '../api/admin-api'
 import type { CrawlProgressEvent, CrawlRun } from '../types/admin.types'
 
 export function useAdminCrawls() {
   const client = useQueryClient(); const [page, setPage] = useState(1)
-  const runs = useQuery({ queryKey: ['admin', 'crawls', page], queryFn: () => getCrawlRuns(page), refetchInterval: 15_000 })
+  const [type, setTypeState] = useState<'manual' | 'scheduled'>('manual')
+  const runs = useQuery({ queryKey: ['admin', 'crawls', type, page], queryFn: () => getCrawlRuns(page, type), refetchInterval: 15_000 })
   const queue = useQuery({ queryKey: ['admin', 'crawl-queue'], queryFn: getCrawlQueue, refetchInterval: 10_000 })
   const trigger = useMutation({ mutationFn: triggerCrawl, onSuccess: refresh })
   const cancel = useMutation({ mutationFn: cancelCrawl, onSuccess: refresh })
-  const remove = useMutation({ mutationFn: removeQueueJob, onSuccess: refresh })
+  const remove = useMutation({
+    mutationFn: removeQueueJob,
+    onSuccess: () => { toast.success('Đã gỡ tác vụ khỏi hàng đợi.'); refresh() },
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Không thể gỡ tác vụ khỏi hàng đợi.')),
+  })
   function refresh() { void client.invalidateQueries({ queryKey: ['admin', 'crawls'] }); void client.invalidateQueries({ queryKey: ['admin', 'crawl-queue'] }) }
   useEffect(() => {
     const onProgress = (event: CrawlProgressEvent) => {
@@ -41,5 +48,6 @@ export function useAdminCrawls() {
     adminSocket.on('crawl:progress', onProgress); adminSocket.connect()
     return () => { adminSocket.off('crawl:progress', onProgress); adminSocket.disconnect() }
   }, [client])
-  return { runs: runs.data?.items ?? [], meta: runs.data?.meta, queue: queue.data, page, setPage, trigger: trigger.mutate, isTriggering: trigger.isPending, cancel: cancel.mutate, isCancelling: cancel.isPending, remove: remove.mutate, refresh }
+  function setType(next: 'manual' | 'scheduled') { setTypeState(next); setPage(1) }
+  return { runs: runs.data?.items ?? [], meta: runs.data?.meta, queue: queue.data, page, setPage, type, setType, trigger: trigger.mutate, isTriggering: trigger.isPending, cancel: cancel.mutate, isCancelling: cancel.isPending, remove: remove.mutate, refresh }
 }

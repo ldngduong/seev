@@ -8,10 +8,14 @@ import type { CvResearchSession } from '@/entities/cv/types/cv.types'
 import { useResearchProgress } from '@/features/cv-research/hooks/use-research-progress'
 import { useAuditStore } from '@/features/cv-research/store/audit-store'
 import type { ResearchProgressEvent } from '@/features/cv-research/types/research-progress.types'
+import { useBilling } from '@/features/billing/hooks/use-billing'
+import { getApiErrorMessage } from '@/shared/lib/api-error'
+import { toast } from 'sonner'
 
 export function useResearchSessionDetail() {
   const { sessionId } = useParams()
   const queryClient = useQueryClient()
+  const billing = useBilling()
   const selectedFeedbackId = useAuditStore((state) => state.selectedFeedbackId)
   const setSelectedFeedbackId = useAuditStore((state) => state.setSelectedFeedbackId)
   const sessionQuery = useQuery({
@@ -25,9 +29,19 @@ export function useResearchSessionDetail() {
   const updateSession = (nextSession: CvResearchSession) => {
     queryClient.setQueryData(['cv-research-session', nextSession.id], nextSession)
     void queryClient.invalidateQueries({ queryKey: ['cv-research-sessions'] })
+    void queryClient.invalidateQueries({ queryKey: ['billing', 'account'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard', 'me'] })
   }
-  const retryJobsMutation = useMutation({ mutationFn: retryCvResearchSessionJobs, onSuccess: updateSession })
-  const retryResearchMutation = useMutation({ mutationFn: retryCvResearchSession, onSuccess: updateSession })
+  const retryJobsMutation = useMutation({
+    mutationFn: retryCvResearchSessionJobs,
+    onSuccess: updateSession,
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Không thể thử lại gợi ý việc làm.')),
+  })
+  const retryResearchMutation = useMutation({
+    mutationFn: retryCvResearchSession,
+    onSuccess: updateSession,
+    onError: (error) => toast.error(getApiErrorMessage(error, 'Không thể thử lại research.')),
+  })
   const handleProgress = useCallback((event: ResearchProgressEvent) => {
     if (event.session_id !== sessionId) return
     queryClient.setQueryData<CvResearchSession>(['cv-research-session', sessionId], (current) => current ? {
@@ -59,6 +73,7 @@ export function useResearchSessionDetail() {
     isLoading: sessionQuery.isLoading,
     researchIsActive: Boolean(session && ['queued', 'processing'].includes(session.status)),
     canRetryJobs: Boolean(audit && session?.job_search_intent_id),
+    retryJobsPrice: billing.products.find((product) => product.code === 'job_suggestion_retry')?.price_credits ?? null,
     retryJobs: () => session && retryJobsMutation.mutate(session.id),
     retryResearch: () => session && retryResearchMutation.mutate(session.id),
     isRetryingJobs: retryJobsMutation.isPending,

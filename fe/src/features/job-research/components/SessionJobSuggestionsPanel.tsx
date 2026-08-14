@@ -11,12 +11,14 @@ export function SessionJobSuggestionsPanel({
   status,
   onRetry,
   isRetrying = false,
+  retryPrice,
   intentId,
 }: {
   jobs: CvResearchJobSuggestion[]
   status?: 'queued' | 'processing' | 'completed' | 'failed'
   onRetry?: () => void
   isRetrying?: boolean
+  retryPrice?: string | null
   intentId: string | null
 }) {
   const { matches, directMatches, suggestions } = useSessionJobSuggestions(intentId, jobs)
@@ -48,7 +50,7 @@ export function SessionJobSuggestionsPanel({
               disabled={isRetrying}
               onClick={onRetry}
             >
-              {isRetrying ? 'Đang thử lại...' : 'Thử lại gợi ý việc làm'}
+              {isRetrying ? 'Đang thử lại...' : retryPrice ? `Thử lại · ${retryPrice} credits` : 'Thử lại gợi ý việc làm'}
             </Button>
           ) : null}
         </div>

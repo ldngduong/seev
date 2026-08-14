@@ -26,6 +26,7 @@ import {
 } from './schemas/job-match.schema';
 import { buildAuditUnits } from './utils/audit-unit-builder';
 import { jobFitResultSchema, type JobFitResult } from './schemas/job-fit.schema';
+import { isNeutralCvLinkOrContactLine } from '../cv/utils/cv-line-classifier';
 
 interface AnalyzeCvInput {
   target: {
@@ -67,6 +68,12 @@ interface AuditPlanEvent {
 }
 
 const LINE_AUDIT_CONTEXT_OVERLAP = 3;
+const CV_AUDIT_LINK_AND_DISPLAY_RULES = [
+  '- Source-line identifiers such as hl_023 are internal machine references. Never mention, quote, explain, or expose any hl_* identifier in section, issue, suggestion, summary, rationale, comment, recommendation, keyword, role, job title, or job reason.',
+  '- GitHub, GitLab, LinkedIn, portfolio, personal website, live demo, email, phone, and other contact/link lines are neutral metadata and valid evidence links. Do not create line-level feedback asking the candidate to rewrite, remove, relabel, or reposition them.',
+  '- A personal website, portfolio, or live demo is not a role claim and must not be judged as conflicting with the selected career target.',
+  '- PDF extraction can place independent links near one another or expose them in surrounding context. Never claim that one URL is duplicated, appended to another URL, or placed under the wrong label based on surrounding lines. Context lines are separate evidence units, not continuations of the candidate line.',
+];
 
 @Injectable()
 export class AiEngineService {

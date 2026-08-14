@@ -11,6 +11,7 @@ import {
   reconstructPdfTextLines,
   type PdfLayoutTextItem,
 } from './utils/pdf-text-layout';
+import { isNeutralCvLinkOrContactLine } from './utils/cv-line-classifier';
 
 const MAX_AI_TEXT_LENGTH = 18_000;
 export const CURRENT_PDF_PARSER_VERSION = 2;
@@ -71,7 +72,7 @@ export class PdfParserService {
     const highlights: CandidateHighlight[] = [];
 
     for (const line of this.toLogicalLines(lines)) {
-      if (line.text.length < 12) {
+      if (line.text.length < 12 || isNeutralCvLinkOrContactLine(line.text)) {
         continue;
       }
 

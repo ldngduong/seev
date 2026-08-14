@@ -129,7 +129,8 @@ export class CrawlerApiConnector implements JobSourceConnector {
     };
 
     let lastError: unknown;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    const maxAttempts = 3;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
         const payload = await this.http.fetchJson<unknown>(
           `${baseUrl}/api/v1/sources/${this.source}/search`,
@@ -148,7 +149,7 @@ export class CrawlerApiConnector implements JobSourceConnector {
         lastError = error;
         const message = error instanceof Error ? error.message : String(error);
         if (
-          attempt === 1 ||
+          attempt === maxAttempts - 1 ||
           !/fetch failed|timeout|network|econnreset|etimedout|429|5\d\d/i.test(
             message,
           )
@@ -158,7 +159,7 @@ export class CrawlerApiConnector implements JobSourceConnector {
         this.logger.warn(
           `[crawler-api:${this.source}] fixed category tạm lỗi, thử lại: ${message}`,
         );
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        await new Promise((resolve) => setTimeout(resolve, 1_500 * (attempt + 1)));
       }
     }
 

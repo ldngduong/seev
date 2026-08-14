@@ -496,6 +496,12 @@ export class CvService {
         'UPDATE job_search_intents SET research_session_attempt = $1 WHERE id = $2',
         [attempt, current.jobSearchIntentId],
       );
+      await this.billingService.reserveResearch(manager, {
+        userId,
+        serviceCode: 'job_suggestion_retry',
+        sessionId: current.id,
+        attempt,
+      });
       return attempt;
     });
 

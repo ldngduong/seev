@@ -39,6 +39,30 @@ export class BillingService {
     }));
   }
 
+  async listTransactionsPage(userId: string, page = 1, pageSize = 10) {
+    const safePage = Math.max(page, 1);
+    const safePageSize = Math.min(Math.max(pageSize, 1), 100);
+    const [items, total] = await this.transactions.findAndCount({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+      skip: (safePage - 1) * safePageSize,
+      take: safePageSize,
+    });
+    return {
+      items: items.map((item) => ({
+        id: item.id, type: item.type, amount_delta: item.amountDelta,
+        balance_before: item.balanceBefore, balance_after: item.balanceAfter,
+        service_product_id: item.serviceProductId, subject_type: item.subjectType,
+        subject_id: item.subjectId, actor_user_id: item.actorUserId,
+        reason: item.reason, metadata: item.metadata, created_at: item.createdAt,
+      })),
+      meta: {
+        page: safePage, page_size: safePageSize, total,
+        total_pages: Math.max(1, Math.ceil(total / safePageSize)),
+      },
+    };
+  }
+
   async reserveService(manager: EntityManager, input: { userId: string; serviceCode: ServiceCode; subjectType: 'cv_research' | 'job_fit' | 'external_job_research'; subjectId: string; attempt: number }) {
     const usageRepository = manager.getRepository(ServiceUsage);
     const existing = await usageRepository.findOneBy({ subjectType: input.subjectType, subjectId: input.subjectId, attempt: input.attempt });

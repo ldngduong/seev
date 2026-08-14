@@ -40,7 +40,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   login: async (payload) => {
-    set({ status: 'loading', error: null })
+    // Do not switch the global route state to `loading` here. GuestGuard uses
+    // that state for initial session hydration and would otherwise unmount the
+    // login form while a credential request is in flight, wiping its values on
+    // a 401 response. react-hook-form owns the local submitting state.
+    set({ error: null })
 
     try {
       const user = await authApi.login(payload)
@@ -54,7 +58,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   register: async (payload) => {
-    set({ status: 'loading', error: null })
+    set({ error: null })
 
     try {
       const user = await authApi.register(payload)

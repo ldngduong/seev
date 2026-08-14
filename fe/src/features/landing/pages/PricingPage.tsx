@@ -15,6 +15,7 @@ const productBenefits: Record<BillingProduct['code'], string[]> = {
   job_fit_analysis: ['So sánh một CV với một việc làm', 'Chỉ rõ điểm phù hợp và còn thiếu', 'Gợi ý việc cần làm trước khi ứng tuyển'],
   external_jd_research: ['Dán nội dung hoặc tải tệp JD', 'Hỗ trợ PDF, Word và TXT', 'Đối chiếu yêu cầu với bằng chứng trong CV'],
   external_link_research: ['Đọc trang việc làm hoặc bài tuyển dụng', 'Lọc nội dung trước khi đánh giá', 'Đối chiếu yêu cầu với bằng chứng trong CV'],
+  job_suggestion_retry: ['Giữ nguyên kết quả đánh giá CV', 'Tìm lại việc làm từ dữ liệu mới nhất', 'Cập nhật danh sách việc làm phù hợp'],
 }
 
 export function PricingPage() {

@@ -12,7 +12,6 @@ export function useLoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const login = useAuthStore((state) => state.login)
-  const status = useAuthStore((state) => state.status)
   const clearError = useAuthStore((state) => state.clearError)
   const redirect = searchParams.get('redirect') || '/dashboard'
   const googleError =
@@ -41,6 +40,6 @@ export function useLoginPage() {
     form,
     onSubmit,
     redirect,
-    isSubmitting: status === 'loading' || form.formState.isSubmitting,
+    isSubmitting: form.formState.isSubmitting,
   }
 }

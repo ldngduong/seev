@@ -1,7 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useDeferredValue, useState } from 'react'
+import { useState } from 'react'
 
 import { listUserCvs, uploadUserCv } from '@/entities/cv/api/cv-api'
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { toast } from 'sonner'
 
 const PAGE_SIZE = 12
@@ -11,13 +12,13 @@ export function useCvLibrary() {
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [search, setSearchValue] = useState('')
-  const deferredSearch = useDeferredValue(search.trim())
+  const debouncedSearch = useDebouncedValue(search.trim())
   const cvsQuery = useQuery({
-    queryKey: ['user-cvs', { page, search: deferredSearch }],
+    queryKey: ['user-cvs', { page, search: debouncedSearch }],
     queryFn: () => listUserCvs({
       page,
       pageSize: PAGE_SIZE,
-      search: deferredSearch || undefined,
+      search: debouncedSearch || undefined,
     }),
     placeholderData: keepPreviousData,
   })

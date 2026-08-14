@@ -13,7 +13,7 @@ export function UserResearchChart({ data }: { data: UserDashboard['trend'] }) {
 
   if (!visibleData.length) return <div className="grid min-h-64 place-items-center text-sm text-muted-foreground">Chưa có kết quả research trong 30 ngày.</div>
 
-  return <ChartContainer config={config} className="min-h-64 w-full aspect-auto">
+  return <ChartContainer config={config} className="h-64 w-full aspect-auto">
     <BarChart accessibilityLayer data={visibleData} margin={{ left: 0, right: 8, top: 20 }}>
       <CartesianGrid vertical={false} strokeDasharray="3 3" />
       <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={10} minTickGap={28} tickFormatter={(value: string) => new Date(`${value}T00:00:00`).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} />

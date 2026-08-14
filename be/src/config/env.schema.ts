@@ -95,7 +95,7 @@ const envSchema = z.object({
     .positive()
     .default(2800),
   CV_AUDIT_COVERAGE_MAX_LINES: z.coerce.number().int().positive().default(20),
-  CV_AUDIT_CONCURRENCY: z.coerce.number().int().positive().default(6),
+  CV_AUDIT_CONCURRENCY: z.coerce.number().int().positive().default(3),
   JOB_RESEARCH_DEFAULT_SOURCES: z
     .string()
     .min(1)
@@ -123,6 +123,11 @@ const envSchema = z.object({
     .string()
     .default('0 2 * * *')
     .describe('Cron schedule for the periodic category crawl.'),
+  CRAWL_CATEGORY_TIMEZONE: z
+    .string()
+    .min(1)
+    .default('Asia/Ho_Chi_Minh')
+    .describe('IANA timezone used to evaluate the category crawl cron.'),
   CRAWL_CATEGORY_SOURCES: z
     .string()
     .default('topcv,vietnamworks,itviec')

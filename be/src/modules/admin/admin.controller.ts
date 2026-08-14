@@ -15,6 +15,8 @@ export class AdminController {
   constructor(private readonly admin: AdminService, private readonly crawls: CategoryCrawlService, private readonly quotas: ExternalQuotaService) {}
   @Get('dashboard') dashboard() { return this.admin.dashboard(); }
   @Get('users') users(@Query('page') page?: string, @Query('pageSize') pageSize?: string, @Query('search') search?: string) { return this.admin.listUsers(Number(page) || 1, Math.min(Number(pageSize) || 20, 100), search); }
+  @Get('users/:id/credit-history') userCredits(@Param('id') id: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) { return this.admin.listUserTransactions(id, Number(page) || 1, Math.min(Number(pageSize) || 10, 100)); }
+  @Get('users/:id/activities') userActivities(@Param('id') id: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) { return this.admin.listUserActivities(id, Number(page) || 1, Math.min(Number(pageSize) || 10, 100)); }
   @Get('users/:id') user(@Param('id') id: string) { return this.admin.getUser(id); }
   @Post('users/:id/credits') adjust(@Param('id') id: string, @Body() dto: AdjustCreditsDto, @Req() request: AuthenticatedRequest) { return this.admin.adjustCredits(id, request.user.id, dto.amount, dto.reason, dto.idempotencyKey); }
   @Get('services') services() { return this.admin.catalog(); }
@@ -22,7 +24,7 @@ export class AdminController {
   @Get('settings/new-account-credits') newAccountCredits() { return this.admin.getNewAccountCredits(); }
   @Patch('settings/new-account-credits') updateNewAccountCredits(@Body() dto: UpdateNewAccountCreditsDto, @Req() request: AuthenticatedRequest) { return this.admin.updateNewAccountCredits(dto, request.user.id); }
   @Get('external-quotas') quotasStatus() { return this.quotas.getAll(); }
-  @Get('crawls') crawlRuns(@Query('page') page?: string, @Query('pageSize') pageSize?: string) { return this.crawls.listRuns(Number(page) || 1, Math.min(Number(pageSize) || 20, 100)); }
+  @Get('crawls') crawlRuns(@Query('page') page?: string, @Query('pageSize') pageSize?: string, @Query('triggerType') triggerType?: 'manual' | 'scheduled') { return this.crawls.listRuns(Number(page) || 1, Math.min(Number(pageSize) || 20, 100), triggerType); }
   @Get('crawls/queue') crawlQueue() { return this.crawls.getQueueOverview(); }
   @Get('crawls/:id') crawl(@Param('id') id: string) { return this.crawls.getRun(id); }
   @Post('crawls/run') run(@Body() dto: RunCategoryCrawlDto, @Req() request: AuthenticatedRequest) { return this.crawls.trigger(dto.forceRetry, request.user.id); }

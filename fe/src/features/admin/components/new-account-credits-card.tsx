@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { Button } from '@/shared/components/ui/button'
 import { Input } from '@/shared/components/ui/input'
+import { Switch } from '@/shared/components/ui/switch'
 import { cn } from '@/shared/lib/utils'
 import type { NewAccountCreditsSetting } from '../types/admin.types'
 
@@ -43,24 +44,12 @@ export function NewAccountCreditsCard({
             Áp dụng cho tài khoản được tạo sau khi lưu.
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled}
+        <Switch
+          checked={enabled}
           aria-label="Bật credit cho tài khoản mới"
-          onClick={() => setEnabled((current) => !current)}
-          className={cn(
-            'relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30',
-            enabled ? 'bg-primary' : 'bg-zinc-200',
-          )}
-        >
-          <span
-            className={cn(
-              'absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform',
-              enabled ? 'translate-x-5' : 'translate-x-0.5',
-            )}
-          />
-        </button>
+          onCheckedChange={setEnabled}
+          className="mt-0.5"
+        />
       </div>
 
       <div className="mt-6">

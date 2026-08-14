@@ -15,7 +15,6 @@ export function useRegisterPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const register = useAuthStore((state) => state.register)
-  const status = useAuthStore((state) => state.status)
   const clearError = useAuthStore((state) => state.clearError)
   const redirect = searchParams.get('redirect') || '/dashboard'
   const form = useForm<RegisterFormValues>({
@@ -49,6 +48,6 @@ export function useRegisterPage() {
     form,
     onSubmit,
     redirect,
-    isSubmitting: status === 'loading' || form.formState.isSubmitting,
+    isSubmitting: form.formState.isSubmitting,
   }
 }

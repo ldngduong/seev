@@ -34,6 +34,13 @@ export const serviceProducts = [
     description: 'Đọc nội dung tuyển dụng từ liên kết rồi đối chiếu với CV.',
     priceCredits: 8,
   },
+  {
+    id: '20000000-0000-4000-8000-000000000006',
+    code: 'job_suggestion_retry',
+    name: 'Thử lại gợi ý việc làm',
+    description: 'Chạy lại bước tìm và đối chiếu việc làm cho một research đã có kết quả đánh giá CV.',
+    priceCredits: 2,
+  },
 ] as const;
 
 type Query = (sql: string, parameters?: unknown[]) => Promise<unknown>;

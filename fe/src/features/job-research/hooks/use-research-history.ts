@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useDeferredValue, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import {
   listCvResearchSessions,
@@ -17,6 +17,7 @@ import { researchSocket } from '@/features/cv-research/api/research-socket'
 import { useEffect } from 'react'
 import { listExternalJobResearches, retryExternalJobResearch } from '@/features/external-job-research/api/external-job-research-api'
 import type { ExternalJobResearch } from '@/features/external-job-research/types/external-job-research.types'
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 
 const PAGE_SIZE = 10
 
@@ -27,17 +28,17 @@ export function useResearchHistory() {
   const [status, setStatusValue] = useState('all')
   const [type, setTypeValue] = useState<'quick' | 'custom' | 'job_fit' | 'external'>('quick')
   const [cvId, setCvIdValue] = useState('all')
-  const deferredSearch = useDeferredValue(search.trim())
+  const debouncedSearch = useDebouncedValue(search.trim())
   const cvsQuery = useQuery({
     queryKey: ['user-cvs', { page: 1, purpose: 'research-history-filter' }],
     queryFn: () => listUserCvs({ page: 1, pageSize: MAX_CV_PAGE_SIZE }),
   })
   const sessionsQuery = useQuery({
-    queryKey: ['cv-research-sessions', { page, search: deferredSearch, status, type, cvId }],
+    queryKey: ['cv-research-sessions', { page, search: debouncedSearch, status, type, cvId }],
     queryFn: () => listCvResearchSessions({
       page,
       pageSize: PAGE_SIZE,
-      search: deferredSearch || undefined,
+      search: debouncedSearch || undefined,
       status: status === 'all' ? undefined : status,
       type: type as 'quick' | 'custom',
       userCvId: cvId === 'all' ? undefined : cvId,
@@ -46,14 +47,14 @@ export function useResearchHistory() {
     enabled: type === 'quick' || type === 'custom',
   })
   const jobFitsQuery = useQuery({
-    queryKey: ['job-fits', { page, search: deferredSearch, status, cvId }],
-    queryFn: () => listJobFits({ page, pageSize: PAGE_SIZE, search: deferredSearch || undefined, status: status === 'all' ? undefined : status, userCvId: cvId === 'all' ? undefined : cvId }),
+    queryKey: ['job-fits', { page, search: debouncedSearch, status, cvId }],
+    queryFn: () => listJobFits({ page, pageSize: PAGE_SIZE, search: debouncedSearch || undefined, status: status === 'all' ? undefined : status, userCvId: cvId === 'all' ? undefined : cvId }),
     placeholderData: keepPreviousData,
     enabled: type === 'job_fit',
   })
   const externalQuery = useQuery({
-    queryKey: ['external-job-researches', { page, search: deferredSearch, status, cvId }],
-    queryFn: () => listExternalJobResearches({ page, pageSize: PAGE_SIZE, search: deferredSearch || undefined, status: status === 'all' ? undefined : status, userCvId: cvId === 'all' ? undefined : cvId }),
+    queryKey: ['external-job-researches', { page, search: debouncedSearch, status, cvId }],
+    queryFn: () => listExternalJobResearches({ page, pageSize: PAGE_SIZE, search: debouncedSearch || undefined, status: status === 'all' ? undefined : status, userCvId: cvId === 'all' ? undefined : cvId }),
     placeholderData: keepPreviousData,
     enabled: type === 'external',
   })

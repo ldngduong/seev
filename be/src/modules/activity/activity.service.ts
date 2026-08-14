@@ -18,6 +18,23 @@ export class ActivityService {
   listForUser(userId: string, limit = 100) {
     return this.logs.find({ where: { subjectUserId: userId }, order: { createdAt: 'DESC' }, take: Math.min(Math.max(limit, 1), 200) });
   }
+  async listForUserPage(userId: string, page = 1, pageSize = 10) {
+    const safePage = Math.max(page, 1);
+    const safePageSize = Math.min(Math.max(pageSize, 1), 100);
+    const [items, total] = await this.logs.findAndCount({
+      where: { subjectUserId: userId },
+      order: { createdAt: 'DESC' },
+      skip: (safePage - 1) * safePageSize,
+      take: safePageSize,
+    });
+    return {
+      items,
+      meta: {
+        page: safePage, page_size: safePageSize, total,
+        total_pages: Math.max(1, Math.ceil(total / safePageSize)),
+      },
+    };
+  }
   listAll(limit = 100) {
     return this.logs.find({ order: { createdAt: 'DESC' }, take: Math.min(Math.max(limit, 1), 200) });
   }

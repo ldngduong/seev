@@ -12,6 +12,9 @@ import { useResearchSessionDetail } from '@/features/cv-research/hooks/use-resea
 export function ResearchSessionDetailPage() {
   const detail = useResearchSessionDetail()
   const { session, audit, activeFeedback, researchIsActive, canRetryJobs } = detail
+  const retryJobsLabel = detail.retryJobsPrice
+    ? `Thử lại gợi ý · ${detail.retryJobsPrice} credits`
+    : 'Thử lại gợi ý việc làm'
 
   if (detail.isLoading) {
     return <ResearchProcessingScreen progress={0} message="Đang tải research..." />
@@ -47,7 +50,7 @@ export function ResearchSessionDetailPage() {
               disabled={!canRetryJobs || detail.isRetryingJobs || researchIsActive}
               onClick={detail.retryJobs}
             >
-              {detail.isRetryingJobs ? 'Đang thử lại...' : 'Thử lại gợi ý việc làm'}
+              {detail.isRetryingJobs ? 'Đang thử lại...' : retryJobsLabel}
             </Button>
             <ResearchHistoryLink />
           </>
@@ -76,7 +79,7 @@ export function ResearchSessionDetailPage() {
           >
             {detail.isRetryingResearch || detail.isRetryingJobs
               ? 'Đang thử lại...'
-              : canRetryJobs ? 'Thử lại gợi ý việc làm' : 'Thử lại research'}
+              : canRetryJobs ? retryJobsLabel : 'Thử lại research'}
           </Button>
         </section>
       ) : null}
@@ -109,6 +112,7 @@ export function ResearchSessionDetailPage() {
         intentId={session.job_search_intent_id}
         onRetry={session.job_search_intent_id ? detail.retryJobs : undefined}
         isRetrying={detail.isRetryingJobs}
+        retryPrice={detail.retryJobsPrice}
       />
     </main>
   )

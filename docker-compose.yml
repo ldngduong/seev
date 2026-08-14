@@ -4,6 +4,8 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 256m
     env_file:
       - ./be/.env
     entrypoint: ["/bin/sh", "/usr/local/bin/seev-postgres-entrypoint"]
@@ -21,6 +23,8 @@ services:
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped
+    mem_limit: 256m
+    mem_reservation: 128m
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     volumes:
       - redis_data:/data
@@ -38,6 +42,8 @@ services:
       context: ./crawl
       dockerfile: Dockerfile
     restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 192m
     env_file:
       - ./crawl/.env
     healthcheck:
@@ -72,6 +78,8 @@ services:
       dockerfile: Dockerfile
       target: runtime
     restart: unless-stopped
+    mem_limit: 900m
+    mem_reservation: 384m
     env_file:
       - ./be/.env
     depends_on:
@@ -92,6 +100,7 @@ services:
   backend:
     image: caddy:2.10-alpine
     restart: unless-stopped
+    mem_limit: 64m
     env_file:
       - ./be/.env
     volumes:
@@ -114,6 +123,7 @@ services:
       context: ./fe
       dockerfile: Dockerfile
     restart: unless-stopped
+    mem_limit: 64m
     env_file:
       - ./fe/.env
     ports:

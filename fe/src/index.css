@@ -150,7 +150,7 @@
   #root {
     @apply min-w-0;
   }
-  img, video, canvas, svg {
+  img, video, canvas {
     max-width: 100%;
   }
   @media (max-width: 47.999rem) {
