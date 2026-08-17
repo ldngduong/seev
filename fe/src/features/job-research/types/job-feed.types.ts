@@ -12,6 +12,8 @@ export interface JobFeedQuery {
   page?: number
   pageSize?: number
   search?: string
+  location?: string
   categoryId?: string
+  groupCode?: string
   seniorityLevelId?: string
 }

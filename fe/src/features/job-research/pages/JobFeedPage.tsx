@@ -1,7 +1,8 @@
-import { BriefcaseBusiness, Search } from 'lucide-react'
+import { BriefcaseBusiness, RotateCcw, Search } from 'lucide-react'
 
 import { DataPagination } from '@/shared/components/data/DataPagination'
 import { DashboardPageHeader } from '@/shared/components/layouts/DashboardPageHeader'
+import { Button } from '@/shared/components/ui/button'
 import { Combobox } from '@/shared/components/ui/combobox'
 import { Input } from '@/shared/components/ui/input'
 import { JobCategoryPicker } from '@/entities/career-taxonomy/components/job-category-picker'
@@ -9,6 +10,7 @@ import { JobCategoryPicker } from '@/entities/career-taxonomy/components/job-cat
 import { JobFeedCard } from '../components/job-feed-card'
 import { JobFeedSkeleton } from '../components/job-feed-skeleton'
 import { useJobFeed } from '../hooks/use-job-feed'
+import { JOB_LOCATION_OPTIONS } from '../utils/job-feed.utils'
 
 export function JobFeedPage({ publicMode = false }: { publicMode?: boolean }) {
   const { filters, actions, jobs, meta, isLoading, isError } = useJobFeed()
@@ -31,9 +33,19 @@ export function JobFeedPage({ publicMode = false }: { publicMode?: boolean }) {
           value={filters.categoryId === 'all' ? null : filters.categoryId}
           showLabel={false}
           allowClear
+          allowGroup
           placeholder="Tất cả chuyên môn"
           onChange={(ids) => actions.setCategoryId(ids[0] ?? 'all')}
           className="lg:w-80"
+        />
+        <Combobox
+          value={filters.location}
+          onChange={(value) => actions.setLocation(String(value))}
+          options={JOB_LOCATION_OPTIONS}
+          placeholder="Chọn địa điểm"
+          searchPlaceholder="Tìm địa điểm..."
+          emptyMessage="Không tìm thấy địa điểm"
+          className="lg:w-52"
         />
         <Combobox
           value={filters.seniorityLevelId}
@@ -44,6 +56,16 @@ export function JobFeedPage({ publicMode = false }: { publicMode?: boolean }) {
           emptyMessage="Không tìm thấy cấp bậc"
           className="lg:w-60"
         />
+        {filters.hasActiveFilters ? (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={actions.reset}
+            className="shrink-0 gap-1.5 text-muted-foreground"
+          >
+            <RotateCcw />
+          </Button>
+        ) : null}
       </section>
 
       {isLoading ? <JobFeedSkeleton /> : null}

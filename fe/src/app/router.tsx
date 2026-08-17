@@ -24,6 +24,7 @@ import { JobFitResultPage } from '@/features/job-fit/pages/JobFitResultPage'
 import { PricingPage } from '@/features/landing/pages/PricingPage'
 import { PublicJobsPage } from '@/features/landing/pages/PublicJobsPage'
 import { ExternalJobResearchResultPage } from '@/features/external-job-research/pages/ExternalJobResearchResultPage'
+import { SavedJobsPage } from '@/features/saved-jobs/pages/SavedJobsPage'
 
 export const router = createBrowserRouter([
   {
@@ -83,6 +84,10 @@ export const router = createBrowserRouter([
           {
             path: '/jobs',
             element: <JobFeedPage />,
+          },
+          {
+            path: '/saved-jobs',
+            element: <SavedJobsPage />,
           },
           {
             path: '/jobs/:jobId/fit/:analysisId',

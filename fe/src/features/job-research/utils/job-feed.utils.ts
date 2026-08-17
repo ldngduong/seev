@@ -2,6 +2,23 @@ import type { SeniorityLevel } from '@/entities/career-taxonomy/types/career-tax
 
 export const JOB_FEED_PAGE_SIZE = 18
 
+export const JOB_LOCATION_OPTIONS = [
+  { value: 'all', label: 'Tất cả địa điểm' },
+  { value: 'Hà Nội', label: 'Hà Nội' },
+  { value: 'Hồ Chí Minh', label: 'TP. Hồ Chí Minh' },
+  { value: 'Đà Nẵng', label: 'Đà Nẵng' },
+  { value: 'Hải Phòng', label: 'Hải Phòng' },
+  { value: 'Cần Thơ', label: 'Cần Thơ' },
+  { value: 'Bình Dương', label: 'Bình Dương' },
+  { value: 'Đồng Nai', label: 'Đồng Nai' },
+  { value: 'Bắc Ninh', label: 'Bắc Ninh' },
+  { value: 'Hưng Yên', label: 'Hưng Yên' },
+  { value: 'Hải Dương', label: 'Hải Dương' },
+  { value: 'Tây Ninh', label: 'Tây Ninh' },
+  { value: 'Khánh Hòa', label: 'Khánh Hòa' },
+  { value: 'Remote', label: 'Remote / Làm từ xa' },
+]
+
 export function createSeniorityOptions(levels: SeniorityLevel[]) {
   return [
     { value: 'all', label: 'Tất cả cấp bậc' },

@@ -1,9 +1,9 @@
-import { FileText, RefreshCw, Search } from 'lucide-react'
+import { FileText, Search } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { DataPagination } from '@/shared/components/data/DataPagination'
 import { DashboardPageHeader } from '@/shared/components/layouts/DashboardPageHeader'
-import { Button, buttonVariants } from '@/shared/components/ui/button'
+import { buttonVariants } from '@/shared/components/ui/button'
 import { Combobox } from '@/shared/components/ui/combobox'
 import { Input } from '@/shared/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select'
@@ -23,14 +23,14 @@ const STATUS_OPTIONS = [
 export function ResearchHistoryPage() {
   const history = useResearchHistory()
   return <main className="flex w-full flex-col gap-5">
-    <DashboardPageHeader title="Lịch sử research" actions={<><Button type="button" variant="outline" onClick={history.refresh} disabled={history.isRefreshing}><RefreshCw />Làm mới</Button><Link to="/research/new" className={cn(buttonVariants())}><FileText />Research mới</Link></>} />
+    <DashboardPageHeader title="Lịch sử research" actions={history.type !== 'job_fit' ? <Link to={`/research/new?mode=${history.type}`} className={cn(buttonVariants())}><FileText />Research mới</Link> : null} />
     <section className="grid gap-3">
       <Tabs value={history.type} onValueChange={(value) => history.setType(value as 'quick' | 'custom' | 'job_fit' | 'external')}>
         <TabsList className="grid h-auto w-full grid-cols-2 grid-rows-2 items-stretch gap-1 rounded-xl p-1 sm:h-10 sm:grid-cols-4 sm:grid-rows-1 sm:gap-0" variant="default">
           <TabsTrigger value="quick" className="h-10 min-h-10 whitespace-normal px-2 py-2 text-xs leading-tight sm:h-full sm:min-h-0 sm:px-3 sm:py-0 sm:text-sm">Nhanh</TabsTrigger>
           <TabsTrigger value="custom" className="h-10 min-h-10 whitespace-normal px-2 py-2 text-xs leading-tight sm:h-full sm:min-h-0 sm:px-3 sm:py-0 sm:text-sm">Tùy chỉnh</TabsTrigger>
-          <TabsTrigger value="job_fit" className="h-10 min-h-10 whitespace-normal px-2 py-2 text-xs leading-tight sm:h-full sm:min-h-0 sm:px-3 sm:py-0 sm:text-sm">Độ phù hợp việc làm</TabsTrigger>
           <TabsTrigger value="external" className="h-10 min-h-10 whitespace-normal px-2 py-2 text-xs leading-tight sm:h-full sm:min-h-0 sm:px-3 sm:py-0 sm:text-sm">Theo nội dung tuyển dụng</TabsTrigger>
+          <TabsTrigger value="job_fit" className="h-10 min-h-10 whitespace-normal px-2 py-2 text-xs leading-tight sm:h-full sm:min-h-0 sm:px-3 sm:py-0 sm:text-sm">Độ phù hợp việc làm</TabsTrigger>
         </TabsList>
       </Tabs>
       <div className="flex flex-col gap-3 sm:flex-row">

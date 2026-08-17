@@ -1,0 +1,1 @@
+export const SAVED_JOBS_PAGE_SIZE = 18

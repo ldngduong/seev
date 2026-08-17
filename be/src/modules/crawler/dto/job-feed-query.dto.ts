@@ -1,5 +1,13 @@
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class JobFeedQueryDto {
   @IsOptional()
@@ -20,8 +28,18 @@ export class JobFeedQueryDto {
   search?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  location?: string;
+
+  @IsOptional()
   @IsUUID()
   categoryId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  groupCode?: string;
 
   @IsOptional()
   @IsUUID()

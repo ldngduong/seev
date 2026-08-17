@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 
 import { listUserCvs } from '@/entities/cv/api/cv-api'
+import { CvPickerWithUpload } from '@/entities/cv/components/cv-picker-with-upload'
 import { Button } from '@/shared/components/ui/button'
-import { Combobox } from '@/shared/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog'
 import { useBilling } from '@/features/billing/hooks/use-billing'
 import { createJobFit } from '../api/job-fit-api'
@@ -18,10 +18,6 @@ export function JobFitDialog({ jobId, jobTitle, open, onOpenChange }: { jobId: s
   const cvs = useQuery({ queryKey: ['user-cvs', 'job-fit-picker'], queryFn: () => listUserCvs({ page: 1, pageSize: 50 }) })
   const billing = useBilling()
   const product = billing.products.find((item) => item.code === 'job_fit_analysis')
-  const cvOptions = (cvs.data?.items ?? []).map((cv) => ({
-    value: cv.id,
-    label: `${cv.name} · ${cv.total_pages} trang`,
-  }))
   const mutation = useMutation({
     mutationFn: () => createJobFit(jobId, selectedCvId!),
     onSuccess: (analysis) => {
@@ -40,17 +36,20 @@ export function JobFitDialog({ jobId, jobTitle, open, onOpenChange }: { jobId: s
           <DialogTitle>Kiểm tra độ phù hợp</DialogTitle>
           <DialogDescription>Chọn CV để đối chiếu trực tiếp với yêu cầu của “{jobTitle}”.</DialogDescription>
         </DialogHeader>
-        <Combobox
-          value={selectedCvId ?? undefined}
-          onChange={(value) => setSelectedCvId(String(value))}
-          options={cvOptions}
-          disabled={cvs.isLoading || cvOptions.length === 0}
-          placeholder={cvs.isLoading ? 'Đang tải danh sách CV...' : cvOptions.length ? 'Chọn CV của bạn' : 'Bạn chưa có CV sẵn sàng'}
-          searchPlaceholder="Tìm theo tên CV..."
-          emptyMessage="Không tìm thấy CV"
-          className="w-full"
-          triggerClassName="h-11 w-full"
-          contentClassName="w-(--radix-popper-anchor-width)"
+        <CvPickerWithUpload
+          value={selectedCvId ?? ''}
+          onChange={(cvId) => setSelectedCvId(cvId)}
+          cvs={cvs.data?.items ?? []}
+          isLoading={cvs.isLoading}
+          disabled={mutation.isPending}
+          showPages
+          placeholder={
+            cvs.isLoading
+              ? 'Đang tải danh sách CV...'
+              : cvs.data?.items.length
+                ? 'Chọn CV của bạn'
+                : 'Bạn chưa có CV sẵn sàng'
+          }
         />
         <DialogFooter className="flex-col gap-3 sm:flex-col">
           <span className="w-full text-xs text-muted-foreground">Chi phí: <strong className="text-foreground">{product?.price_credits ?? '—'} credits</strong> · Số dư {billing.balance ?? '—'}</span>

@@ -112,7 +112,7 @@ export class JobResearchService {
     return result.affected ?? 0;
   }
 
-  async listJobFeed(query: JobFeedQueryDto) {
+  async listJobFeed(query: JobFeedQueryDto, userId?: string | null) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 18;
     const builder = this.jobPostRepository
@@ -130,6 +130,28 @@ export class JobResearchService {
       builder.andWhere('job.job_category_id = :categoryId', {
         categoryId: query.categoryId,
       });
+    }
+    if (query.groupCode) {
+      builder.andWhere(
+        `job.job_category_id IN (
+          SELECT id FROM job_categories WHERE group_code = :groupCode
+        )`,
+        { groupCode: query.groupCode },
+      );
+    }
+    if (query.location) {
+      const normalizedLocation = query.location
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+      builder.andWhere(
+        `EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(job.locations) AS feed_location
+          WHERE unaccent(lower(feed_location)) LIKE :location
+        )`,
+        { location: `%${normalizedLocation}%` },
+      );
     }
     if (query.seniorityLevelId) {
       builder.andWhere(
@@ -149,6 +171,32 @@ export class JobResearchService {
       .take(pageSize);
 
     const [jobs, total] = await builder.getManyAndCount();
+    let items = await this.hydrateFeedItems(jobs);
+
+    if (userId && jobs.length) {
+      const savedRows: Array<{ jobPostId: string }> = await this.jobPostRepository.query(
+        `SELECT job_post_id AS "jobPostId" FROM saved_jobs WHERE user_id = $1 AND job_post_id = ANY($2::uuid[])`,
+        [userId, jobs.map((job) => job.id)],
+      );
+      const savedIds = new Set(savedRows.map((row) => row.jobPostId));
+      items = items.map((item) => ({
+        ...item,
+        isSaved: savedIds.has(item.id),
+      }));
+    }
+
+    return {
+      items,
+      meta: {
+        page,
+        page_size: pageSize,
+        total,
+        total_pages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
+  async hydrateFeedItems(jobs: JobPost[]) {
     const seniorityRows: Array<{
       jobPostId: string;
       id: string;
@@ -183,20 +231,12 @@ export class JobResearchService {
       ]);
     }
 
-    return {
-      items: jobs.map((job) => ({
-        ...job,
-        skills: sanitizeJobSkills(job.skills),
-        seniorityLevels: seniorityByJob.get(job.id) ?? [],
-        detailReady: detailReadyIds.has(job.id),
-      })),
-      meta: {
-        page,
-        page_size: pageSize,
-        total,
-        total_pages: Math.ceil(total / pageSize),
-      },
-    };
+    return jobs.map((job) => ({
+      ...job,
+      skills: sanitizeJobSkills(job.skills),
+      seniorityLevels: seniorityByJob.get(job.id) ?? [],
+      detailReady: detailReadyIds.has(job.id),
+    }));
   }
 
   async createIntent(

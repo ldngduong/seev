@@ -25,6 +25,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { JobFitModule } from './modules/job-fit/job-fit.module';
 import { ExternalJobResearchModule } from './modules/external-job-research/external-job-research.module';
 import { SystemSettingsModule } from './modules/system-settings/system-settings.module';
+import { SavedJobsModule } from './modules/saved-jobs/saved-jobs.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { SystemSettingsModule } from './modules/system-settings/system-settings.
     DashboardModule,
     JobFitModule,
     ExternalJobResearchModule,
+    SavedJobsModule,
     SystemSettingsModule,
   ],
   controllers: [AppController],

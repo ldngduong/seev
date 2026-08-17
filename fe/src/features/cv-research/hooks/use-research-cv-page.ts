@@ -43,6 +43,17 @@ export function useResearchCvPage() {
     if (cvId) setSelectedCvId(cvId)
   }, [searchParams])
 
+  useEffect(() => {
+    const modeParam = searchParams.get('mode')
+    if (
+      modeParam === 'quick' ||
+      modeParam === 'custom' ||
+      modeParam === 'external'
+    ) {
+      setMode(modeParam)
+    }
+  }, [searchParams])
+
   const setSelectedCategoryId = (value: string) => {
     setSelectedCategoryIdValue(value)
     setSeniorityLevelId('')

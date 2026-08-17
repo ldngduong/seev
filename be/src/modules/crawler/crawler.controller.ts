@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request.type';
 import { CategoryCrawlService } from './category-crawl.service';
@@ -40,9 +41,10 @@ export class CrawlerController {
     };
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('feed')
-  getJobFeed(@Query() query: JobFeedQueryDto) {
-    return this.jobResearchService.listJobFeed(query);
+  getJobFeed(@Req() req: AuthenticatedRequest, @Query() query: JobFeedQueryDto) {
+    return this.jobResearchService.listJobFeed(query, req.user?.id);
   }
 
   @UseGuards(JwtAuthGuard)

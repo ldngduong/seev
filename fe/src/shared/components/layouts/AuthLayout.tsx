@@ -1,4 +1,5 @@
 import {
+  Bookmark,
   BriefcaseBusiness,
   FileText,
   LayoutDashboard,
@@ -36,6 +37,11 @@ const navItems = [
     title: 'Việc làm',
     to: '/jobs',
     icon: Newspaper,
+  },
+  {
+    title: 'Việc làm đã lưu',
+    to: '/saved-jobs',
+    icon: Bookmark,
   },
   {
     title: 'Nghiên cứu',

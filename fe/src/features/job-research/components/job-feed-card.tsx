@@ -4,11 +4,13 @@ import {
   CalendarDays,
   Clock,
   ExternalLink,
+  Heart,
   Sparkles,
   MapPin,
 } from 'lucide-react'
 
 import { cn } from '@/shared/lib/utils'
+import { useSaveJob } from '@/features/saved-jobs/hooks/use-save-job'
 
 import type { JobFeedItem } from '../types/job-feed.types'
 import {
@@ -27,6 +29,7 @@ import { Link } from 'react-router'
 
 export function JobFeedCard({ job, publicMode = false }: { job: JobFeedItem; publicMode?: boolean }) {
   const [fitOpen, setFitOpen] = useState(false)
+  const save = useSaveJob(job.id, job.isSaved ?? false)
   const postedAt = formatPostedAt(job.postedAt)
   const visibleSkills = job.skills.filter(isDisplayableSkill).slice(0, 4)
 
@@ -42,6 +45,27 @@ export function JobFeedCard({ job, publicMode = false }: { job: JobFeedItem; pub
             {job.companyName || 'Chưa cập nhật công ty'}
           </p>
         </div>
+        {!publicMode ? (
+          <button
+            type="button"
+            onClick={save.toggle}
+            disabled={save.isPending}
+            aria-label={save.saved ? 'Bỏ lưu việc làm' : 'Lưu việc làm'}
+            className={cn(
+              'grid size-8 shrink-0 place-items-center rounded-full transition hover:bg-muted',
+              save.saved && 'bg-rose-500/10',
+            )}
+          >
+            <Heart
+              className={cn(
+                'size-4',
+                save.saved
+                  ? 'fill-rose-500 text-rose-500'
+                  : 'text-muted-foreground',
+              )}
+            />
+          </button>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-1.5">

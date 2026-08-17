@@ -20,6 +20,7 @@ export const jobFeedItemSchema = z.object({
   postedAt: z.string().nullable(),
   expiredAt: z.string(),
   detailReady: z.boolean(),
+  isSaved: z.boolean().optional(),
   seniorityLevels: z.array(
     z.object({
       id: z.string().uuid(),

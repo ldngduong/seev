@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileText, Link2, Upload } from 'lucide-react'
-import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router'
 
 import { listUserCvs, MAX_CV_PAGE_SIZE } from '@/entities/cv/api/cv-api'
+import { CvPickerWithUpload } from '@/entities/cv/components/cv-picker-with-upload'
 import { useBilling } from '@/features/billing/hooks/use-billing'
 import { Button } from '@/shared/components/ui/button'
-import { Combobox } from '@/shared/components/ui/combobox'
 import { Input } from '@/shared/components/ui/input'
 import { Label } from '@/shared/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs'
@@ -23,12 +23,17 @@ export function ExternalJobResearchForm() {
   const queryClient = useQueryClient()
   const billing = useBilling()
   const fileRef = useRef<HTMLInputElement>(null)
+  const [searchParams] = useSearchParams()
   const [source, setSource] = useState<Source>('jd')
   const [jdInput, setJdInput] = useState<JdInput>('text')
   const [cvId, setCvId] = useState('')
   const [text, setText] = useState('')
   const [url, setUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  useEffect(() => {
+    const cvIdParam = searchParams.get('cvId')
+    if (cvIdParam) setCvId(cvIdParam)
+  }, [searchParams])
   const cvs = useQuery({ queryKey: ['user-cvs', { page: 1, status: 'ready', purpose: 'external-job-research' }], queryFn: () => listUserCvs({ page: 1, pageSize: MAX_CV_PAGE_SIZE, status: 'ready' }) })
   const finish = (research: { id: string }) => { toast.success('Đã bắt đầu đánh giá nội dung tuyển dụng.'); void queryClient.invalidateQueries({ queryKey: ['billing', 'account'] }); void navigate(`/research-history/external/${research.id}`) }
   const jdMutation = useMutation({ mutationFn: createJdResearch, onSuccess: finish })
@@ -52,7 +57,7 @@ export function ExternalJobResearchForm() {
         <TabsTrigger value="link" className="h-full"><Link2 />Dán liên kết tuyển dụng</TabsTrigger>
       </TabsList>
     </Tabs>
-    <div className="space-y-2"><Label>CV</Label><Combobox value={cvId} onChange={(value) => setCvId(String(value))} options={(cvs.data?.items ?? []).map((cv) => ({ value: cv.id, label: cv.name }))} placeholder={cvs.isLoading ? 'Đang tải CV...' : 'Chọn CV đã lưu'} searchPlaceholder="Tìm theo tên CV..." emptyMessage="Không tìm thấy CV" disabled={pending} /></div>
+    <div className="space-y-2"><Label htmlFor="externalCvId">CV</Label><CvPickerWithUpload id="externalCvId" value={cvId} onChange={setCvId} cvs={cvs.data?.items ?? []} isLoading={cvs.isLoading} disabled={pending} placeholder={cvs.isLoading ? 'Đang tải CV...' : 'Chọn CV đã lưu'} /></div>
     {source === 'jd' ? <div className="grid gap-4 border-t pt-5">
       <div className="flex gap-2"><Button type="button" variant={jdInput === 'text' ? 'secondary' : 'ghost'} onClick={() => setJdInput('text')}>Dán nội dung</Button><Button type="button" variant={jdInput === 'file' ? 'secondary' : 'ghost'} onClick={() => setJdInput('file')}>Tải tệp</Button></div>
       {jdInput === 'text' ? <div className="space-y-2"><Label htmlFor="jdText">Nội dung JD</Label><Textarea id="jdText" value={text} onChange={(event) => setText(event.target.value)} className="min-h-56 resize-y" placeholder="Dán đầy đủ mô tả công việc và yêu cầu ứng viên..." disabled={pending} /><p className="text-xs text-muted-foreground">Tối thiểu 200 ký tự.</p></div> : <div className="space-y-2"><Label>Tệp JD</Label><input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /><button type="button" onClick={() => fileRef.current?.click()} className={cn('flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-5 text-center transition-colors hover:bg-muted/50', file && 'border-primary/50 bg-primary/5')}><Upload className="size-5 text-primary" /><span className="text-sm font-medium">{file?.name ?? 'Chọn tệp PDF, Word hoặc TXT'}</span><span className="text-xs text-muted-foreground">Tối đa 8 MB</span></button></div>}

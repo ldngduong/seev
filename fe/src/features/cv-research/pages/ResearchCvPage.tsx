@@ -11,8 +11,9 @@ import { DashboardPageHeader } from "@/shared/components/layouts/DashboardPageHe
 import { ResearchModeButton } from '@/features/cv-research/components/research-mode-button'
 import { useResearchCvPage } from '@/features/cv-research/hooks/use-research-cv-page'
 import { JobCategoryPicker } from "@/entities/career-taxonomy/components/job-category-picker";
+import { CvPickerWithUpload } from '@/entities/cv/components/cv-picker-with-upload'
 import { Button, buttonVariants } from "@/shared/components/ui/button";
-import { Combobox, MultiCombobox } from "@/shared/components/ui/combobox";
+import { MultiCombobox } from "@/shared/components/ui/combobox";
 import { Label } from "@/shared/components/ui/label";
 import {
   Select,
@@ -88,20 +89,16 @@ export const ResearchCvPage = () => {
           {mode === 'external' ? <ExternalJobResearchForm /> : <div className="grid gap-5">
             <div className="space-y-2">
               <Label htmlFor="userCvId">CV</Label>
-              <Combobox
+              <CvPickerWithUpload
                 id="userCvId"
                 value={selectedCvId}
-                onChange={(value) => setSelectedCvId(String(value))}
-                disabled={research.isCvsLoading || isSubmitting}
+                onChange={(cvId) => setSelectedCvId(cvId)}
+                cvs={research.cvs}
+                isLoading={research.isCvsLoading}
+                disabled={isSubmitting}
                 placeholder={
                   research.isCvsLoading ? "Đang tải CV..." : "Tìm CV đã lưu"
                 }
-                searchPlaceholder="Tìm theo tên CV..."
-                emptyMessage="Không tìm thấy CV phù hợp"
-                options={research.cvs.map((cv) => ({
-                  value: cv.id,
-                  label: cv.name,
-                }))}
               />
             </div>
 

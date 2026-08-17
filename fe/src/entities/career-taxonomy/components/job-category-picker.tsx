@@ -20,6 +20,7 @@ interface JobCategoryPickerProps {
   onChange: (ids: string[], label: string) => void;
   showLabel?: boolean;
   allowClear?: boolean;
+  allowGroup?: boolean;
   placeholder?: string;
   className?: string;
 }
@@ -30,10 +31,11 @@ export function JobCategoryPicker({
   onChange,
   showLabel = true,
   allowClear = false,
+  allowGroup = false,
   placeholder = "Chọn chuyên môn CNTT",
   className,
 }: JobCategoryPickerProps) {
-  const picker = useJobCategoryPicker(value, onChange);
+  const picker = useJobCategoryPicker(value, onChange, { allowGroup });
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -84,7 +86,9 @@ export function JobCategoryPicker({
                     type="button"
                     className={cn(
                       "flex w-full rounded-md px-2 py-2 text-left text-sm hover:bg-muted",
-                      picker.activeGroup?.code === group.code && "bg-muted font-medium",
+                      (picker.activeGroup?.code === group.code ||
+                        picker.selectedCategoryId === group.code) &&
+                        "bg-muted font-medium",
                     )}
                     onClick={() => picker.setActiveGroupCode(group.code)}
                   >
@@ -100,6 +104,46 @@ export function JobCategoryPicker({
                 {picker.isLoading ? <EmptyText>Đang tải...</EmptyText> : null}
                 {!picker.isLoading && !picker.activeGroup ? (
                   <EmptyText>Không tìm thấy chuyên môn.</EmptyText>
+                ) : null}
+                {picker.allowGroup && picker.activeGroup ? (
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted",
+                      picker.draftGroupCode === picker.activeGroup.code &&
+                        "bg-primary/5",
+                    )}
+                    onClick={() => {
+                      picker.setDraftGroupCode(picker.activeGroup.code);
+                      picker.setDraftCategoryId(null);
+                    }}
+                  >
+                    <span
+                      className={cn(
+                        "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border border-muted-foreground/40",
+                        picker.draftGroupCode === picker.activeGroup.code &&
+                          "border-primary",
+                      )}
+                    >
+                      {picker.draftGroupCode === picker.activeGroup.code ? (
+                        <span className="size-2 rounded-full bg-primary" />
+                      ) : null}
+                    </span>
+                    <span>
+                      <span
+                        className={cn(
+                          "block font-medium",
+                          picker.draftGroupCode === picker.activeGroup.code &&
+                            "text-primary",
+                        )}
+                      >
+                        Cả nhóm {picker.activeGroup.name}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        Lọc tất cả việc làm thuộc nhóm này.
+                      </span>
+                    </span>
+                  </button>
                 ) : null}
                 {picker.activeGroup?.categories.map((category) => (
                   <CategoryOption
@@ -118,7 +162,7 @@ export function JobCategoryPicker({
               <Button type="button" variant="ghost" onClick={picker.clear}>Bỏ lọc</Button>
             ) : null}
             <Button type="button" variant="outline" onClick={() => picker.setOpen(false)}>Hủy</Button>
-            <Button type="button" disabled={!picker.draftCategoryId} onClick={picker.choose}>Chọn</Button>
+            <Button type="button" disabled={!picker.draftCategoryId && !picker.draftGroupCode} onClick={picker.choose}>Chọn</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
